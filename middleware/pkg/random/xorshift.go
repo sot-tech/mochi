@@ -7,7 +7,7 @@ package random
 func GenerateAndAdvance(s0, s1 uint64) (v, newS0, newS1 uint64) {
 	v = s0 + s1
 	newS0 = s1
-	s0 ^= (s0 << 23)
+	s0 ^= s0 << 23
 	newS1 = s0 ^ s1 ^ (s0 >> 18) ^ (s1 >> 5)
 	return
 }

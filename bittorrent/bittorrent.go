@@ -24,7 +24,7 @@ func PeerIDFromBytes(b []byte) PeerID {
 
 	var buf [20]byte
 	copy(buf[:], b)
-	return PeerID(buf)
+	return buf
 }
 
 // String implements fmt.Stringer, returning the base16 encoded PeerID.
@@ -47,7 +47,7 @@ func PeerIDFromString(s string) PeerID {
 
 	var buf [20]byte
 	copy(buf[:], s)
-	return PeerID(buf)
+	return buf
 }
 
 // InfoHash represents an infohash.
@@ -63,7 +63,7 @@ func InfoHashFromBytes(b []byte) InfoHash {
 
 	var buf [20]byte
 	copy(buf[:], b)
-	return InfoHash(buf)
+	return buf
 }
 
 // InfoHashFromString creates an InfoHash from a string.
@@ -76,7 +76,7 @@ func InfoHashFromString(s string) InfoHash {
 
 	var buf [20]byte
 	copy(buf[:], s)
-	return InfoHash(buf)
+	return buf
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.

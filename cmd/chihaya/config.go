@@ -33,9 +33,9 @@ type Config struct {
 	MetricsAddr               string                  `yaml:"metrics_addr"`
 	HTTPConfig                http.Config             `yaml:"http"`
 	UDPConfig                 udp.Config              `yaml:"udp"`
-	Storage                   storageConfig           `yaml:"storage"`
-	PreHooks                  []middleware.HookConfig `yaml:"prehooks"`
-	PostHooks                 []middleware.HookConfig `yaml:"posthooks"`
+	Storage                   storageConfig       `yaml:"storage"`
+	PreHooks                  []middleware.Config `yaml:"prehooks"`
+	PostHooks                 []middleware.Config `yaml:"posthooks"`
 }
 
 // PreHookNames returns only the names of the configured middleware.

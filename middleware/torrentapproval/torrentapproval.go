@@ -4,10 +4,10 @@ package torrentapproval
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-
-	yaml "gopkg.in/yaml.v2"
+	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
+	"github.com/chihaya/chihaya/pkg/stop"
+	"gopkg.in/yaml.v2"
 
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
@@ -20,90 +20,58 @@ func init() {
 	middleware.RegisterDriver(Name, driver{})
 }
 
-var _ middleware.Driver = driver{}
-
 type driver struct{}
 
 func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
-	var cfg Config
+	var cfg middleware.Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
 	}
 
-	return NewHook(cfg)
+	if len(cfg.Name) == 0 {
+		return nil, fmt.Errorf("invalid options for middleware %s: name not provided", Name)
+	}
+
+	if cfg.Options == nil {
+		return nil, fmt.Errorf("invalid options for middleware %s: options not provided", Name)
+	}
+
+	var confBytes []byte
+	if confBytes, err = yaml.Marshal(cfg.Options); err != nil {
+		return nil, err
+	}
+
+	if c, err := container.GetContainer(cfg.Name, confBytes); err == nil{
+		return &hook{c}, nil
+	} else {
+		return nil, err
+	}
 }
 
 // ErrTorrentUnapproved is the error returned when a torrent hash is invalid.
 var ErrTorrentUnapproved = bittorrent.ClientError("unapproved torrent")
 
-// Config represents all the values required by this middleware to validate
-// torrents based on their hash value.
-type Config struct {
-	Whitelist []string `yaml:"whitelist"`
-	Blacklist []string `yaml:"blacklist"`
-}
-
 type hook struct {
-	approved   map[bittorrent.InfoHash]struct{}
-	unapproved map[bittorrent.InfoHash]struct{}
+	hashContainer container.Container
 }
 
-// NewHook returns an instance of the torrent approval middleware.
-func NewHook(cfg Config) (middleware.Hook, error) {
-	h := &hook{
-		approved:   make(map[bittorrent.InfoHash]struct{}),
-		unapproved: make(map[bittorrent.InfoHash]struct{}),
-	}
-
-	if len(cfg.Whitelist) > 0 && len(cfg.Blacklist) > 0 {
-		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
-	}
-
-	for _, hashString := range cfg.Whitelist {
-		hashinfo, err := hex.DecodeString(hashString)
-		if err != nil {
-			return nil, fmt.Errorf("whitelist : invalid hash %s", hashString)
-		}
-		if len(hashinfo) != 20 {
-			return nil, fmt.Errorf("whitelist : hash %s is not 20 byes", hashString)
-		}
-		h.approved[bittorrent.InfoHashFromBytes(hashinfo)] = struct{}{}
-	}
-
-	for _, hashString := range cfg.Blacklist {
-		hashinfo, err := hex.DecodeString(hashString)
-		if err != nil {
-			return nil, fmt.Errorf("blacklist : invalid hash %s", hashString)
-		}
-		if len(hashinfo) != 20 {
-			return nil, fmt.Errorf("blacklist : hash %s is not 20 byes", hashString)
-		}
-		h.unapproved[bittorrent.InfoHashFromBytes(hashinfo)] = struct{}{}
-	}
-
-	return h, nil
-}
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
-	infohash := req.InfoHash
+	var err error
 
-	if len(h.approved) > 0 {
-		if _, found := h.approved[infohash]; !found {
-			return ctx, ErrTorrentUnapproved
-		}
+	if !h.hashContainer.Contains(req.InfoHash){
+		err = ErrTorrentUnapproved
 	}
 
-	if len(h.unapproved) > 0 {
-		if _, found := h.unapproved[infohash]; found {
-			return ctx, ErrTorrentUnapproved
-		}
-	}
-
-	return ctx, nil
+	return ctx, err
 }
 
 func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
 	// Scrapes don't require any protection.
 	return ctx, nil
+}
+
+func (h *hook) Stop() stop.Result {
+	return h.hashContainer.Stop()
 }

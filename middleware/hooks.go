@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/storage"
 )

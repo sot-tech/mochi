@@ -65,14 +65,14 @@ func New(name string, optionBytes []byte) (Hook, error) {
 	return d.NewHook(optionBytes)
 }
 
-// HookConfig is the generic configuration format used for all registered Hooks.
-type HookConfig struct {
+// Config is the generic configuration format used for all registered Hooks.
+type Config struct {
 	Name    string                 `yaml:"name"`
 	Options map[string]interface{} `yaml:"options"`
 }
 
 // HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
-func HooksFromHookConfigs(cfgs []HookConfig) (hooks []Hook, err error) {
+func HooksFromHookConfigs(cfgs []Config) (hooks []Hook, err error) {
 	for _, cfg := range cfgs {
 		// Marshal the options back into bytes.
 		var optionBytes []byte

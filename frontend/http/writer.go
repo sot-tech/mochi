@@ -1,12 +1,14 @@
 package http
 
 import (
+	"github.com/zeebo/bencode"
 	"net/http"
 
 	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/frontend/http/bencode"
 	"github.com/chihaya/chihaya/pkg/log"
 )
+
+type strMap map[string]interface{}
 
 // WriteError communicates an error to a BitTorrent client over HTTP.
 func WriteError(w http.ResponseWriter, err error) error {
@@ -18,7 +20,7 @@ func WriteError(w http.ResponseWriter, err error) error {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return bencode.NewEncoder(w).Encode(bencode.Dict{
+	return bencode.NewEncoder(w).Encode(map[string]interface{}{
 		"failure reason": message,
 	})
 }
@@ -26,7 +28,7 @@ func WriteError(w http.ResponseWriter, err error) error {
 // WriteAnnounceResponse communicates the results of an Announce to a
 // BitTorrent client over HTTP.
 func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceResponse) error {
-	bdict := bencode.Dict{
+	bdict := strMap{
 		"complete":     resp.Complete,
 		"incomplete":   resp.Incomplete,
 		"interval":     resp.Interval,
@@ -57,7 +59,7 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	}
 
 	// Add the peers to the dictionary.
-	var peers []bencode.Dict
+	var peers []strMap
 	for _, peer := range resp.IPv4Peers {
 		peers = append(peers, dict(peer))
 	}
@@ -72,15 +74,15 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 // WriteScrapeResponse communicates the results of a Scrape to a BitTorrent
 // client over HTTP.
 func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse) error {
-	filesDict := bencode.NewDict()
+	filesDict := make(strMap)
 	for _, scrape := range resp.Files {
-		filesDict[string(scrape.InfoHash[:])] = bencode.Dict{
+		filesDict[string(scrape.InfoHash[:])] = strMap{
 			"complete":   scrape.Complete,
 			"incomplete": scrape.Incomplete,
 		}
 	}
 
-	return bencode.NewEncoder(w).Encode(bencode.Dict{
+	return bencode.NewEncoder(w).Encode(strMap{
 		"files": filesDict,
 	})
 }
@@ -107,8 +109,8 @@ func compact6(peer bittorrent.Peer) (buf []byte) {
 	return
 }
 
-func dict(peer bittorrent.Peer) bencode.Dict {
-	return bencode.Dict{
+func dict(peer bittorrent.Peer) strMap {
+	return strMap{
 		"peer id": string(peer.ID[:]),
 		"ip":      peer.IP.String(),
 		"port":    peer.Port,

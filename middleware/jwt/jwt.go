@@ -119,15 +119,13 @@ func (h *hook) updateKeys() error {
 		log.Error("failed to fetch JWK Set", log.Err(err))
 		return err
 	}
-
+	defer resp.Body.Close()
 	var parsedJWKs gojwk.Key
 	err = json.NewDecoder(resp.Body).Decode(&parsedJWKs)
 	if err != nil {
-		resp.Body.Close()
 		log.Error("failed to decode JWK JSON", log.Err(err))
 		return err
 	}
-	resp.Body.Close()
 
 	keys := map[string]crypto.PublicKey{}
 	for _, parsedJWK := range parsedJWKs.Keys {

@@ -50,8 +50,12 @@ func (r *Run) Start(ps storage.PeerStore) error {
 
 	r.sg = stop.NewGroup()
 
-	log.Info("starting metrics server", log.Fields{"addr": cfg.MetricsAddr})
-	r.sg.Add(metrics.NewServer(cfg.MetricsAddr))
+	if len(cfg.MetricsAddr) > 0 {
+		log.Info("starting metrics server", log.Fields{"addr": cfg.MetricsAddr})
+		r.sg.Add(metrics.NewServer(cfg.MetricsAddr))
+	} else {
+		log.Info("metrics disabled because of empty address")
+	}
 
 	if ps == nil {
 		log.Info("starting storage", log.Fields{"name": cfg.Storage.Name})
