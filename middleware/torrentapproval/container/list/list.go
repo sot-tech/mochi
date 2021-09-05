@@ -10,10 +10,8 @@ import (
 )
 
 func init() {
-	container.Register("list", builder{})
+	container.Register("list", build)
 }
-
-type builder struct {}
 
 type Config struct {
 	Whitelist []string `yaml:"whitelist"`
@@ -22,7 +20,7 @@ type Config struct {
 
 var DUMMY struct{}
 
-func (b builder) Build(confBytes []byte) (container.Container, error) {
+func build(confBytes []byte) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)

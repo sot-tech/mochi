@@ -11,17 +11,15 @@ import (
 )
 
 func init() {
-	container.Register("directory", builder{})
+	container.Register("directory", build)
 }
-
-type builder struct {}
 
 type Config struct {
 	WhitelistPath string `yaml:"whitelist_path"`
 	BlacklistPath string `yaml:"blacklist_path"`
 }
 
-func (b builder) Build(confBytes []byte) (container.Container, error) {
+func build(confBytes []byte) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)

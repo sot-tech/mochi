@@ -44,7 +44,7 @@ func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
 		return nil, err
 	}
 
-	if c, err := container.GetContainer(cfg.Name, confBytes); err == nil{
+	if c, err := container.GetContainer(cfg.Name, confBytes); err == nil {
 		return &hook{c}, nil
 	} else {
 		return nil, err
@@ -58,24 +58,23 @@ type hook struct {
 	hashContainer container.Container
 }
 
-
-func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
+func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
 	var err error
 
-	if !h.hashContainer.Contains(req.InfoHash){
+	if !h.hashContainer.Contains(req.InfoHash) {
 		err = ErrTorrentUnapproved
 	}
 
 	return ctx, err
 }
 
-func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
 	// Scrapes don't require any protection.
 	return ctx, nil
 }
 
 func (h *hook) Stop() stop.Result {
-	if st, isOk := h.hashContainer.(stop.Stopper); isOk{
+	if st, isOk := h.hashContainer.(stop.Stopper); isOk {
 		return st.Stop()
 	}
 	return stop.AlreadyStopped

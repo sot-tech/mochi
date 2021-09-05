@@ -6,9 +6,7 @@ import (
 	"sync"
 )
 
-type Builder interface {
-	Build([]byte) (Container, error)
-}
+type Builder func ([]byte) (Container, error)
 
 var (
 	buildersMU sync.Mutex
@@ -43,7 +41,7 @@ func GetContainer(name string, confBytes []byte) (Container, error) {
 	if builder, exist := builders[name]; !exist {
 		err = ErrContainerDoesNotExist
 	} else {
-		cn, err = builder.Build(confBytes)
+		cn, err = builder(confBytes)
 	}
 	return cn, err
 }
