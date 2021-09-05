@@ -11,6 +11,8 @@ import (
 
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
+	_ "github.com/chihaya/chihaya/middleware/torrentapproval/container/directory"
+	_ "github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
 )
 
 // Name is the name by which this middleware is registered with Chihaya.
@@ -73,5 +75,8 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 }
 
 func (h *hook) Stop() stop.Result {
-	return h.hashContainer.Stop()
+	if st, isOk := h.hashContainer.(stop.Stopper); isOk{
+		return st.Stop()
+	}
+	return stop.AlreadyStopped
 }

@@ -6,35 +6,40 @@ import (
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
 	"github.com/chihaya/chihaya/pkg/stop"
+	"gopkg.in/yaml.v2"
 	"sync"
 )
 
 func init() {
-	container.Register("list", func() container.Configuration {
-		return Config{}
-	})
+	container.Register("directory", builder{})
 }
+
+type builder struct {}
 
 type Config struct {
 	WhitelistPath string `yaml:"whitelist_path"`
 	BlacklistPath string `yaml:"blacklist_path"`
 }
 
-func (b Config) Build() (container.Container, error) {
-	if len(b.WhitelistPath) > 0 && len(b.BlacklistPath) > 0 {
+func (b builder) Build(confBytes []byte) (container.Container, error) {
+	c := new(Config)
+	if err := yaml.Unmarshal(confBytes, c); err != nil {
+		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
+	}
+	if len(c.WhitelistPath) > 0 && len(c.BlacklistPath) > 0 {
 		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
 	}
 	var err error
 	lst := &directory{
 		List: list.List{
 			Hashes: sync.Map{},
-			Invert: len(b.WhitelistPath) == 0,
+			Invert: len(c.WhitelistPath) == 0,
 		},
 		watcher: nil,
 	}
-	dir := b.WhitelistPath
+	dir := c.WhitelistPath
 	if lst.Invert {
-		dir = b.BlacklistPath
+		dir = c.BlacklistPath
 	}
 	var w *dirwatch.Instance
 	w, err = dirwatch.New(dir)

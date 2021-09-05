@@ -65,7 +65,7 @@ func generateInfohash() [20]byte {
 		panic(fmt.Errorf("not enough randomness? Got %d bytes", n))
 	}
 
-	return [20]byte(bittorrent.InfoHashFromBytes(b))
+	return bittorrent.InfoHashFromBytes(b)
 }
 
 func test(addr string, delay time.Duration) error {

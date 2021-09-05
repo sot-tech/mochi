@@ -3,25 +3,21 @@ package container
 import (
 	"errors"
 	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"gopkg.in/yaml.v2"
 	"sync"
 )
 
-type Constructor func () Configuration
-
-type Configuration interface {
-	Build() (Container, error)
+type Builder interface {
+	Build([]byte) (Container, error)
 }
 
 var (
-	constructorsMU sync.Mutex
-	constructors   = make(map[string]Constructor)
+	buildersMU sync.Mutex
+	builders   = make(map[string]Builder)
 
 	ErrContainerDoesNotExist = errors.New("torrent hash container with that name does not exist")
 )
 
-func Register(n string, c Constructor) {
+func Register(n string, c Builder) {
 	if len(n) == 0 {
 		panic("middleware: could not register a Container with an empty name")
 	}
@@ -29,28 +25,25 @@ func Register(n string, c Constructor) {
 		panic("middleware: could not register a Container with nil builder constructor")
 	}
 
-	constructorsMU.Lock()
-	defer constructorsMU.Unlock()
-	constructors[n] = c
+	buildersMU.Lock()
+	defer buildersMU.Unlock()
+	builders[n] = c
 }
 
 type Container interface {
-	stop.Stopper
 	Contains(bittorrent.InfoHash) bool
 }
 
 func GetContainer(name string, confBytes []byte) (Container, error) {
-	constructorsMU.Lock()
-	defer constructorsMU.Unlock()
+
+	buildersMU.Lock()
+	defer buildersMU.Unlock()
 	var err error
 	var cn Container
-	if getConfig, exist := constructors[name]; !exist {
+	if builder, exist := builders[name]; !exist {
 		err = ErrContainerDoesNotExist
 	} else {
-		conf := getConfig()
-		if err = yaml.Unmarshal(confBytes, &conf); err == nil {
-			cn, err = conf.Build()
-		}
+		cn, err = builder.Build(confBytes)
 	}
 	return cn, err
 }

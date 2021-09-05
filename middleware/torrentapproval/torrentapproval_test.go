@@ -68,7 +68,7 @@ func TestHandleAnnounce(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {
 			d := driver{}
-			cfg, err := yaml.Marshal(tt)
+			cfg, err := yaml.Marshal(tt.cfg)
 			require.Nil(t, err)
 			h, err := d.NewHook(cfg)
 			require.Nil(t, err)

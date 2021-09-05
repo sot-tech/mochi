@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
-	"github.com/chihaya/chihaya/pkg/stop"
+	"gopkg.in/yaml.v2"
 	"sync"
 )
 
 func init() {
-	container.Register("list", func() container.Configuration {
-		return Config{}
-	})
+	container.Register("list", builder{})
 }
+
+type builder struct {}
 
 type Config struct {
 	Whitelist []string `yaml:"whitelist"`
@@ -22,7 +22,11 @@ type Config struct {
 
 var DUMMY struct{}
 
-func (c Config) Build() (container.Container, error) {
+func (b builder) Build(confBytes []byte) (container.Container, error) {
+	c := new(Config)
+	if err := yaml.Unmarshal(confBytes, c); err != nil {
+		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
+	}
 	if len(c.Whitelist) > 0 && len(c.Blacklist) > 0 {
 		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
 	}
@@ -53,10 +57,6 @@ func (c Config) Build() (container.Container, error) {
 type List struct {
 	Invert bool
 	Hashes sync.Map
-}
-
-func (l *List) Stop() stop.Result {
-	return stop.AlreadyStopped
 }
 
 func (l *List) Contains(hash bittorrent.InfoHash) bool {
