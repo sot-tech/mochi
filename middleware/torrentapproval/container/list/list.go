@@ -10,29 +10,31 @@ import (
 )
 
 func init() {
-	container.Register("list", Builder{})
+	container.Register("list", func() container.Configuration {
+		return Config{}
+	})
 }
 
-type Builder struct {
+type Config struct {
 	Whitelist []string `yaml:"whitelist"`
 	Blacklist []string `yaml:"blacklist"`
 }
 
 var DUMMY struct{}
 
-func (b Builder) New() (container.Container, error) {
-	if len(b.Whitelist) > 0 && len(b.Blacklist) > 0 {
+func (c Config) Build() (container.Container, error) {
+	if len(c.Whitelist) > 0 && len(c.Blacklist) > 0 {
 		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
 	}
 	l := &List{
 		Hashes: sync.Map{},
-		Invert: len(b.Whitelist) == 0,
+		Invert: len(c.Whitelist) == 0,
 	}
 
-	hashList := b.Whitelist
+	hashList := c.Whitelist
 	if l.Invert {
 		l.Invert = true
-		hashList = b.Blacklist
+		hashList = c.Blacklist
 	}
 
 	for _, hashString := range hashList {

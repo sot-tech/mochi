@@ -2,103 +2,65 @@ package directory
 
 import (
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/anacrolix/torrent/util/dirwatch"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
-	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/fsnotify/fsnotify"
-	"os"
-	"path/filepath"
 	"sync"
 )
 
 func init() {
-	container.Register("list", builder{})
+	container.Register("list", func() container.Configuration {
+		return Config{}
+	})
 }
 
-type builder struct {
+type Config struct {
 	WhitelistPath string `yaml:"whitelist_path"`
 	BlacklistPath string `yaml:"blacklist_path"`
 }
 
-func (b builder) New() (container.Container, error) {
+func (b Config) Build() (container.Container, error) {
 	if len(b.WhitelistPath) > 0 && len(b.BlacklistPath) > 0 {
 		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
 	}
 	var err error
-	dirLister := &directory{
+	lst := &directory{
 		List: list.List{
 			Hashes: sync.Map{},
 			Invert: len(b.WhitelistPath) == 0,
 		},
-		files:   sync.Map{},
-		root:    b.WhitelistPath,
 		watcher: nil,
 	}
-	if dirLister.Invert {
-		dirLister.root = b.BlacklistPath
+	dir := b.WhitelistPath
+	if lst.Invert {
+		dir = b.BlacklistPath
 	}
-	var w *fsnotify.Watcher
-	if w, err = fsnotify.NewWatcher(); err != nil {
-		return nil, fmt.Errorf("unable to initialize fsnotify mechanism")
+	var w *dirwatch.Instance
+	w, err = dirwatch.New(dir)
+	if w, err = dirwatch.New(dir); err != nil {
+		return nil, fmt.Errorf("unable to initialize directory watch")
 	}
-	if dirContent, err := os.ReadDir(dirLister.root); err != nil {
-		return nil, err
-	} else {
-		for _, f := range dirContent {
-			if !f.IsDir() {
-				if err = dirLister.processFile(f.Name(), false); err != nil {
-					log.Warn(err)
-				}
+	lst.watcher = w
+	go func() {
+		for event := range lst.watcher.Events {
+			switch event.Change {
+			case dirwatch.Added:
+				lst.Hashes.Store(event.InfoHash, list.DUMMY)
+			case dirwatch.Removed:
+				lst.Hashes.Delete(event.InfoHash)
 			}
 		}
-	}
-	if err = w.Add(dirLister.root); err != nil {
-		_ = w.Close()
-		dirLister = nil
-	}
-	return dirLister, err
-}
-
-func (d *directory) watch() {
-	go func() {
-		for err := range d.watcher.Errors {
-			log.Error(err)
-		}
 	}()
-	go func() {
-		for event := range d.watcher.Events {
-			log.Debug(event.String())
-			//todo: implement event type parsing
-		}
-	}()
-}
-
-func (d *directory) processFile(name string, delete bool) error {
-	fullName := filepath.Join(d.root, name)
-	if delete {
-		if hash, found := d.files.Load(fullName); found{
-			d.Hashes.Delete(hash)
-		}
-	} else {
-		var hashBytes []byte
-		info := bittorrent.InfoHashFromBytes(hashBytes)
-		d.files.Store(fullName, info)
-		d.Hashes.Store(info, list.DUMMY)
-	}
-	return nil
+	return lst, err
 }
 
 type directory struct {
 	list.List
-	files   sync.Map
-	root    string
-	watcher *fsnotify.Watcher
+	watcher *dirwatch.Instance
 }
 
 func (d *directory) Stop() stop.Result {
-	ch := make(stop.Channel)
-	go ch.Done(d.watcher.Close())
-	return ch.Result()
+	d.watcher.Close()
+	return stop.AlreadyStopped
 }

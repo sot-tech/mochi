@@ -8,28 +8,30 @@ import (
 	"sync"
 )
 
-type Builder interface {
-	New() (Container, error)
+type Constructor func () Configuration
+
+type Configuration interface {
+	Build() (Container, error)
 }
 
 var (
-	buildersMU sync.Mutex
-	builders   = make(map[string]Builder)
+	constructorsMU sync.Mutex
+	constructors   = make(map[string]Constructor)
 
 	ErrContainerDoesNotExist = errors.New("torrent hash container with that name does not exist")
 )
 
-func Register(n string, c Builder) {
+func Register(n string, c Constructor) {
 	if len(n) == 0 {
 		panic("middleware: could not register a Container with an empty name")
 	}
 	if c == nil {
-		panic("middleware: could not register a Container with nil builder")
+		panic("middleware: could not register a Container with nil builder constructor")
 	}
 
-	buildersMU.Lock()
-	defer buildersMU.Unlock()
-	builders[n] = c
+	constructorsMU.Lock()
+	defer constructorsMU.Unlock()
+	constructors[n] = c
 }
 
 type Container interface {
@@ -38,15 +40,16 @@ type Container interface {
 }
 
 func GetContainer(name string, confBytes []byte) (Container, error) {
-	buildersMU.Lock()
-	defer buildersMU.Unlock()
+	constructorsMU.Lock()
+	defer constructorsMU.Unlock()
 	var err error
 	var cn Container
-	if builder, exist := builders[name]; !exist {
+	if getConfig, exist := constructors[name]; !exist {
 		err = ErrContainerDoesNotExist
 	} else {
-		if err = yaml.Unmarshal(confBytes, &cn); err == nil {
-			cn, err = builder.New()
+		conf := getConfig()
+		if err = yaml.Unmarshal(confBytes, &conf); err == nil {
+			cn, err = conf.Build()
 		}
 	}
 	return cn, err

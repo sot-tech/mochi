@@ -1,7 +1,7 @@
 package http
 
 import (
-	"github.com/zeebo/bencode"
+	"github.com/anacrolix/torrent/bencode"
 	"net/http"
 
 	"github.com/chihaya/chihaya/bittorrent"

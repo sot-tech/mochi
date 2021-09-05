@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/chihaya/chihaya/middleware"
+	"gopkg.in/yaml.v2"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,38 +14,50 @@ import (
 )
 
 var cases = []struct {
-	cfg      Config
+	cfg      middleware.Config
 	ih       string
 	approved bool
 }{
 	// Infohash is whitelisted
 	{
-		Config{
-			Whitelist: []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+		middleware.Config{
+			Name: "list",
+			Options: map[string]interface{}{
+				"Whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
 		true,
 	},
 	// Infohash is not whitelisted
 	{
-		Config{
-			Whitelist: []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+		middleware.Config{
+			Name: "list",
+			Options: map[string]interface{}{
+				"Whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
 		false,
 	},
 	// Infohash is not blacklisted
 	{
-		Config{
-			Blacklist: []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+		middleware.Config{
+			Name: "list",
+			Options: map[string]interface{}{
+				"Blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
 		true,
 	},
 	// Infohash is blacklisted
 	{
-		Config{
-			Blacklist: []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+		middleware.Config{
+			Name: "list",
+			Options: map[string]interface{}{
+				"Blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
 		false,
@@ -53,7 +67,10 @@ var cases = []struct {
 func TestHandleAnnounce(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {
-			h, err := NewHook(tt.cfg)
+			d := driver{}
+			cfg, err := yaml.Marshal(tt)
+			require.Nil(t, err)
+			h, err := d.NewHook(cfg)
 			require.Nil(t, err)
 
 			ctx := context.Background()

@@ -7,7 +7,6 @@ require (
 	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/anacrolix/torrent v1.28.0
-	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-redsync/redsync v1.4.2
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/julienschmidt/httprouter v1.3.0
@@ -19,6 +18,5 @@ require (
 	github.com/spf13/cobra v1.1.3
 	github.com/stretchr/testify v1.7.0
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
-	github.com/zeebo/bencode v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
