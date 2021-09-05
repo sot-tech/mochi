@@ -23,7 +23,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"Whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
@@ -34,7 +34,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"Whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
@@ -45,7 +45,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"Blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
@@ -56,7 +56,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"Blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
