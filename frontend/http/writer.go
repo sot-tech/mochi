@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/anacrolix/torrent/bencode"
 	"net/http"
+	"time"
 
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
@@ -28,6 +29,14 @@ func WriteError(w http.ResponseWriter, err error) error {
 // WriteAnnounceResponse communicates the results of an Announce to a
 // BitTorrent client over HTTP.
 func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceResponse) error {
+	if resp.Interval > 0 {
+		resp.Interval /= time.Second
+	}
+
+	if resp.Interval > 0 {
+		resp.MinInterval /= time.Second
+	}
+
 	bdict := strMap{
 		"complete":     resp.Complete,
 		"incomplete":   resp.Incomplete,
