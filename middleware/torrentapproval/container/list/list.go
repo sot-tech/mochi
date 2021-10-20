@@ -1,3 +1,5 @@
+// Package list implements container with pre-defined
+// list of torrent hashes from config file
 package list
 
 import (
@@ -35,14 +37,13 @@ func build(confBytes []byte) (container.Container, error) {
 
 	hashList := c.Whitelist
 	if l.Invert {
-		l.Invert = true
 		hashList = c.Blacklist
 	}
 
 	for _, hashString := range hashList {
 		hashinfo, err := hex.DecodeString(hashString)
 		if err != nil {
-			return nil, fmt.Errorf("whitelist : invalid hash %s", hashString)
+			return nil, fmt.Errorf("whitelist : invalid hash %s, %v", hashString, err)
 		}
 		if len(hashinfo) != 20 {
 			return nil, fmt.Errorf("whitelist : hash %s is not 20 byes", hashString)

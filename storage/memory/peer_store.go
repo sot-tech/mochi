@@ -147,23 +147,27 @@ func New(provided Config) (storage.PeerStore, error) {
 		}
 	}()
 
-	// Start a goroutine for reporting statistics to Prometheus.
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
-		t := time.NewTicker(cfg.PrometheusReportingInterval)
-		for {
-			select {
-			case <-ps.closed:
-				t.Stop()
-				return
-			case <-t.C:
-				before := time.Now()
-				ps.populateProm()
-				log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+	if cfg.PrometheusReportingInterval > 0 {
+		// Start a goroutine for reporting statistics to Prometheus.
+		ps.wg.Add(1)
+		go func() {
+			defer ps.wg.Done()
+			t := time.NewTicker(cfg.PrometheusReportingInterval)
+			for {
+				select {
+				case <-ps.closed:
+					t.Stop()
+					return
+				case <-t.C:
+					before := time.Now()
+					ps.populateProm()
+					log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+				}
 			}
-		}
-	}()
+		}()
+	} else {
+		log.Info("prometheus disabled because of zero reporting interval")
+	}
 
 	return ps, nil
 }

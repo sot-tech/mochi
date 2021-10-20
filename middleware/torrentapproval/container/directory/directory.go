@@ -1,3 +1,6 @@
+// Package directory implements container which
+// checks if hash present in any of *.torrent file
+// placed in some directory
 package directory
 
 import (
@@ -40,9 +43,8 @@ func build(confBytes []byte) (container.Container, error) {
 		dir = c.BlacklistPath
 	}
 	var w *dirwatch.Instance
-	w, err = dirwatch.New(dir)
 	if w, err = dirwatch.New(dir); err != nil {
-		return nil, fmt.Errorf("unable to initialize directory watch")
+		return nil, fmt.Errorf("unable to initialize directory watch: %v", err)
 	}
 	lst.watcher = w
 	go func() {
