@@ -5,6 +5,7 @@ package bittorrent
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"net"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 )
 
 // PeerID represents a peer ID.
+// TODO: check if torrentV2 also changed this field size
 type PeerID [20]byte
 
 // PeerIDFromBytes creates a PeerID from a byte slice.
@@ -51,32 +53,52 @@ func PeerIDFromString(s string) PeerID {
 }
 
 // InfoHash represents an infohash.
-type InfoHash [20]byte
+type InfoHash []byte
+
+const(
+	InfoHashV1Len = 20
+	InfoHashV2Len = 32
+)
+
+var invalidHashSize = errors.New("InfoHash must be either 20 (for torrent V1) or 32 (V2) bytes")
+var isNotV1Hash = errors.New("InfoHash is not V1 (SHA1)")
+
+// BytesV1 returns 20-bytes length array of the corresponding InfoHash.
+// If InfoHash is not 20-bytes long (is torrent V2 hash) zeroed array and error returned
+func (i InfoHash) BytesV1() ([InfoHashV1Len]byte, error){
+	var bb [InfoHashV1Len]byte
+	if len(i) != InfoHashV1Len {
+		return bb, isNotV1Hash
+	}
+	copy(bb[:], i)
+	return bb, nil
+}
+
+// ValidateInfoHash validates input bytes size and returns it
+// if size one of InfoHashV1Len or InfoHashV2Len.
+// In other case 0 and non-nil error returned
+func ValidateInfoHash(b []byte) (int, error) {
+	l := len(b)
+	if l != InfoHashV1Len && l != InfoHashV2Len {
+		return 0, invalidHashSize
+	}
+	return l, nil
+}
 
 // InfoHashFromBytes creates an InfoHash from a byte slice.
-//
-// It panics if b is not 20 bytes long.
-func InfoHashFromBytes(b []byte) InfoHash {
-	if len(b) != 20 {
-		panic("infohash must be 20 bytes")
+func InfoHashFromBytes(b []byte) (InfoHash, error) {
+	if l, err := ValidateInfoHash(b); err != nil{
+		return nil, err
+	} else {
+		buf := make([]byte, l)
+		copy(buf[:], b)
+		return buf, nil
 	}
-
-	var buf [20]byte
-	copy(buf[:], b)
-	return buf
 }
 
 // InfoHashFromString creates an InfoHash from a string.
-//
-// It panics if s is not 20 bytes long.
-func InfoHashFromString(s string) InfoHash {
-	if len(s) != 20 {
-		panic("infohash must be 20 bytes")
-	}
-
-	var buf [20]byte
-	copy(buf[:], s)
-	return buf
+func InfoHashFromString(s string) (InfoHash, error) {
+	return InfoHashFromBytes([]byte(s))
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.
@@ -84,9 +106,9 @@ func (i InfoHash) String() string {
 	return fmt.Sprintf("%x", i[:])
 }
 
-// RawString returns a 20-byte string of the raw bytes of the InfoHash.
+// RawString returns a string of the raw bytes of the InfoHash.
 func (i InfoHash) RawString() string {
-	return string(i[:])
+	return string(i)
 }
 
 // AnnounceRequest represents the parsed parameters from an announce request.

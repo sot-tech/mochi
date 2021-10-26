@@ -17,16 +17,18 @@ var PeerEqualityFunc = func(p1, p2 bittorrent.Peer) bool { return p1.Equal(p2) }
 
 // TestPeerStore tests a PeerStore implementation against the interface.
 func TestPeerStore(t *testing.T, p PeerStore) {
+	ih0, _ := bittorrent.InfoHashFromString("00000000000000000001")
+	ih1, _ := bittorrent.InfoHashFromString("00000000000000000002")
 	testData := []struct {
 		ih   bittorrent.InfoHash
 		peer bittorrent.Peer
 	}{
 		{
-			bittorrent.InfoHashFromString("00000000000000000001"),
+			ih0,
 			bittorrent.Peer{ID: bittorrent.PeerIDFromString("00000000000000000001"), Port: 1, IP: bittorrent.IP{IP: net.ParseIP("1.1.1.1").To4(), AddressFamily: bittorrent.IPv4}},
 		},
 		{
-			bittorrent.InfoHashFromString("00000000000000000002"),
+			ih1,
 			bittorrent.Peer{ID: bittorrent.PeerIDFromString("00000000000000000002"), Port: 2, IP: bittorrent.IP{IP: net.ParseIP("abab::0001"), AddressFamily: bittorrent.IPv6}},
 		},
 	}

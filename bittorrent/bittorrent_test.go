@@ -41,8 +41,9 @@ func TestPeerID_String(t *testing.T) {
 }
 
 func TestInfoHash_String(t *testing.T) {
-	s := InfoHashFromBytes(b).String()
-	require.Equal(t, expected, s)
+	ih, err := InfoHashFromBytes(b)
+	require.Nil(t, err)
+	require.Equal(t, expected, ih.String())
 }
 
 func TestPeer_String(t *testing.T) {

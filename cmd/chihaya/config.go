@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 
 	yaml "gopkg.in/yaml.v2"
@@ -73,19 +72,10 @@ func ParseConfigFile(path string) (*ConfigFile, error) {
 	f, err := os.Open(os.ExpandEnv(path))
 	if err != nil {
 		return nil, err
+	} else {
+		defer f.Close()
+		cfgFile := new(ConfigFile)
+		err = yaml.NewDecoder(f).Decode(cfgFile)
+		return cfgFile, err
 	}
-	defer f.Close()
-
-	contents, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfgFile ConfigFile
-	err = yaml.Unmarshal(contents, &cfgFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfgFile, nil
 }

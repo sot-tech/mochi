@@ -12,7 +12,7 @@ import (
 type strMap map[string]interface{}
 
 // WriteError communicates an error to a BitTorrent client over HTTP.
-func WriteError(w http.ResponseWriter, err error) error {
+func WriteError(w http.ResponseWriter, err error) {
 	message := "internal server error"
 	if _, clientErr := err.(bittorrent.ClientError); clientErr {
 		message = err.Error()
@@ -21,9 +21,11 @@ func WriteError(w http.ResponseWriter, err error) error {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return bencode.NewEncoder(w).Encode(map[string]interface{}{
+	if err = bencode.NewEncoder(w).Encode(map[string]interface{}{
 		"failure reason": message,
-	})
+	}); err != nil{
+		log.Error("unable to encode string", log.Err(err))
+	}
 }
 
 // WriteAnnounceResponse communicates the results of an Announce to a
@@ -64,18 +66,17 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 			bdict["peers6"] = IPv6CompactDict
 		}
 
-		return bencode.NewEncoder(w).Encode(bdict)
+	} else {
+		// Add the peers to the dictionary.
+		var peers []strMap
+		for _, peer := range resp.IPv4Peers {
+			peers = append(peers, dict(peer))
+		}
+		for _, peer := range resp.IPv6Peers {
+			peers = append(peers, dict(peer))
+		}
+		bdict["peers"] = peers
 	}
-
-	// Add the peers to the dictionary.
-	var peers []strMap
-	for _, peer := range resp.IPv4Peers {
-		peers = append(peers, dict(peer))
-	}
-	for _, peer := range resp.IPv6Peers {
-		peers = append(peers, dict(peer))
-	}
-	bdict["peers"] = peers
 
 	return bencode.NewEncoder(w).Encode(bdict)
 }
@@ -100,7 +101,7 @@ func compact4(peer bittorrent.Peer) (buf []byte) {
 	if ip := peer.IP.To4(); ip == nil {
 		panic("non-IPv4 IP for Peer in IPv4Peers")
 	} else {
-		buf = []byte(ip)
+		buf = ip
 	}
 	buf = append(buf, byte(peer.Port>>8))
 	buf = append(buf, byte(peer.Port&0xff))
@@ -111,7 +112,7 @@ func compact6(peer bittorrent.Peer) (buf []byte) {
 	if ip := peer.IP.To16(); ip == nil {
 		panic("non-IPv6 IP for Peer in IPv6Peers")
 	} else {
-		buf = []byte(ip)
+		buf = ip
 	}
 	buf = append(buf, byte(peer.Port>>8))
 	buf = append(buf, byte(peer.Port&0xff))

@@ -112,10 +112,15 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, err
 	}
 
+	ih, err := bittorrent.InfoHashFromBytes(infohash)
+	if err != nil{
+		return nil, err
+	}
+
 	request := &bittorrent.AnnounceRequest{
 		Event:           eventIDs[eventID],
-		InfoHash:        bittorrent.InfoHashFromBytes(infohash),
-		NumWant:         uint32(numWant),
+		InfoHash:        ih,
+		NumWant:         numWant,
 		Left:            left,
 		Downloaded:      downloaded,
 		Uploaded:        uploaded,
@@ -208,15 +213,26 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 	// Skip past the initial headers and check that the bytes left equal the
 	// length of a valid list of infohashes.
 	r.Packet = r.Packet[16:]
-	if len(r.Packet)%20 != 0 {
+	l := len(r.Packet)
+	isV1, isV2 := l%bittorrent.InfoHashV1Len == 0, l%bittorrent.InfoHashV2Len == 0
+
+	if !(isV1 || isV2) {
 		return nil, errMalformedPacket
 	}
 
 	// Allocate a list of infohashes and append it to the list until we're out.
 	var infohashes []bittorrent.InfoHash
-	for len(r.Packet) >= 20 {
-		infohashes = append(infohashes, bittorrent.InfoHashFromBytes(r.Packet[:20]))
-		r.Packet = r.Packet[20:]
+	pageSize := bittorrent.InfoHashV1Len
+	if isV2 {
+		pageSize = bittorrent.InfoHashV2Len
+	}
+	for len(r.Packet) >= pageSize {
+		if ih, err := bittorrent.InfoHashFromBytes(r.Packet[:pageSize]); err != nil{
+			return nil, err
+		} else {
+			infohashes = append(infohashes, ih)
+			r.Packet = r.Packet[pageSize:]
+		}
 	}
 
 	// Sanitize the request.

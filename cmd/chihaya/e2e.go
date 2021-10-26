@@ -1,8 +1,8 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/anacrolix/torrent/tracker"
@@ -54,28 +54,22 @@ func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func generateInfohash() [20]byte {
+func generateInfohash() bittorrent.InfoHash {
 	b := make([]byte, 20)
-
-	n, err := rand.Read(b)
-	if err != nil {
-		panic(err)
-	}
-	if n != 20 {
-		panic(fmt.Errorf("not enough randomness? Got %d bytes", n))
-	}
-
-	return bittorrent.InfoHashFromBytes(b)
+	rand.Read(b)
+	ih, _ := bittorrent.InfoHashFromBytes(b)
+	return ih
 }
 
 func test(addr string, delay time.Duration) error {
-	ih := generateInfohash()
+	ih, _ := generateInfohash().BytesV1()
 	return testWithInfohash(ih, addr, delay)
 }
 
 func testWithInfohash(infoHash [20]byte, url string, delay time.Duration) error {
+	var ih [20]byte
 	req := tracker.AnnounceRequest{
-		InfoHash:   infoHash,
+		InfoHash:   ih,
 		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
 		Downloaded: 50,
 		Left:       100,
