@@ -16,14 +16,10 @@ type benchData struct {
 }
 
 func generateInfohashes() (a [1000]bittorrent.InfoHash) {
-	r := rand.New(rand.NewSource(0))
 	for i := range a {
-		b := [20]byte{}
-		n, err := r.Read(b[:])
-		if err != nil || n != 20 {
-			panic("unable to create random bytes")
-		}
-		a[i] = bittorrent.InfoHash(b)
+		b := make([]byte, 20)
+		rand.Read(b)
+		a[i], _ = bittorrent.InfoHashFromBytes(b)
 	}
 
 	return
@@ -44,7 +40,7 @@ func generatePeers() (a [1000]bittorrent.Peer) {
 		}
 		port := uint16(r.Uint32())
 		a[i] = bittorrent.Peer{
-			ID:   bittorrent.PeerID(id),
+			ID:   id,
 			IP:   bittorrent.IP{IP: net.IP(ip), AddressFamily: bittorrent.IPv4},
 			Port: port,
 		}

@@ -13,7 +13,6 @@ import (
 )
 
 // PeerID represents a peer ID.
-// TODO: check if torrentV2 also changed this field size
 type PeerID [20]byte
 
 // PeerIDFromBytes creates a PeerID from a byte slice.
@@ -61,17 +60,14 @@ const(
 )
 
 var invalidHashSize = errors.New("InfoHash must be either 20 (for torrent V1) or 32 (V2) bytes")
-var isNotV1Hash = errors.New("InfoHash is not V1 (SHA1)")
 
 // BytesV1 returns 20-bytes length array of the corresponding InfoHash.
-// If InfoHash is not 20-bytes long (is torrent V2 hash) zeroed array and error returned
-func (i InfoHash) BytesV1() ([InfoHashV1Len]byte, error){
+// If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
+// according to BEP52.
+func (i InfoHash) BytesV1() [InfoHashV1Len]byte{
 	var bb [InfoHashV1Len]byte
-	if len(i) != InfoHashV1Len {
-		return bb, isNotV1Hash
-	}
 	copy(bb[:], i)
-	return bb, nil
+	return bb
 }
 
 // ValidateInfoHash validates input bytes size and returns it

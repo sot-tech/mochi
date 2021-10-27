@@ -1,6 +1,7 @@
-package bittorrent
+package clientapproval
 
 import (
+	"github.com/chihaya/chihaya/bittorrent"
 	"testing"
 )
 
@@ -45,8 +46,8 @@ func TestClientID(t *testing.T) {
 	for _, tt := range clientTable {
 		t.Run(tt.peerID, func(t *testing.T) {
 			var clientID ClientID
-			copy(clientID[:], []byte(tt.clientID))
-			parsedID := NewClientID(PeerIDFromString(tt.peerID))
+			copy(clientID[:], tt.clientID)
+			parsedID := NewClientID(bittorrent.PeerIDFromString(tt.peerID))
 			if parsedID != clientID {
 				t.Error("Incorrectly parsed peer ID", tt.peerID, "as", parsedID)
 			}

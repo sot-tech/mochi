@@ -44,15 +44,15 @@ type Config struct {
 }
 
 type hook struct {
-	approved   map[bittorrent.ClientID]struct{}
-	unapproved map[bittorrent.ClientID]struct{}
+	approved   map[ClientID]struct{}
+	unapproved map[ClientID]struct{}
 }
 
 // NewHook returns an instance of the client approval middleware.
 func NewHook(cfg Config) (middleware.Hook, error) {
 	h := &hook{
-		approved:   make(map[bittorrent.ClientID]struct{}),
-		unapproved: make(map[bittorrent.ClientID]struct{}),
+		approved:   make(map[ClientID]struct{}),
+		unapproved: make(map[ClientID]struct{}),
 	}
 
 	if len(cfg.Whitelist) > 0 && len(cfg.Blacklist) > 0 {
@@ -64,7 +64,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 		if len(cidBytes) != 6 {
 			return nil, errors.New("client ID " + cidString + " must be 6 bytes")
 		}
-		var cid bittorrent.ClientID
+		var cid ClientID
 		copy(cid[:], cidBytes)
 		h.approved[cid] = struct{}{}
 	}
@@ -74,7 +74,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 		if len(cidBytes) != 6 {
 			return nil, errors.New("client ID " + cidString + " must be 6 bytes")
 		}
-		var cid bittorrent.ClientID
+		var cid ClientID
 		copy(cid[:], cidBytes)
 		h.unapproved[cid] = struct{}{}
 	}
@@ -83,7 +83,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
-	clientID := bittorrent.NewClientID(req.Peer.ID)
+	clientID := NewClientID(req.Peer.ID)
 
 	if len(h.approved) > 0 {
 		if _, found := h.approved[clientID]; !found {
