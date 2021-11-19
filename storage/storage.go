@@ -14,24 +14,24 @@ var (
 	drivers  = make(map[string]Driver)
 )
 
-// Driver is the interface used to initialize a new type of PeerStore.
+// Driver is the interface used to initialize a new type of Storage.
 type Driver interface {
-	NewPeerStore(cfg interface{}) (PeerStore, error)
+	NewPeerStore(cfg interface{}) (Storage, error)
 }
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
-// AnnouncePeers method of the PeerStore interface if the requested resource
+// AnnouncePeers method of the Storage interface if the requested resource
 // does not exist.
 var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 
-// ErrDriverDoesNotExist is the error returned by NewPeerStore when a peer
+// ErrDriverDoesNotExist is the error returned by NewStorage when a peer
 // store driver with that name does not exist.
 var ErrDriverDoesNotExist = errors.New("peer store driver with that name does not exist")
 
-// PeerStore is an interface that abstracts the interactions of storing and
+// Storage is an interface that abstracts the interactions of storing and
 // manipulating Peers such that it can be implemented for various data stores.
 //
-// Implementations of the PeerStore interface must do the following in addition
+// Implementations of the Storage interface must do the following in addition
 // to implementing the methods of the interface in the way documented:
 //
 // - Implement a garbage-collection strategy that ensures stale data is removed.
@@ -40,13 +40,13 @@ var ErrDriverDoesNotExist = errors.New("peer store driver with that name does no
 //     be scanned periodically and too old Peers removed. The intervals and
 //     durations involved should be configurable.
 // - IPv4 and IPv6 swarms must be isolated from each other.
-//     A PeerStore must be able to transparently handle IPv4 and IPv6 Peers, but
+//     A Storage must be able to transparently handle IPv4 and IPv6 Peers, but
 //     must separate them. AnnouncePeers and ScrapeSwarm must return information
 //     about the Swarm matching the given AddressFamily only.
 //
 // Implementations can be tested against this interface using the tests in
-// storage_tests.go and the benchmarks in storage_bench.go.
-type PeerStore interface {
+// storage_test.go and the benchmarks in storage_bench.go.
+type Storage interface {
 	// PutSeeder adds a Seeder to the Swarm identified by the provided
 	// InfoHash.
 	PutSeeder(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
@@ -104,13 +104,21 @@ type PeerStore interface {
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
 	ScrapeSwarm(infoHash bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) bittorrent.Scrape
 
+	/*TODO: implement this*/
+	
+	Put(key interface{}, value interface{})
+
+	Load(key interface{}) interface{}
+
+	Delete(key interface{})
+
 	// stop.Stopper is an interface that expects a Stop method to stop the
-	// PeerStore.
+	// Storage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper
 
 	// log.Fielder returns a loggable version of the data used to configure and
-	// operate a particular PeerStore.
+	// operate a particular Storage.
 	log.Fielder
 }
 
@@ -136,11 +144,11 @@ func RegisterDriver(name string, d Driver) {
 	drivers[name] = d
 }
 
-// NewPeerStore attempts to initialize a new PeerStore instance from
+// NewStorage attempts to initialize a new Storage instance from
 // the list of registered Drivers.
 //
 // If a driver does not exist, returns ErrDriverDoesNotExist.
-func NewPeerStore(name string, cfg interface{}) (ps PeerStore, err error) {
+func NewStorage(name string, cfg interface{}) (ps Storage, err error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 

@@ -24,7 +24,7 @@ import (
 // Run represents the state of a running instance of Chihaya.
 type Run struct {
 	configFilePath string
-	peerStore      storage.PeerStore
+	storage        storage.Storage
 	logic          *middleware.Logic
 	sg             *stop.Group
 }
@@ -41,7 +41,7 @@ func NewRun(configFilePath string) (*Run, error) {
 // Start begins an instance of Chihaya.
 // It is optional to provide an instance of the peer store to avoid the
 // creation of a new one.
-func (r *Run) Start(ps storage.PeerStore) error {
+func (r *Run) Start(ps storage.Storage) error {
 	configFile, err := ParseConfigFile(r.configFilePath)
 	if err != nil {
 		return errors.New("failed to read config: " + err.Error())
@@ -59,19 +59,19 @@ func (r *Run) Start(ps storage.PeerStore) error {
 
 	if ps == nil {
 		log.Info("starting storage", log.Fields{"name": cfg.Storage.Name})
-		ps, err = storage.NewPeerStore(cfg.Storage.Name, cfg.Storage.Config)
+		ps, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
 		if err != nil {
 			return errors.New("failed to create storage: " + err.Error())
 		}
 		log.Info("started storage", ps)
 	}
-	r.peerStore = ps
+	r.storage = ps
 
-	preHooks, err := middleware.HooksFromHookConfigs(cfg.PreHooks)
+	preHooks, err := middleware.HooksFromHookConfigs(cfg.PreHooks, r.storage)
 	if err != nil {
 		return errors.New("failed to validate hook config: " + err.Error())
 	}
-	postHooks, err := middleware.HooksFromHookConfigs(cfg.PostHooks)
+	postHooks, err := middleware.HooksFromHookConfigs(cfg.PostHooks, r.storage)
 	if err != nil {
 		return errors.New("failed to validate hook config: " + err.Error())
 	}
@@ -80,7 +80,7 @@ func (r *Run) Start(ps storage.PeerStore) error {
 		"prehooks":  cfg.PreHookNames(),
 		"posthooks": cfg.PostHookNames(),
 	})
-	r.logic = middleware.NewLogic(cfg.ResponseConfig, r.peerStore, preHooks, postHooks)
+	r.logic = middleware.NewLogic(cfg.ResponseConfig, r.storage, preHooks, postHooks)
 
 	if cfg.HTTPConfig.Addr != "" {
 		log.Info("starting HTTP frontend", cfg.HTTPConfig)
@@ -113,7 +113,7 @@ func combineErrors(prefix string, errs []error) error {
 }
 
 // Stop shuts down an instance of Chihaya.
-func (r *Run) Stop(keepPeerStore bool) (storage.PeerStore, error) {
+func (r *Run) Stop(keepPeerStore bool) (storage.Storage, error) {
 	log.Debug("stopping frontends and metrics server")
 	if errs := r.sg.Stop().Wait(); len(errs) != 0 {
 		return nil, combineErrors("failed while shutting down frontends", errs)
@@ -126,13 +126,13 @@ func (r *Run) Stop(keepPeerStore bool) (storage.PeerStore, error) {
 
 	if !keepPeerStore {
 		log.Debug("stopping peer store")
-		if errs := r.peerStore.Stop().Wait(); len(errs) != 0 {
+		if errs := r.storage.Stop().Wait(); len(errs) != 0 {
 			return nil, combineErrors("failed while shutting down peer store", errs)
 		}
-		r.peerStore = nil
+		r.storage = nil
 	}
 
-	return r.peerStore, nil
+	return r.storage, nil
 }
 
 // RootRunCmdFunc implements a Cobra command that runs an instance of Chihaya

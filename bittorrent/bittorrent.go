@@ -12,20 +12,23 @@ import (
 	"github.com/chihaya/chihaya/pkg/log"
 )
 
-// PeerID represents a peer ID.
-type PeerID [20]byte
+const PeerIDLen = 20
 
-// PeerIDFromBytes creates a PeerID from a byte slice.
+// PeerID represents a peer ID.
+type PeerID [PeerIDLen]byte
+
+var InvalidPeerIDSizeError = errors.New("peer ID must be 20 bytes")
+
+// NewPeerID creates a PeerID from a byte slice.
 //
 // It panics if b is not 20 bytes long.
-func PeerIDFromBytes(b []byte) PeerID {
-	if len(b) != 20 {
-		panic("peer ID must be 20 bytes")
+func NewPeerID(b []byte) (PeerID, error) {
+	var p PeerID
+	if len(b) != PeerIDLen {
+		return p, InvalidPeerIDSizeError
 	}
-
-	var buf [20]byte
-	copy(buf[:], b)
-	return buf
+	copy(p[:], b)
+	return p, nil
 }
 
 // String implements fmt.Stringer, returning the base16 encoded PeerID.
@@ -38,36 +41,22 @@ func (p PeerID) RawString() string {
 	return string(p[:])
 }
 
-// PeerIDFromString creates a PeerID from a string.
-//
-// It panics if s is not 20 bytes long.
-func PeerIDFromString(s string) PeerID {
-	if len(s) != 20 {
-		panic("peer ID must be 20 bytes")
-	}
-
-	var buf [20]byte
-	copy(buf[:], s)
-	return buf
-}
-
 // InfoHash represents an infohash.
-type InfoHash []byte
+type InfoHash string
 
-const(
-	InfoHashV1Len = 20
-	InfoHashV2Len = 32
+const (
+	InfoHashV1Len          = 20
+	InfoHashV2Len          = 32
+	NoneInfoHash  InfoHash = ""
 )
 
-var invalidHashSize = errors.New("InfoHash must be either 20 (for torrent V1) or 32 (V2) bytes")
+var InvalidHashSizeError = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
 
-// BytesV1 returns 20-bytes length array of the corresponding InfoHash.
+// TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
 // If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
 // according to BEP52.
-func (i InfoHash) BytesV1() [InfoHashV1Len]byte{
-	var bb [InfoHashV1Len]byte
-	copy(bb[:], i)
-	return bb
+func (i InfoHash) TruncateV1() InfoHash {
+	return i[:InfoHashV1Len]
 }
 
 // ValidateInfoHash validates input bytes size and returns it
@@ -76,25 +65,19 @@ func (i InfoHash) BytesV1() [InfoHashV1Len]byte{
 func ValidateInfoHash(b []byte) (int, error) {
 	l := len(b)
 	if l != InfoHashV1Len && l != InfoHashV2Len {
-		return 0, invalidHashSize
+		return 0, InvalidHashSizeError
 	}
 	return l, nil
 }
 
-// InfoHashFromBytes creates an InfoHash from a byte slice.
-func InfoHashFromBytes(b []byte) (InfoHash, error) {
-	if l, err := ValidateInfoHash(b); err != nil{
-		return nil, err
+// NewInfoHash creates an InfoHash from a byte slice.
+func NewInfoHash(b []byte) (InfoHash, error) {
+	if _, err := ValidateInfoHash(b); err != nil {
+		return NoneInfoHash, err
 	} else {
-		buf := make([]byte, l)
-		copy(buf[:], b)
+		buf := InfoHash(b)
 		return buf, nil
 	}
-}
-
-// InfoHashFromString creates an InfoHash from a string.
-func InfoHashFromString(s string) (InfoHash, error) {
-	return InfoHashFromBytes([]byte(s))
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.

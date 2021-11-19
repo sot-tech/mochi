@@ -26,11 +26,10 @@ var _ frontend.TrackerLogic = &Logic{}
 
 // NewLogic creates a new instance of a TrackerLogic that executes the provided
 // middleware hooks.
-func NewLogic(cfg ResponseConfig, peerStore storage.PeerStore, preHooks, postHooks []Hook) *Logic {
+func NewLogic(cfg ResponseConfig, peerStore storage.Storage, preHooks, postHooks []Hook) *Logic {
 	return &Logic{
 		announceInterval:    cfg.AnnounceInterval,
 		minAnnounceInterval: cfg.MinAnnounceInterval,
-		peerStore:           peerStore,
 		preHooks:            append(preHooks, &responseHook{store: peerStore}),
 		postHooks:           append(postHooks, &swarmInteractionHook{store: peerStore}),
 	}
@@ -41,7 +40,6 @@ func NewLogic(cfg ResponseConfig, peerStore storage.PeerStore, preHooks, postHoo
 type Logic struct {
 	announceInterval    time.Duration
 	minAnnounceInterval time.Duration
-	peerStore           storage.PeerStore
 	preHooks            []Hook
 	postHooks           []Hook
 }

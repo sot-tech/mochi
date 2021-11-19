@@ -67,10 +67,10 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	if !ok {
 		return nil, bittorrent.ClientError("failed to parse parameter: peer_id")
 	}
-	if len(peerID) != 20 {
+	if len(peerID) != bittorrent.PeerIDLen {
 		return nil, bittorrent.ClientError("failed to provide valid peer_id")
 	}
-	request.Peer.ID = bittorrent.PeerIDFromString(peerID)
+	request.Peer.ID = bittorrent.NewPeerID([]byte(peerID))
 
 	// Determine the number of remaining bytes for the client.
 	request.Left, err = qp.Uint64("left")

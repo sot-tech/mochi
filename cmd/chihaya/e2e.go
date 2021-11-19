@@ -57,17 +57,17 @@ func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
 func generateInfohash() bittorrent.InfoHash {
 	b := make([]byte, 20)
 	rand.Read(b)
-	ih, _ := bittorrent.InfoHashFromBytes(b)
+	ih, _ := bittorrent.NewInfoHash(b)
 	return ih
 }
 
 func test(addr string, delay time.Duration) error {
-	ih, _ := generateInfohash().BytesV1()
+	ih := generateInfohash().TruncateV1()
 	return testWithInfohash(ih, addr, delay)
 }
 
-func testWithInfohash(infoHash [20]byte, url string, delay time.Duration) error {
-	var ih [20]byte
+func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Duration) error {
+	var ih [bittorrent.InfoHashV1Len]byte
 	req := tracker.AnnounceRequest{
 		InfoHash:   ih,
 		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
@@ -95,8 +95,9 @@ func testWithInfohash(infoHash [20]byte, url string, delay time.Duration) error 
 
 	time.Sleep(delay)
 
+	copy(ih[:], infoHash)
 	req = tracker.AnnounceRequest{
-		InfoHash:   infoHash,
+		InfoHash:   ih,
 		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21},
 		Downloaded: 50,
 		Left:       100,

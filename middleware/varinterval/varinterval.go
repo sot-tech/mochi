@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/chihaya/chihaya/storage"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ var _ middleware.Driver = driver{}
 
 type driver struct{}
 
-func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
+func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook, error) {
 	var cfg Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
@@ -96,12 +97,12 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 	if h.cfg.ModifyResponseProbability == 1 || p < h.cfg.ModifyResponseProbability {
 		// Generate the increase delta.
 		v, _, _ = random.Intn(s0, s1, h.cfg.MaxIncreaseDelta)
-		addSeconds := time.Duration(v+1) * time.Second
+		add := time.Duration(v+1) * time.Second
 
-		resp.Interval += addSeconds
+		resp.Interval += add
 
 		if h.cfg.ModifyMinInterval {
-			resp.MinInterval += addSeconds
+			resp.MinInterval += add
 		}
 
 		return ctx, nil

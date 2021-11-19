@@ -11,7 +11,7 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/chihaya/chihaya/bittorrent"
+	bittorrent "github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/pkg/timecache"
@@ -36,7 +36,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewPeerStore(icfg interface{}) (storage.PeerStore, error) {
+func (d driver) NewPeerStore(icfg interface{}) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -53,7 +53,7 @@ func (d driver) NewPeerStore(icfg interface{}) (storage.PeerStore, error) {
 	return New(cfg)
 }
 
-// Config holds the configuration of a memory PeerStore.
+// Config holds the configuration of a memory Storage.
 type Config struct {
 	GarbageCollectionInterval   time.Duration `yaml:"gc_interval"`
 	PrometheusReportingInterval time.Duration `yaml:"prometheus_reporting_interval"`
@@ -118,8 +118,8 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// New creates a new PeerStore backed by memory.
-func New(provided Config) (storage.PeerStore, error) {
+// New creates a new Storage backed by memory.
+func New(provided Config) (storage.Storage, error) {
 	cfg := provided.Validate()
 	ps := &peerStore{
 		cfg:    cfg,
@@ -142,7 +142,9 @@ func New(provided Config) (storage.PeerStore, error) {
 			case <-time.After(cfg.GarbageCollectionInterval):
 				before := time.Now().Add(-cfg.PeerLifetime)
 				log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
-				ps.collectGarbage(before)
+				if err := ps.collectGarbage(before); err != nil {
+					log.Error(err)
+				}
 			}
 		}
 	}()
@@ -177,17 +179,22 @@ type serializedPeer string
 func newPeerKey(p bittorrent.Peer) serializedPeer {
 	b := make([]byte, 20+2+len(p.IP.IP))
 	copy(b[:20], p.ID[:])
-	binary.BigEndian.PutUint16(b[20:22], p.Port)
-	copy(b[22:], p.IP.IP)
+	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port)
+	copy(b[bittorrent.PeerIDLen+2:], p.IP.IP)
 
 	return serializedPeer(b)
 }
 
+// TODO: move duplicated code into one place
 func decodePeerKey(pk serializedPeer) bittorrent.Peer {
+	peerId, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
+	if err != nil {
+		panic(err)
+	}
 	peer := bittorrent.Peer{
-		ID:   bittorrent.PeerIDFromString(string(pk[:20])),
-		Port: binary.BigEndian.Uint16([]byte(pk[20:22])),
-		IP:   bittorrent.IP{IP: net.IP(pk[22:])}}
+		ID:   peerId,
+		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2])),
+		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
 
 	if ip := peer.IP.To4(); ip != nil {
 		peer.IP.IP = ip
@@ -222,7 +229,7 @@ type peerStore struct {
 	wg     sync.WaitGroup
 }
 
-var _ storage.PeerStore = &peerStore{}
+var _ storage.Storage = &peerStore{}
 
 // populateProm aggregates metrics over all shards and then posts them to
 // prometheus.
@@ -255,7 +262,7 @@ func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, af bittorrent.Addr
 	// There are twice the amount of shards specified by the user, the first
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
 	// IPv6 swarms.
-	idx := binary.BigEndian.Uint32(infoHash[:4]) % (uint32(len(ps.shards)) / 2)
+	idx := binary.BigEndian.Uint32([]byte(infoHash[:4])) % (uint32(len(ps.shards)) / 2)
 	if af == bittorrent.IPv6 {
 		idx += uint32(len(ps.shards) / 2)
 	}
@@ -512,7 +519,7 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorren
 	return
 }
 
-// collectGarbage deletes all Peers from the PeerStore which are older than the
+// collectGarbage deletes all Peers from the Storage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface

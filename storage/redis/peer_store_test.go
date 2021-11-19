@@ -10,7 +10,7 @@ import (
 	s "github.com/chihaya/chihaya/storage"
 )
 
-func createNew() s.PeerStore {
+func createNew() s.Storage {
 	rs, err := miniredis.Run()
 	if err != nil {
 		panic(err)

@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"errors"
+	"github.com/chihaya/chihaya/storage"
 	"sync"
 
 	yaml "gopkg.in/yaml.v2"
@@ -23,7 +24,7 @@ var (
 // The options parameter is YAML encoded bytes that should be unmarshalled into
 // the hook's custom configuration.
 type Driver interface {
-	NewHook(options []byte) (Hook, error)
+	NewHook(options []byte, storage storage.Storage) (Hook, error)
 }
 
 // RegisterDriver makes a Driver available by the provided name.
@@ -52,7 +53,7 @@ func RegisterDriver(name string, d Driver) {
 // list of registered Drivers.
 //
 // If a driver does not exist, returns ErrDriverDoesNotExist.
-func New(name string, optionBytes []byte) (Hook, error) {
+func New(name string, optionBytes []byte, storage storage.Storage) (Hook, error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 
@@ -62,7 +63,7 @@ func New(name string, optionBytes []byte) (Hook, error) {
 		return nil, ErrDriverDoesNotExist
 	}
 
-	return d.NewHook(optionBytes)
+	return d.NewHook(optionBytes, storage)
 }
 
 // Config is the generic configuration format used for all registered Hooks.
@@ -72,7 +73,7 @@ type Config struct {
 }
 
 // HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
-func HooksFromHookConfigs(cfgs []Config) (hooks []Hook, err error) {
+func HooksFromHookConfigs(cfgs []Config, storage storage.Storage) (hooks []Hook, err error) {
 	for _, cfg := range cfgs {
 		// Marshal the options back into bytes.
 		var optionBytes []byte
@@ -82,7 +83,7 @@ func HooksFromHookConfigs(cfgs []Config) (hooks []Hook, err error) {
 		}
 
 		var h Hook
-		h, err = New(cfg.Name, optionBytes)
+		h, err = New(cfg.Name, optionBytes, storage)
 		if err != nil {
 			return
 		}

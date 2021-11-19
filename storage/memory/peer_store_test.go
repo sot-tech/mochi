@@ -7,7 +7,7 @@ import (
 	s "github.com/chihaya/chihaya/storage"
 )
 
-func createNew() s.PeerStore {
+func createNew() s.Storage {
 	ps, err := New(Config{
 		ShardCount:                  1024,
 		GarbageCollectionInterval:   10 * time.Minute,

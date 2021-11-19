@@ -11,30 +11,34 @@ import (
 
 // PeerEqualityFunc is the boolean function to use to check two Peers for
 // equality.
-// Depending on the implementation of the PeerStore, this can be changed to
+// Depending on the implementation of the Storage, this can be changed to
 // use (Peer).EqualEndpoint instead.
 var PeerEqualityFunc = func(p1, p2 bittorrent.Peer) bool { return p1.Equal(p2) }
 
-// TestPeerStore tests a PeerStore implementation against the interface.
-func TestPeerStore(t *testing.T, p PeerStore) {
-	ih0, _ := bittorrent.InfoHashFromString("00000000000000000001")
-	ih1, _ := bittorrent.InfoHashFromString("00000000000000000002")
+// TestPeerStore tests a Storage implementation against the interface.
+func TestPeerStore(t *testing.T, p Storage) {
+	ih0, _ := bittorrent.NewInfoHash([]byte("00000000000000000001"))
+	ih1, _ := bittorrent.NewInfoHash([]byte("00000000000000000002"))
+	id0, _ := bittorrent.NewPeerID([]byte("00000000000000000001"))
+	id1, _ := bittorrent.NewPeerID([]byte("00000000000000000001"))
+	id2, _ := bittorrent.NewPeerID([]byte("00000000000000000001"))
+	id3, _ := bittorrent.NewPeerID([]byte("00000000000000000001"))
 	testData := []struct {
 		ih   bittorrent.InfoHash
 		peer bittorrent.Peer
 	}{
 		{
 			ih0,
-			bittorrent.Peer{ID: bittorrent.PeerIDFromString("00000000000000000001"), Port: 1, IP: bittorrent.IP{IP: net.ParseIP("1.1.1.1").To4(), AddressFamily: bittorrent.IPv4}},
+			bittorrent.Peer{ID: id0, Port: 1, IP: bittorrent.IP{IP: net.ParseIP("1.1.1.1").To4(), AddressFamily: bittorrent.IPv4}},
 		},
 		{
 			ih1,
-			bittorrent.Peer{ID: bittorrent.PeerIDFromString("00000000000000000002"), Port: 2, IP: bittorrent.IP{IP: net.ParseIP("abab::0001"), AddressFamily: bittorrent.IPv6}},
+			bittorrent.Peer{ID: id1, Port: 2, IP: bittorrent.IP{IP: net.ParseIP("abab::0001"), AddressFamily: bittorrent.IPv6}},
 		},
 	}
 
-	v4Peer := bittorrent.Peer{ID: bittorrent.PeerIDFromString("99999999999999999994"), IP: bittorrent.IP{IP: net.ParseIP("99.99.99.99").To4(), AddressFamily: bittorrent.IPv4}, Port: 9994}
-	v6Peer := bittorrent.Peer{ID: bittorrent.PeerIDFromString("99999999999999999996"), IP: bittorrent.IP{IP: net.ParseIP("fc00::0001"), AddressFamily: bittorrent.IPv6}, Port: 9996}
+	v4Peer := bittorrent.Peer{ID: id2, IP: bittorrent.IP{IP: net.ParseIP("99.99.99.99").To4(), AddressFamily: bittorrent.IPv4}, Port: 9994}
+	v6Peer := bittorrent.Peer{ID: id3, IP: bittorrent.IP{IP: net.ParseIP("fc00::0001"), AddressFamily: bittorrent.IPv6}, Port: 9996}
 
 	for _, c := range testData {
 		peer := v4Peer

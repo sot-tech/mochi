@@ -10,7 +10,7 @@ import (
 )
 
 func TestStartStopRaceIssue437(t *testing.T) {
-	ps, err := storage.NewPeerStore("memory", nil)
+	ps, err := storage.NewStorage("memory", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

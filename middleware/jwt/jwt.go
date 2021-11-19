@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chihaya/chihaya/storage"
 	"net/http"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ var _ middleware.Driver = driver{}
 
 type driver struct{}
 
-func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
+func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook, error) {
 	var cfg Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
@@ -174,7 +175,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 	return ctx, nil
 }
 
-func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
 	// Scrapes don't require any protection.
 	return ctx, nil
 }
@@ -204,7 +205,7 @@ func validateJWT(ih bittorrent.InfoHash, jwtBytes []byte, cfgIss, cfgAud string,
 		return jwt.ErrInvalidAUDClaim
 	}
 
-	ihHex := hex.EncodeToString(ih[:])
+	ihHex := hex.EncodeToString([]byte(ih))
 	if ihClaim, ok := claims.Get("infohash").(string); !ok || ihClaim != ihHex {
 		log.Debug("unequal or missing infohash when validating JWT", log.Fields{
 			"exists":  ok,

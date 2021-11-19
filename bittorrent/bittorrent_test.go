@@ -19,7 +19,7 @@ var peerStringTestCases = []struct {
 }{
 	{
 		input: Peer{
-			ID:   PeerIDFromBytes(b),
+			ID:   NewPeerID(b),
 			IP:   IP{net.IPv4(10, 11, 12, 1), IPv4},
 			Port: 1234,
 		},
@@ -27,7 +27,7 @@ var peerStringTestCases = []struct {
 	},
 	{
 		input: Peer{
-			ID:   PeerIDFromBytes(b),
+			ID:   NewPeerID(b),
 			IP:   IP{net.ParseIP("2001:db8::ff00:42:8329"), IPv6},
 			Port: 1234,
 		},
@@ -36,12 +36,12 @@ var peerStringTestCases = []struct {
 }
 
 func TestPeerID_String(t *testing.T) {
-	s := PeerIDFromBytes(b).String()
+	s := NewPeerID(b).String()
 	require.Equal(t, expected, s)
 }
 
 func TestInfoHash_String(t *testing.T) {
-	ih, err := InfoHashFromBytes(b)
+	ih, err := NewInfoHash(b)
 	require.Nil(t, err)
 	require.Equal(t, expected, ih.String())
 }

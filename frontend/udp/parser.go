@@ -112,7 +112,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, err
 	}
 
-	ih, err := bittorrent.InfoHashFromBytes(infohash)
+	ih, err := bittorrent.NewInfoHash(infohash)
 	if err != nil{
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		NumWantProvided: true,
 		EventProvided:   true,
 		Peer: bittorrent.Peer{
-			ID:   bittorrent.PeerIDFromBytes(peerID),
+			ID:   bittorrent.NewPeerID(peerID),
 			IP:   bittorrent.IP{IP: ip},
 			Port: port,
 		},
@@ -227,7 +227,7 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 		pageSize = bittorrent.InfoHashV2Len
 	}
 	for len(r.Packet) >= pageSize {
-		if ih, err := bittorrent.InfoHashFromBytes(r.Packet[:pageSize]); err != nil{
+		if ih, err := bittorrent.NewInfoHash(r.Packet[:pageSize]); err != nil{
 			return nil, err
 		} else {
 			infohashes = append(infohashes, ih)

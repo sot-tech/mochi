@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
 	"github.com/chihaya/chihaya/pkg/stop"
+	"github.com/chihaya/chihaya/storage"
 	"gopkg.in/yaml.v2"
 
 	"github.com/chihaya/chihaya/bittorrent"
@@ -24,7 +25,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
+func (d driver) NewHook(optionBytes []byte, storage storage.Storage) (middleware.Hook, error) {
 	var cfg middleware.Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
@@ -44,7 +45,7 @@ func (d driver) NewHook(optionBytes []byte) (middleware.Hook, error) {
 		return nil, err
 	}
 
-	if c, err := container.GetContainer(cfg.Name, confBytes); err == nil {
+	if c, err := container.GetContainer(cfg.Name, confBytes, storage); err == nil {
 		return &hook{c}, nil
 	} else {
 		return nil, err

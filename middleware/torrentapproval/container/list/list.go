@@ -5,8 +5,9 @@ package list
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
+	bittorrent "github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
+	"github.com/chihaya/chihaya/storage"
 	"gopkg.in/yaml.v2"
 	"sync"
 )
@@ -22,7 +23,8 @@ type Config struct {
 
 var DUMMY struct{}
 
-func build(confBytes []byte) (container.Container, error) {
+// TODO: change sync map to provided storage
+func build(confBytes []byte, storage storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
@@ -41,14 +43,15 @@ func build(confBytes []byte) (container.Container, error) {
 	}
 
 	for _, hashString := range hashList {
-		hashinfo, err := hex.DecodeString(hashString)
+		hashBytes, err := hex.DecodeString(hashString)
 		if err != nil {
 			return nil, fmt.Errorf("whitelist : invalid hash %s, %v", hashString, err)
 		}
-		if len(hashinfo) != 20 {
-			return nil, fmt.Errorf("whitelist : hash %s is not 20 byes", hashString)
+		ih, err := bittorrent.NewInfoHash(hashBytes)
+		if err != nil {
+			return nil, fmt.Errorf("whitelist : %s : %v", hashString, err)
 		}
-		l.Hashes.Store(bittorrent.InfoHashFromBytes(hashinfo), DUMMY)
+		l.Hashes.Store(ih, DUMMY)
 	}
 	return l, nil
 }

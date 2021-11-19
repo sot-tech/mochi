@@ -80,7 +80,7 @@ func TestHandleAnnounce(t *testing.T) {
 			hashbytes, err := hex.DecodeString(tt.ih)
 			require.Nil(t, err)
 
-			hashinfo := bittorrent.InfoHashFromBytes(hashbytes)
+			hashinfo := bittorrent.NewInfoHash(hashbytes)
 
 			req.InfoHash = hashinfo
 

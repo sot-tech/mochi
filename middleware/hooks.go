@@ -25,7 +25,7 @@ type skipSwarmInteraction struct{}
 var SkipSwarmInteractionKey = skipSwarmInteraction{}
 
 type swarmInteractionHook struct {
-	store storage.PeerStore
+	store storage.Storage
 }
 
 func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (_ context.Context, err error) {
@@ -85,7 +85,7 @@ type scrapeAddressType struct{}
 var ScrapeIsIPv6Key = scrapeAddressType{}
 
 type responseHook struct {
-	store storage.PeerStore
+	store storage.Storage
 }
 
 func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (_ context.Context, err error) {

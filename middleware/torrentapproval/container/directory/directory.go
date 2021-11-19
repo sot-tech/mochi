@@ -9,6 +9,7 @@ import (
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
 	"github.com/chihaya/chihaya/pkg/stop"
+	"github.com/chihaya/chihaya/storage"
 	"gopkg.in/yaml.v2"
 	"sync"
 )
@@ -22,7 +23,8 @@ type Config struct {
 	BlacklistPath string `yaml:"blacklist_path"`
 }
 
-func build(confBytes []byte) (container.Container, error) {
+// TODO: change sync map to provided storage
+func build(confBytes []byte, storage storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
@@ -42,6 +44,7 @@ func build(confBytes []byte) (container.Container, error) {
 	if lst.Invert {
 		dir = c.BlacklistPath
 	}
+	//FIXME: implement V2 torrent add/delete
 	var w *dirwatch.Instance
 	if w, err = dirwatch.New(dir); err != nil {
 		return nil, fmt.Errorf("unable to initialize directory watch: %v", err)

@@ -61,7 +61,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewPeerStore(icfg interface{}) (storage.PeerStore, error) {
+func (d driver) NewPeerStore(icfg interface{}) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -78,7 +78,7 @@ func (d driver) NewPeerStore(icfg interface{}) (storage.PeerStore, error) {
 	return New(cfg)
 }
 
-// Config holds the configuration of a redis PeerStore.
+// Config holds the configuration of a redis Storage.
 type Config struct {
 	GarbageCollectionInterval   time.Duration `yaml:"gc_interval"`
 	PrometheusReportingInterval time.Duration `yaml:"prometheus_reporting_interval"`
@@ -176,8 +176,8 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// New creates a new PeerStore backed by redis.
-func New(provided Config) (storage.PeerStore, error) {
+// New creates a new Storage backed by redis.
+func New(provided Config) (storage.Storage, error) {
 	cfg := provided.Validate()
 
 	u, err := parseRedisURL(cfg.RedisBroker)
@@ -237,19 +237,24 @@ func New(provided Config) (storage.PeerStore, error) {
 type serializedPeer string
 
 func newPeerKey(p bittorrent.Peer) serializedPeer {
-	b := make([]byte, 20+2+len(p.IP.IP))
-	copy(b[:20], p.ID[:])
-	binary.BigEndian.PutUint16(b[20:22], p.Port)
-	copy(b[22:], p.IP.IP)
+	b := make([]byte, bittorrent.PeerIDLen+2+len(p.IP.IP))
+	copy(b[:bittorrent.PeerIDLen], p.ID[:])
+	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port)
+	copy(b[bittorrent.PeerIDLen+2:], p.IP.IP)
 
 	return serializedPeer(b)
 }
 
+// TODO: move duplicated code into one place
 func decodePeerKey(pk serializedPeer) bittorrent.Peer {
+	peerId, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
+	if err != nil {
+		panic(err)
+	}
 	peer := bittorrent.Peer{
-		ID:   bittorrent.PeerIDFromString(string(pk[:20])),
-		Port: binary.BigEndian.Uint16([]byte(pk[20:22])),
-		IP:   bittorrent.IP{IP: net.IP(pk[22:])}}
+		ID:   peerId,
+		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen : bittorrent.PeerIDLen+2])),
+		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
 
 	if ip := peer.IP.To4(); ip != nil {
 		peer.IP.IP = ip
@@ -295,12 +300,21 @@ func (ps *peerStore) leecherCountKey(af string) string {
 	return af + "_L_count"
 }
 
+func (ps *peerStore) getConnection() redis.Conn {
+	select {
+	case <-ps.closed:
+		panic("attempted to interact with stopped redis store")
+	default:
+	}
+	return ps.rb.open()
+}
+
 // populateProm aggregates metrics over all groups and then posts them to
 // prometheus.
 func (ps *peerStore) populateProm() {
 	var numInfohashes, numSeeders, numLeechers int64
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	for _, group := range ps.groups() {
@@ -346,18 +360,11 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 		"Peer":     p,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
 	pk := newPeerKey(p)
-
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
 	ct := ps.getClock()
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	conn.Send("MULTI")
@@ -393,15 +400,9 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 		"Peer":     p,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
 	pk := newPeerKey(p)
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
@@ -427,18 +428,12 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 		"Peer":     p,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
 	// Update the peer in the swarm.
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, ih.String())
 	pk := newPeerKey(p)
 	ct := ps.getClock()
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	conn.Send("MULTI")
@@ -465,13 +460,7 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 		"Peer":     p,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	pk := newPeerKey(p)
@@ -484,9 +473,7 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 	if delNum == 0 {
 		return storage.ErrResourceDoesNotExist
 	}
-	if _, err := conn.Do("DECR", ps.leecherCountKey(addressFamily)); err != nil {
-		return err
-	}
+	_, err = conn.Do("DECR", ps.leecherCountKey(addressFamily))
 
 	return nil
 }
@@ -498,19 +485,13 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 		"Peer":     p,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
 	encodedInfoHash := ih.String()
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
 	pk := newPeerKey(p)
 	ct := ps.getClock()
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	conn.Send("MULTI")
@@ -552,17 +533,11 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 		"Peer":     announcer,
 	})
 
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-
 	encodedInfoHash := ih.String()
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	leechers, err := conn.Do("HKEYS", encodedLeecherInfoHash)
@@ -624,11 +599,6 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 }
 
 func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily) (resp bittorrent.Scrape) {
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
 
 	resp.InfoHash = ih
 	addressFamily := af.String()
@@ -636,7 +606,7 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
 
-	conn := ps.rb.open()
+	conn := ps.getConnection()
 	defer conn.Close()
 
 	leechersLen, err := redis.Int64(conn.Do("HLEN", encodedLeecherInfoHash))
@@ -663,7 +633,7 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 	return
 }
 
-// collectGarbage deletes all Peers from the PeerStore which are older than the
+// collectGarbage deletes all Peers from the Storage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface
@@ -709,17 +679,11 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 //	 transaction. The infohash key will remain in the addressFamil hash and
 //	 we'll attempt to clean it up the next time collectGarbage runs.
 func (ps *peerStore) collectGarbage(cutoff time.Time) error {
-	select {
-	case <-ps.closed:
-		return nil
-	default:
-	}
-
-	conn := ps.rb.open()
-	defer conn.Close()
-
 	cutoffUnix := cutoff.UnixNano()
 	start := time.Now()
+
+	conn := ps.getConnection()
+	defer conn.Close()
 
 	for _, group := range ps.groups() {
 		// list all infohashes in the group

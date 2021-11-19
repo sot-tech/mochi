@@ -3,10 +3,11 @@ package container
 import (
 	"errors"
 	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/chihaya/chihaya/storage"
 	"sync"
 )
 
-type Builder func ([]byte) (Container, error)
+type Builder func ([]byte, storage.Storage) (Container, error)
 
 var (
 	buildersMU sync.Mutex
@@ -32,7 +33,7 @@ type Container interface {
 	Contains(bittorrent.InfoHash) bool
 }
 
-func GetContainer(name string, confBytes []byte) (Container, error) {
+func GetContainer(name string, confBytes []byte, storage storage.Storage) (Container, error) {
 
 	buildersMU.Lock()
 	defer buildersMU.Unlock()
@@ -41,7 +42,7 @@ func GetContainer(name string, confBytes []byte) (Container, error) {
 	if builder, exist := builders[name]; !exist {
 		err = ErrContainerDoesNotExist
 	} else {
-		cn, err = builder(confBytes)
+		cn, err = builder(confBytes, storage)
 	}
 	return cn, err
 }
