@@ -4,63 +4,88 @@
 package directory
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/util/dirwatch"
+	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
+	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"
 	"gopkg.in/yaml.v2"
-	"sync"
 )
 
+const Name = "directory"
+
 func init() {
-	container.Register("directory", build)
+	container.Register(Name, build)
 }
 
 type Config struct {
-	WhitelistPath string `yaml:"whitelist_path"`
-	BlacklistPath string `yaml:"blacklist_path"`
+	list.Config
+	Path string `yaml:"path"`
 }
 
-// TODO: change sync map to provided storage
-func build(confBytes []byte, storage storage.Storage) (container.Container, error) {
+func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
 	}
-	if len(c.WhitelistPath) > 0 && len(c.BlacklistPath) > 0 {
-		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
-	}
 	var err error
-	lst := &directory{
+	d := &directory{
 		List: list.List{
-			Hashes: sync.Map{},
-			Invert: len(c.WhitelistPath) == 0,
+			Invert:     c.Invert,
+			Storage:    st,
+			StorageCtx: c.StorageCtx,
 		},
 		watcher: nil,
 	}
-	dir := c.WhitelistPath
-	if lst.Invert {
-		dir = c.BlacklistPath
-	}
-	//FIXME: implement V2 torrent add/delete
 	var w *dirwatch.Instance
-	if w, err = dirwatch.New(dir); err != nil {
+	if w, err = dirwatch.New(c.Path); err != nil {
 		return nil, fmt.Errorf("unable to initialize directory watch: %v", err)
 	}
-	lst.watcher = w
+	d.watcher = w
+	if len(d.StorageCtx) == 0 {
+		log.Info("Storage context not set, using default value: " + container.DefaultStorageCtxName)
+		d.StorageCtx = container.DefaultStorageCtxName
+	}
 	go func() {
-		for event := range lst.watcher.Events {
+		for event := range d.watcher.Events {
 			switch event.Change {
 			case dirwatch.Added:
-				lst.Hashes.Store(event.InfoHash, list.DUMMY)
+				data := make([]storage.Pair, 1, 2)
+				data[0] = storage.Pair{Left: event.InfoHash[:], Right: list.DUMMY}
+				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
+					data = append(data, storage.Pair{Left: v2ih, Right: list.DUMMY})
+				} else {
+					log.Err(err)
+				}
+				d.Storage.BulkPut(c.StorageCtx, data...)
 			case dirwatch.Removed:
-				lst.Hashes.Delete(event.InfoHash)
+				data := make([]interface{}, 1, 2)
+				data[0] = event.InfoHash[:]
+				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
+					data = append(data, v2ih)
+				} else {
+					log.Err(err)
+				}
+				d.Storage.Delete(c.StorageCtx, data...)
 			}
 		}
 	}()
-	return lst, err
+	return d, err
+}
+
+func v2InfoHash(path string) (ih bittorrent.InfoHash, err error) {
+	var mi *metainfo.MetaInfo
+	if mi, err = metainfo.LoadFromFile(path); err == nil {
+		hash := sha256.New()
+		hash.Write(mi.InfoBytes)
+		ih, err = bittorrent.NewInfoHash(hash.Sum(nil))
+	}
+	return
 }
 
 type directory struct {

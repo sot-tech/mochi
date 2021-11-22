@@ -7,7 +7,7 @@ import (
 	"github.com/chihaya/chihaya/storage"
 	"sync"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 var (

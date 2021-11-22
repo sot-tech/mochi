@@ -27,10 +27,10 @@ func newRedisBackend(cfg *Config, u *redisURL, socketPath string) *redisBackend 
 		ConnectTimeout: cfg.RedisConnectTimeout,
 	}
 	pool := rc.NewPool()
-	redsync := redsync.New([]redsync.Pool{pool})
+	rs := redsync.New([]redsync.Pool{pool})
 	return &redisBackend{
 		pool:    pool,
-		redsync: redsync,
+		redsync: rs,
 	}
 }
 

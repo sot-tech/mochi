@@ -4,14 +4,15 @@ package memory
 
 import (
 	"encoding/binary"
-	"net"
+	"fmt"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 
-	bittorrent "github.com/chihaya/chihaya/bittorrent"
+	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/pkg/timecache"
@@ -36,7 +37,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewPeerStore(icfg interface{}) (storage.Storage, error) {
+func (d driver) NewStorage(icfg interface{}) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -121,10 +122,11 @@ func (cfg Config) Validate() Config {
 // New creates a new Storage backed by memory.
 func New(provided Config) (storage.Storage, error) {
 	cfg := provided.Validate()
-	ps := &peerStore{
-		cfg:    cfg,
-		shards: make([]*peerShard, cfg.ShardCount*2),
-		closed: make(chan struct{}),
+	ps := &store{
+		cfg:      cfg,
+		shards:   make([]*peerShard, cfg.ShardCount*2),
+		contexts: sync.Map{},
+		closed:   make(chan struct{}),
 	}
 
 	for i := 0; i < cfg.ShardCount*2; i++ {
@@ -174,40 +176,6 @@ func New(provided Config) (storage.Storage, error) {
 	return ps, nil
 }
 
-type serializedPeer string
-
-func newPeerKey(p bittorrent.Peer) serializedPeer {
-	b := make([]byte, 20+2+len(p.IP.IP))
-	copy(b[:20], p.ID[:])
-	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port)
-	copy(b[bittorrent.PeerIDLen+2:], p.IP.IP)
-
-	return serializedPeer(b)
-}
-
-// TODO: move duplicated code into one place
-func decodePeerKey(pk serializedPeer) bittorrent.Peer {
-	peerId, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
-	if err != nil {
-		panic(err)
-	}
-	peer := bittorrent.Peer{
-		ID:   peerId,
-		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2])),
-		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
-
-	if ip := peer.IP.To4(); ip != nil {
-		peer.IP.IP = ip
-		peer.IP.AddressFamily = bittorrent.IPv4
-	} else if len(peer.IP.IP) == net.IPv6len { // implies toReturn.IP.To4() == nil
-		peer.IP.AddressFamily = bittorrent.IPv6
-	} else {
-		panic("IP is neither v4 nor v6")
-	}
-
-	return peer
-}
-
 type peerShard struct {
 	swarms      map[bittorrent.InfoHash]swarm
 	numSeeders  uint64
@@ -217,23 +185,24 @@ type peerShard struct {
 
 type swarm struct {
 	// map serialized peer to mtime
-	seeders  map[serializedPeer]int64
-	leechers map[serializedPeer]int64
+	seeders  map[storage.SerializedPeer]int64
+	leechers map[storage.SerializedPeer]int64
 }
 
-type peerStore struct {
-	cfg    Config
-	shards []*peerShard
+type store struct {
+	cfg      Config
+	shards   []*peerShard
+	contexts sync.Map
 
 	closed chan struct{}
 	wg     sync.WaitGroup
 }
 
-var _ storage.Storage = &peerStore{}
+var _ storage.Storage = &store{}
 
 // populateProm aggregates metrics over all shards and then posts them to
 // prometheus.
-func (ps *peerStore) populateProm() {
+func (ps *store) populateProm() {
 	var numInfohashes, numSeeders, numLeechers uint64
 
 	for _, s := range ps.shards {
@@ -254,11 +223,11 @@ func recordGCDuration(duration time.Duration) {
 	storage.PromGCDurationMilliseconds.Observe(float64(duration.Nanoseconds()) / float64(time.Millisecond))
 }
 
-func (ps *peerStore) getClock() int64 {
+func (ps *store) getClock() int64 {
 	return timecache.NowUnixNano()
 }
 
-func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, af bittorrent.AddressFamily) uint32 {
+func (ps *store) shardIndex(infoHash bittorrent.InfoHash, af bittorrent.AddressFamily) uint32 {
 	// There are twice the amount of shards specified by the user, the first
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
 	// IPv6 swarms.
@@ -269,22 +238,22 @@ func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, af bittorrent.Addr
 	return idx
 }
 
-func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[serializedPeer]int64),
-			leechers: make(map[serializedPeer]int64),
+			seeders:  make(map[storage.SerializedPeer]int64),
+			leechers: make(map[storage.SerializedPeer]int64),
 		}
 	}
 
@@ -300,14 +269,14 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	return nil
 }
 
-func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
@@ -333,22 +302,22 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 	return nil
 }
 
-func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[serializedPeer]int64),
-			leechers: make(map[serializedPeer]int64),
+			seeders:  make(map[storage.SerializedPeer]int64),
+			leechers: make(map[storage.SerializedPeer]int64),
 		}
 	}
 
@@ -364,14 +333,14 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 	return nil
 }
 
-func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
@@ -397,22 +366,22 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 	return nil
 }
 
-func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[serializedPeer]int64),
-			leechers: make(map[serializedPeer]int64),
+			seeders:  make(map[storage.SerializedPeer]int64),
+			leechers: make(map[storage.SerializedPeer]int64),
 		}
 	}
 
@@ -434,7 +403,7 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 	return nil
 }
 
-func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -457,7 +426,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 				break
 			}
 
-			peers = append(peers, decodePeerKey(pk))
+			peers = append(peers, pk.ToPeer())
 			numWant--
 		}
 	} else {
@@ -468,14 +437,14 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 				break
 			}
 
-			peers = append(peers, decodePeerKey(pk))
+			peers = append(peers, pk.ToPeer())
 			numWant--
 		}
 
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
 			leechers := shard.swarms[ih].leechers
-			announcerPK := newPeerKey(announcer)
+			announcerPK := storage.NewSerializedPeer(announcer)
 			for pk := range leechers {
 				if pk == announcerPK {
 					continue
@@ -485,7 +454,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 					break
 				}
 
-				peers = append(peers, decodePeerKey(pk))
+				peers = append(peers, pk.ToPeer())
 				numWant--
 			}
 		}
@@ -495,7 +464,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 	return
 }
 
-func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) (resp bittorrent.Scrape) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) (resp bittorrent.Scrape) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -519,12 +488,65 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorren
 	return
 }
 
+func asKey(in interface{}) interface{} {
+	if in == nil {
+		panic("unable to use nil map key")
+	}
+	if reflect.TypeOf(in).Comparable() {
+		return in
+	}
+	//FIXME: dirty hack
+	return fmt.Sprint(in)
+}
+
+func (ps *store) Put(ctx string, key, value interface{}) {
+	m, _ := ps.contexts.LoadOrStore(ctx, new(sync.Map))
+	m.(*sync.Map).Store(asKey(key), value)
+}
+
+func (ps *store) Contains(ctx string, key interface{}) bool {
+	var exist bool
+	if m, found := ps.contexts.Load(ctx); found {
+		_, exist = m.(*sync.Map).Load(asKey(key))
+	}
+	return exist
+}
+
+func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
+	if len(pairs) > 0 {
+		c, _ := ps.contexts.LoadOrStore(ctx, new(sync.Map))
+		m := c.(*sync.Map)
+		for _, p := range pairs {
+			m.Store(asKey(p.Left), p.Right)
+		}
+	}
+}
+
+func (ps *store) Load(ctx string, key interface{}) interface{} {
+	var v interface{}
+	if m, found := ps.contexts.Load(ctx); found {
+		v, _ = m.(*sync.Map).Load(asKey(key))
+	}
+	return v
+}
+
+func (ps *store) Delete(ctx string, keys ...interface{}) {
+	if len(keys) > 0 {
+		if m, found := ps.contexts.Load(ctx); found {
+			m := m.(*sync.Map)
+			for k := range keys {
+				m.Delete(asKey(k))
+			}
+		}
+	}
+}
+
 // collectGarbage deletes all Peers from the Storage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface
 // are being executed in parallel.
-func (ps *peerStore) collectGarbage(cutoff time.Time) error {
+func (ps *store) collectGarbage(cutoff time.Time) error {
 	select {
 	case <-ps.closed:
 		return nil
@@ -582,7 +604,7 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 	return nil
 }
 
-func (ps *peerStore) Stop() stop.Result {
+func (ps *store) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
 		close(ps.closed)
@@ -601,6 +623,6 @@ func (ps *peerStore) Stop() stop.Result {
 	return c.Result()
 }
 
-func (ps *peerStore) LogFields() log.Fields {
+func (ps *store) LogFields() log.Fields {
 	return ps.cfg.LogFields()
 }

@@ -59,8 +59,8 @@ func TestHandleAnnounce(t *testing.T) {
 			req := &bittorrent.AnnounceRequest{}
 			resp := &bittorrent.AnnounceResponse{}
 
-			peerid := bittorrent.NewPeerID([]byte(tt.peerID))
-
+			peerid, err := bittorrent.NewPeerID([]byte(tt.peerID))
+			require.Nil(t, err)
 			req.Peer.ID = peerid
 
 			nctx, err := h.HandleAnnounce(ctx, req, resp)

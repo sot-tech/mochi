@@ -148,7 +148,7 @@ func (t *Frontend) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
 		close(t.closing)
-		t.socket.SetReadDeadline(time.Now())
+		_ = t.socket.SetReadDeadline(time.Now())
 		t.wg.Wait()
 		c.Done(t.socket.Close())
 	}()

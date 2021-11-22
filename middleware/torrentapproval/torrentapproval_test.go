@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/chihaya/chihaya/middleware"
+	"github.com/chihaya/chihaya/storage/memory"
 	"gopkg.in/yaml.v2"
 	"testing"
 
@@ -23,7 +24,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
@@ -34,7 +35,7 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"whitelist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
@@ -45,7 +46,8 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"invert":    true,
 			},
 		},
 		"4532cf2d327fad8448c075b4cb42c8136964a435",
@@ -56,7 +58,8 @@ var cases = []struct {
 		middleware.Config{
 			Name: "list",
 			Options: map[string]interface{}{
-				"blacklist": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
+				"invert":    true,
 			},
 		},
 		"3532cf2d327fad8448c075b4cb42c8136964a435",
@@ -65,12 +68,15 @@ var cases = []struct {
 }
 
 func TestHandleAnnounce(t *testing.T) {
+	config := memory.Config{}.Validate()
+	storage, err := memory.New(config)
+	require.Nil(t, err)
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {
 			d := driver{}
 			cfg, err := yaml.Marshal(tt.cfg)
 			require.Nil(t, err)
-			h, err := d.NewHook(cfg)
+			h, err := d.NewHook(cfg, storage)
 			require.Nil(t, err)
 
 			ctx := context.Background()
@@ -80,7 +86,8 @@ func TestHandleAnnounce(t *testing.T) {
 			hashbytes, err := hex.DecodeString(tt.ih)
 			require.Nil(t, err)
 
-			hashinfo := bittorrent.NewInfoHash(hashbytes)
+			hashinfo, err := bittorrent.NewInfoHash(hashbytes)
+			require.Nil(t, err)
 
 			req.InfoHash = hashinfo
 

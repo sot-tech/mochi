@@ -5,63 +5,68 @@ package list
 import (
 	"encoding/hex"
 	"fmt"
-	bittorrent "github.com/chihaya/chihaya/bittorrent"
+	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
+	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/storage"
 	"gopkg.in/yaml.v2"
-	"sync"
 )
 
+const Name = "list"
+
 func init() {
-	container.Register("list", build)
+	container.Register(Name, build)
 }
 
 type Config struct {
-	Whitelist []string `yaml:"whitelist"`
-	Blacklist []string `yaml:"blacklist"`
+	HashList   []string `yaml:"hash_list"`
+	Invert     bool     `yaml:"invert"`
+	StorageCtx string   `yaml:"storage_ctx"`
 }
 
-var DUMMY struct{}
+const DUMMY = true
 
-// TODO: change sync map to provided storage
-func build(confBytes []byte, storage storage.Storage) (container.Container, error) {
+func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
 	}
-	if len(c.Whitelist) > 0 && len(c.Blacklist) > 0 {
-		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
-	}
 	l := &List{
-		Hashes: sync.Map{},
-		Invert: len(c.Whitelist) == 0,
+		Invert:     c.Invert,
+		Storage:    st,
+		StorageCtx: c.StorageCtx,
 	}
 
-	hashList := c.Whitelist
-	if l.Invert {
-		hashList = c.Blacklist
+	if len(l.StorageCtx) == 0 {
+		log.Info("Storage context not set, using default value: " + container.DefaultStorageCtxName)
+		l.StorageCtx = container.DefaultStorageCtxName
 	}
 
-	for _, hashString := range hashList {
-		hashBytes, err := hex.DecodeString(hashString)
-		if err != nil {
-			return nil, fmt.Errorf("whitelist : invalid hash %s, %v", hashString, err)
+	if len(c.HashList) > 0 {
+		init := make([]storage.Pair, 0, len(c.HashList))
+		for _, hashString := range c.HashList {
+			hashBytes, err := hex.DecodeString(hashString)
+			if err != nil {
+				return nil, fmt.Errorf("whitelist : invalid hash %s, %v", hashString, err)
+			}
+			ih, err := bittorrent.NewInfoHash(hashBytes)
+			if err != nil {
+				return nil, fmt.Errorf("whitelist : %s : %v", hashString, err)
+			}
+			init = append(init, storage.Pair{Left: ih, Right: DUMMY})
 		}
-		ih, err := bittorrent.NewInfoHash(hashBytes)
-		if err != nil {
-			return nil, fmt.Errorf("whitelist : %s : %v", hashString, err)
-		}
-		l.Hashes.Store(ih, DUMMY)
+		l.Storage.BulkPut(l.StorageCtx, init...)
 	}
 	return l, nil
 }
 
 type List struct {
-	Invert bool
-	Hashes sync.Map
+	Invert     bool
+	Storage    storage.Storage
+	StorageCtx string
 }
 
-func (l *List) Contains(hash bittorrent.InfoHash) bool {
-	_, result := l.Hashes.Load(hash)
-	return result != l.Invert
+func (l *List) Approved(hash bittorrent.InfoHash) bool {
+	b := l.Storage.Contains(l.StorageCtx, hash)
+	return b != l.Invert
 }

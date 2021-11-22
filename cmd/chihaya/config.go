@@ -29,9 +29,9 @@ type storageConfig struct {
 // Config represents the configuration used for executing Chihaya.
 type Config struct {
 	middleware.ResponseConfig `yaml:",inline"`
-	MetricsAddr               string                  `yaml:"metrics_addr"`
-	HTTPConfig                http.Config             `yaml:"http"`
-	UDPConfig                 udp.Config              `yaml:"udp"`
+	MetricsAddr               string              `yaml:"metrics_addr"`
+	HTTPConfig                http.Config         `yaml:"http"`
+	UDPConfig                 udp.Config          `yaml:"udp"`
 	Storage                   storageConfig       `yaml:"storage"`
 	PreHooks                  []middleware.Config `yaml:"prehooks"`
 	PostHooks                 []middleware.Config `yaml:"posthooks"`

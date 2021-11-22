@@ -19,7 +19,6 @@ var peerStringTestCases = []struct {
 }{
 	{
 		input: Peer{
-			ID:   NewPeerID(b),
 			IP:   IP{net.IPv4(10, 11, 12, 1), IPv4},
 			Port: 1234,
 		},
@@ -27,7 +26,6 @@ var peerStringTestCases = []struct {
 	},
 	{
 		input: Peer{
-			ID:   NewPeerID(b),
 			IP:   IP{net.ParseIP("2001:db8::ff00:42:8329"), IPv6},
 			Port: 1234,
 		},
@@ -36,7 +34,9 @@ var peerStringTestCases = []struct {
 }
 
 func TestPeerID_String(t *testing.T) {
-	s := NewPeerID(b).String()
+	pid, err := NewPeerID(b)
+	require.Nil(t, err)
+	s := pid.String()
 	require.Equal(t, expected, s)
 }
 
@@ -47,7 +47,10 @@ func TestInfoHash_String(t *testing.T) {
 }
 
 func TestPeer_String(t *testing.T) {
+	pid, err := NewPeerID(b)
+	require.Nil(t, err)
 	for _, c := range peerStringTestCases {
+		c.input.ID = pid
 		got := c.input.String()
 		require.Equal(t, c.expected, got)
 	}

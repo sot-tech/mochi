@@ -28,7 +28,7 @@ type swarmInteractionHook struct {
 	store storage.Storage
 }
 
-func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (_ context.Context, err error) {
+func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (_ context.Context, err error) {
 	if ctx.Value(SkipSwarmInteractionKey) != nil {
 		return ctx, nil
 	}
@@ -75,14 +75,14 @@ type skipResponseHook struct{}
 // skip.
 var SkipResponseHookKey = skipResponseHook{}
 
-type scrapeAddressType struct{}
+//type scrapeAddressType struct{}
 
 // ScrapeIsIPv6Key is the key under which to store whether or not the
 // address used to request a scrape was an IPv6 address.
 // The value is expected to be of type bool.
 // A missing value or a value that is not a bool for this key is equivalent to
 // it being set to false.
-var ScrapeIsIPv6Key = scrapeAddressType{}
+//var ScrapeIsIPv6Key = scrapeAddressType{}
 
 type responseHook struct {
 	store storage.Storage

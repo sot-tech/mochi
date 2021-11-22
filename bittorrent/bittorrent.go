@@ -4,6 +4,8 @@
 package bittorrent
 
 import (
+	"crypto/sha1"
+	"crypto/sha256"
 	"fmt"
 	"github.com/pkg/errors"
 	"net"
@@ -45,8 +47,8 @@ func (p PeerID) RawString() string {
 type InfoHash string
 
 const (
-	InfoHashV1Len          = 20
-	InfoHashV2Len          = 32
+	InfoHashV1Len          = sha1.Size
+	InfoHashV2Len          = sha256.Size
 	NoneInfoHash  InfoHash = ""
 )
 

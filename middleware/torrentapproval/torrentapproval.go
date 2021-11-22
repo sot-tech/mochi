@@ -62,7 +62,7 @@ type hook struct {
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
 	var err error
 
-	if !h.hashContainer.Contains(req.InfoHash) {
+	if !h.hashContainer.Approved(req.InfoHash) {
 		err = ErrTorrentUnapproved
 	}
 

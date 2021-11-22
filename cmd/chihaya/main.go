@@ -2,15 +2,13 @@ package main
 
 import (
 	"errors"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
-
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 
 	"github.com/chihaya/chihaya/frontend/http"
 	"github.com/chihaya/chihaya/frontend/udp"
@@ -20,6 +18,8 @@ import (
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"
 )
+
+var e2eCmd *cobra.Command
 
 // Run represents the state of a running instance of Chihaya.
 type Run struct {
@@ -137,7 +137,7 @@ func (r *Run) Stop(keepPeerStore bool) (storage.Storage, error) {
 
 // RootRunCmdFunc implements a Cobra command that runs an instance of Chihaya
 // and handles reloading and shutdown via process signals.
-func RootRunCmdFunc(cmd *cobra.Command, args []string) error {
+func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 	configFilePath, err := cmd.Flags().GetString("config")
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func RootRunCmdFunc(cmd *cobra.Command, args []string) error {
 }
 
 // RootPreRunCmdFunc handles command line flags for the Run command.
-func RootPreRunCmdFunc(cmd *cobra.Command, args []string) error {
+func RootPreRunCmdFunc(cmd *cobra.Command, _ []string) error {
 	noColors, err := cmd.Flags().GetBool("nocolors")
 	if err != nil {
 		return err
@@ -233,18 +233,9 @@ func main() {
 
 	rootCmd.Flags().String("config", "/etc/chihaya.yaml", "location of configuration file")
 
-	var e2eCmd = &cobra.Command{
-		Use:   "e2e",
-		Short: "exec e2e tests",
-		Long:  "Execute the Chihaya end-to-end test suite",
-		RunE:  EndToEndRunCmdFunc,
+	if e2eCmd != nil {
+		rootCmd.AddCommand(e2eCmd)
 	}
-
-	e2eCmd.Flags().String("httpaddr", "http://127.0.0.1:6969/announce", "address of the HTTP tracker")
-	e2eCmd.Flags().String("udpaddr", "udp://127.0.0.1:6969", "address of the UDP tracker")
-	e2eCmd.Flags().Duration("delay", time.Second, "delay between announces")
-
-	rootCmd.AddCommand(e2eCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("failed when executing root cobra command: " + err.Error())

@@ -7,7 +7,9 @@ import (
 	"sync"
 )
 
-type Builder func ([]byte, storage.Storage) (Container, error)
+const DefaultStorageCtxName = "MW_APPROVAL"
+
+type Builder func([]byte, storage.Storage) (Container, error)
 
 var (
 	buildersMU sync.Mutex
@@ -30,7 +32,7 @@ func Register(n string, c Builder) {
 }
 
 type Container interface {
-	Contains(bittorrent.InfoHash) bool
+	Approved(bittorrent.InfoHash) bool
 }
 
 func GetContainer(name string, confBytes []byte, storage storage.Storage) (Container, error) {

@@ -16,7 +16,7 @@ var (
 
 // Driver is the interface used to initialize a new type of Storage.
 type Driver interface {
-	NewPeerStore(cfg interface{}) (Storage, error)
+	NewStorage(cfg interface{}) (Storage, error)
 }
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
@@ -104,13 +104,23 @@ type Storage interface {
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
 	ScrapeSwarm(infoHash bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) bittorrent.Scrape
 
-	/*TODO: implement this*/
-	
-	Put(key interface{}, value interface{})
+	// Put used to place arbitrary k-v data with specified context
+	// into storage. ctx parameter used to group data
+	// (i.e. data only for specific middleware module)
+	Put(ctx string, key, value interface{})
 
-	Load(key interface{}) interface{}
+	// BulkPut used to place array of k-v data in specified context.
+	// Useful when several data entries should be added in single transaction/connection
+	BulkPut(ctx string, pairs ...Pair)
 
-	Delete(key interface{})
+	// Contains checks if any data in specified context exist
+	Contains(ctx string, key interface{}) bool
+
+	// Load used to get arbitrary data in specified context by its key
+	Load(ctx string, key interface{}) interface{}
+
+	// Delete used to delete arbitrary data in specified context by its keys
+	Delete(ctx string, keys ...interface{})
 
 	// stop.Stopper is an interface that expects a Stop method to stop the
 	// Storage.
@@ -158,5 +168,5 @@ func NewStorage(name string, cfg interface{}) (ps Storage, err error) {
 		return nil, ErrDriverDoesNotExist
 	}
 
-	return d.NewPeerStore(cfg)
+	return d.NewStorage(cfg)
 }

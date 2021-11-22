@@ -168,7 +168,7 @@ func parseQuery(query string) (q *QueryParams, err error) {
 		}
 
 		if key == "info_hash" {
-			if ih, err := InfoHashFromString(value); err == nil{
+			if ih, err := NewInfoHash([]byte(value)); err == nil {
 				q.infoHashes = append(q.infoHashes, ih)
 			} else {
 				return nil, err

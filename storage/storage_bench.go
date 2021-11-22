@@ -17,7 +17,7 @@ type benchData struct {
 
 func generateInfohashes() (a [1000]bittorrent.InfoHash) {
 	for i := range a {
-		b := make([]byte, 20)
+		b := make([]byte, bittorrent.InfoHashV1Len)
 		rand.Read(b)
 		a[i], _ = bittorrent.NewInfoHash(b)
 	}
@@ -33,9 +33,9 @@ func generatePeers() (a [1000]bittorrent.Peer) {
 		if err != nil || n != 4 {
 			panic("unable to create random bytes")
 		}
-		id := [20]byte{}
+		id := [bittorrent.PeerIDLen]byte{}
 		n, err = r.Read(id[:])
-		if err != nil || n != 20 {
+		if err != nil || n != bittorrent.InfoHashV1Len {
 			panic("unable to create random bytes")
 		}
 		port := uint16(r.Uint32())

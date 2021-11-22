@@ -186,7 +186,7 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 
 	if cfg.Addr != "" {
 		go func() {
-			if err := f.serveHTTP(router,false); err != nil {
+			if err := f.serveHTTP(router, false); err != nil {
 				log.Fatal("failed while serving http", log.Err(err))
 			}
 		}()
@@ -194,7 +194,7 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 
 	if cfg.HTTPSAddr != "" {
 		go func() {
-			if err := f.serveHTTP(router,true); err != nil {
+			if err := f.serveHTTP(router, true); err != nil {
 				log.Fatal("failed while serving https", log.Err(err))
 			}
 		}()
@@ -245,7 +245,7 @@ func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
 		srv.TLSConfig = f.tlsCfg
 		f.tlsSrv = srv
 		err = srv.ListenAndServe()
-	} else{
+	} else {
 		srv.Addr = f.Addr
 		f.srv = srv
 		err = f.tlsSrv.ListenAndServeTLS("", "")

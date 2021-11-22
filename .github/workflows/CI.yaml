@@ -56,7 +56,7 @@ jobs:
         go-version: ^1.15
     - name: End-to-End Test
       run: |
-        go install ./cmd/chihaya
+        go install --tags e2e ./cmd/chihaya
         cat ./dist/example_config.yaml
         chihaya --config=./dist/example_config.yaml --debug &
         pid=$!
@@ -87,7 +87,7 @@ jobs:
         cat ./dist/example_redis_config.yaml
     - name: End-to-End Test
       run: |
-        go install ./cmd/chihaya
+        go install --tags e2e ./cmd/chihaya
         chihaya --config=./dist/example_redis_config.yaml --debug &
         pid=$!
         sleep 2

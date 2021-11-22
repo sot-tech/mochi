@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package main
 
 import (
@@ -12,6 +15,19 @@ import (
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
 )
+
+func init() {
+	e2eCmd = &cobra.Command{
+		Use:   "e2e",
+		Short: "exec e2e tests",
+		Long:  "Execute the Chihaya end-to-end test suite",
+		RunE:  EndToEndRunCmdFunc,
+	}
+
+	e2eCmd.Flags().String("httpaddr", "http://127.0.0.1:6969/announce", "address of the HTTP tracker")
+	e2eCmd.Flags().String("udpaddr", "udp://127.0.0.1:6969", "address of the UDP tracker")
+	e2eCmd.Flags().Duration("delay", time.Second, "delay between announces")
+}
 
 // EndToEndRunCmdFunc implements a Cobra command that runs the end-to-end test
 // suite for a Chihaya build.
@@ -55,7 +71,7 @@ func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
 }
 
 func generateInfohash() bittorrent.InfoHash {
-	b := make([]byte, 20)
+	b := make([]byte, bittorrent.InfoHashV1Len)
 	rand.Read(b)
 	ih, _ := bittorrent.NewInfoHash(b)
 	return ih
@@ -70,7 +86,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 	var ih [bittorrent.InfoHashV1Len]byte
 	req := tracker.AnnounceRequest{
 		InfoHash:   ih,
-		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+		PeerId:     [bittorrent.PeerIDLen]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
 		Downloaded: 50,
 		Left:       100,
 		Uploaded:   50,
@@ -98,7 +114,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 	copy(ih[:], infoHash)
 	req = tracker.AnnounceRequest{
 		InfoHash:   ih,
-		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21},
+		PeerId:     [bittorrent.PeerIDLen]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21},
 		Downloaded: 50,
 		Left:       100,
 		Uploaded:   50,

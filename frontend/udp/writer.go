@@ -18,9 +18,9 @@ func WriteError(w io.Writer, txID []byte, err error) {
 
 	buf := newBuffer()
 	writeHeader(buf, txID, errorActionID)
-	buf.WriteString(err.Error())
-	buf.WriteRune('\000')
-	w.Write(buf.Bytes())
+	_, _ = buf.WriteString(err.Error())
+	_, _ = buf.WriteRune('\000')
+	_, _ = w.Write(buf.Bytes())
 	buf.free()
 }
 
@@ -37,9 +37,9 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 	} else {
 		writeHeader(buf, txID, announceActionID)
 	}
-	binary.Write(buf, binary.BigEndian, uint32(resp.Interval/time.Second))
-	binary.Write(buf, binary.BigEndian, resp.Incomplete)
-	binary.Write(buf, binary.BigEndian, resp.Complete)
+	_ = binary.Write(buf, binary.BigEndian, uint32(resp.Interval/time.Second))
+	_ = binary.Write(buf, binary.BigEndian, resp.Incomplete)
+	_ = binary.Write(buf, binary.BigEndian, resp.Complete)
 
 	peers := resp.IPv4Peers
 	if v6Peers {
@@ -47,11 +47,11 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 	}
 
 	for _, peer := range peers {
-		buf.Write(peer.IP.IP)
-		binary.Write(buf, binary.BigEndian, peer.Port)
+		_, _ = buf.Write(peer.IP.IP)
+		_ = binary.Write(buf, binary.BigEndian, peer.Port)
 	}
 
-	w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 	buf.free()
 }
 
@@ -62,12 +62,12 @@ func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 	writeHeader(buf, txID, scrapeActionID)
 
 	for _, scrape := range resp.Files {
-		binary.Write(buf, binary.BigEndian, scrape.Complete)
-		binary.Write(buf, binary.BigEndian, scrape.Snatches)
-		binary.Write(buf, binary.BigEndian, scrape.Incomplete)
+		_ = binary.Write(buf, binary.BigEndian, scrape.Complete)
+		_ = binary.Write(buf, binary.BigEndian, scrape.Snatches)
+		_ = binary.Write(buf, binary.BigEndian, scrape.Incomplete)
 	}
 
-	w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 	buf.free()
 }
 
@@ -76,15 +76,15 @@ func WriteConnectionID(w io.Writer, txID, connID []byte) {
 	buf := newBuffer()
 
 	writeHeader(buf, txID, connectActionID)
-	buf.Write(connID)
+	_, _ = buf.Write(connID)
 
-	w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 	buf.free()
 }
 
 // writeHeader writes the action and transaction ID to the provided response
 // buffer.
 func writeHeader(w io.Writer, txID []byte, action uint32) {
-	binary.Write(w, binary.BigEndian, action)
-	w.Write(txID)
+	_ = binary.Write(w, binary.BigEndian, action)
+	_, _ = w.Write(txID)
 }

@@ -23,7 +23,7 @@ func WriteError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusOK)
 	if err = bencode.NewEncoder(w).Encode(map[string]interface{}{
 		"failure reason": message,
-	}); err != nil{
+	}); err != nil {
 		log.Error("unable to encode string", log.Err(err))
 	}
 }

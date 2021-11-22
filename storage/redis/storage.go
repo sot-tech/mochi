@@ -24,14 +24,13 @@
 package redis
 
 import (
-	"encoding/binary"
-	"net"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
@@ -61,7 +60,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewPeerStore(icfg interface{}) (storage.Storage, error) {
+func (d driver) NewStorage(icfg interface{}) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -185,7 +184,7 @@ func New(provided Config) (storage.Storage, error) {
 		return nil, err
 	}
 
-	ps := &peerStore{
+	ps := &store{
 		cfg:    cfg,
 		rb:     newRedisBackend(&provided, u, ""),
 		closed: make(chan struct{}),
@@ -234,41 +233,7 @@ func New(provided Config) (storage.Storage, error) {
 	return ps, nil
 }
 
-type serializedPeer string
-
-func newPeerKey(p bittorrent.Peer) serializedPeer {
-	b := make([]byte, bittorrent.PeerIDLen+2+len(p.IP.IP))
-	copy(b[:bittorrent.PeerIDLen], p.ID[:])
-	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port)
-	copy(b[bittorrent.PeerIDLen+2:], p.IP.IP)
-
-	return serializedPeer(b)
-}
-
-// TODO: move duplicated code into one place
-func decodePeerKey(pk serializedPeer) bittorrent.Peer {
-	peerId, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
-	if err != nil {
-		panic(err)
-	}
-	peer := bittorrent.Peer{
-		ID:   peerId,
-		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen : bittorrent.PeerIDLen+2])),
-		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
-
-	if ip := peer.IP.To4(); ip != nil {
-		peer.IP.IP = ip
-		peer.IP.AddressFamily = bittorrent.IPv4
-	} else if len(peer.IP.IP) == net.IPv6len { // implies toReturn.IP.To4() == nil
-		peer.IP.AddressFamily = bittorrent.IPv6
-	} else {
-		panic("IP is neither v4 nor v6")
-	}
-
-	return peer
-}
-
-type peerStore struct {
+type store struct {
 	cfg Config
 	rb  *redisBackend
 
@@ -276,31 +241,31 @@ type peerStore struct {
 	wg     sync.WaitGroup
 }
 
-func (ps *peerStore) groups() []string {
+func (ps *store) groups() []string {
 	return []string{bittorrent.IPv4.String(), bittorrent.IPv6.String()}
 }
 
-func (ps *peerStore) leecherInfohashKey(af, ih string) string {
+func (ps *store) leecherInfohashKey(af, ih string) string {
 	return af + "_L_" + ih
 }
 
-func (ps *peerStore) seederInfohashKey(af, ih string) string {
+func (ps *store) seederInfohashKey(af, ih string) string {
 	return af + "_S_" + ih
 }
 
-func (ps *peerStore) infohashCountKey(af string) string {
+func (ps *store) infohashCountKey(af string) string {
 	return af + "_infohash_count"
 }
 
-func (ps *peerStore) seederCountKey(af string) string {
+func (ps *store) seederCountKey(af string) string {
 	return af + "_S_count"
 }
 
-func (ps *peerStore) leecherCountKey(af string) string {
+func (ps *store) leecherCountKey(af string) string {
 	return af + "_L_count"
 }
 
-func (ps *peerStore) getConnection() redis.Conn {
+func (ps *store) getConnection() redis.Conn {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped redis store")
@@ -309,13 +274,21 @@ func (ps *peerStore) getConnection() redis.Conn {
 	return ps.rb.open()
 }
 
+func closeConnection(con redis.Conn) {
+	if con != nil {
+		if err := con.Close(); err != nil {
+			log.Err(err)
+		}
+	}
+}
+
 // populateProm aggregates metrics over all groups and then posts them to
 // prometheus.
-func (ps *peerStore) populateProm() {
+func (ps *store) populateProm() {
 	var numInfohashes, numSeeders, numLeechers int64
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
 	for _, group := range ps.groups() {
 		if n, err := redis.Int64(conn.Do("GET", ps.infohashCountKey(group))); err != nil && err != redis.ErrNil {
@@ -349,27 +322,27 @@ func (ps *peerStore) populateProm() {
 	storage.PromLeechersCount.Set(float64(numLeechers))
 }
 
-func (ps *peerStore) getClock() int64 {
+func (ps *store) getClock() int64 {
 	return timecache.NowUnixNano()
 }
 
-func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: PutSeeder", log.Fields{
 		"InfoHash": ih.String(),
 		"Peer":     p,
 	})
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
 	ct := ps.getClock()
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
-	conn.Send("MULTI")
-	conn.Send("HSET", encodedSeederInfoHash, pk, ct)
-	conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
+	_ = conn.Send("MULTI")
+	_ = conn.Send("HSET", encodedSeederInfoHash, pk, ct)
+	_ = conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
 	reply, err := redis.Int64s(conn.Do("EXEC"))
 	if err != nil {
 		return err
@@ -393,17 +366,17 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	return nil
 }
 
-func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: DeleteSeeder", log.Fields{
 		"InfoHash": ih.String(),
 		"Peer":     p,
 	})
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
 
@@ -421,7 +394,7 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 	return nil
 }
 
-func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: PutLeecher", log.Fields{
 		"InfoHash": ih.String(),
@@ -430,15 +403,15 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 
 	// Update the peer in the swarm.
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, ih.String())
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 	ct := ps.getClock()
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
-	conn.Send("MULTI")
-	conn.Send("HSET", encodedLeecherInfoHash, pk, ct)
-	conn.Send("HSET", addressFamily, encodedLeecherInfoHash, ct)
+	_ = conn.Send("MULTI")
+	_ = conn.Send("HSET", encodedLeecherInfoHash, pk, ct)
+	_ = conn.Send("HSET", addressFamily, encodedLeecherInfoHash, ct)
 	reply, err := redis.Int64s(conn.Do("EXEC"))
 	if err != nil {
 		return err
@@ -453,7 +426,7 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 	return nil
 }
 
-func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: DeleteLeecher", log.Fields{
 		"InfoHash": ih.String(),
@@ -461,9 +434,9 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 	})
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, ih.String())
 
 	delNum, err := redis.Int64(conn.Do("HDEL", encodedLeecherInfoHash, pk))
@@ -478,7 +451,7 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 	return nil
 }
 
-func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: GraduateLeecher", log.Fields{
 		"InfoHash": ih.String(),
@@ -488,16 +461,16 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 	encodedInfoHash := ih.String()
 	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
-	pk := newPeerKey(p)
+	pk := storage.NewSerializedPeer(p)
 	ct := ps.getClock()
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
-	conn.Send("MULTI")
-	conn.Send("HDEL", encodedLeecherInfoHash, pk)
-	conn.Send("HSET", encodedSeederInfoHash, pk, ct)
-	conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
+	_ = conn.Send("MULTI")
+	_ = conn.Send("HDEL", encodedLeecherInfoHash, pk)
+	_ = conn.Send("HSET", encodedSeederInfoHash, pk, ct)
+	_ = conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
 	reply, err := redis.Int64s(conn.Do("EXEC"))
 	if err != nil {
 		return err
@@ -524,7 +497,7 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 	return nil
 }
 
-func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
 	addressFamily := announcer.IP.AddressFamily.String()
 	log.Debug("storage: AnnouncePeers", log.Fields{
 		"InfoHash": ih.String(),
@@ -538,7 +511,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
 	leechers, err := conn.Do("HKEYS", encodedLeecherInfoHash)
 	if err != nil {
@@ -563,7 +536,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 				break
 			}
 
-			peers = append(peers, decodePeerKey(serializedPeer(pk.([]byte))))
+			peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
 			numWant--
 		}
 	} else {
@@ -573,13 +546,13 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 				break
 			}
 
-			peers = append(peers, decodePeerKey(serializedPeer(pk.([]byte))))
+			peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
 			numWant--
 		}
 
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
-			announcerPK := newPeerKey(announcer)
+			announcerPK := storage.NewSerializedPeer(announcer)
 			for _, pk := range conLeechers {
 				if pk == announcerPK {
 					continue
@@ -589,7 +562,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 					break
 				}
 
-				peers = append(peers, decodePeerKey(serializedPeer(pk.([]byte))))
+				peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
 				numWant--
 			}
 		}
@@ -598,7 +571,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 	return
 }
 
-func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily) (resp bittorrent.Scrape) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily) (resp bittorrent.Scrape) {
 
 	resp.InfoHash = ih
 	addressFamily := af.String()
@@ -607,7 +580,7 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
 	leechersLen, err := redis.Int64(conn.Do("HLEN", encodedLeecherInfoHash))
 	if err != nil {
@@ -631,6 +604,62 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 	resp.Complete = uint32(seedersLen)
 
 	return
+}
+
+func (ps *store) Put(ctx string, key, value interface{}) {
+	conn := ps.getConnection()
+	defer closeConnection(conn)
+	_ = conn.Send("HSET", ctx, key, value)
+}
+
+func (ps *store) Contains(ctx string, key interface{}) bool {
+	conn := ps.getConnection()
+	defer closeConnection(conn)
+	exist, _ := redis.Bool(conn.Do("HEXISTS", ctx, key))
+	return exist
+}
+
+func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
+	switch l := len(pairs); l {
+	case 0:
+		break
+	case 1:
+		ps.Put(ctx, fmt.Sprint(pairs[0].Left), pairs[0].Right)
+	default:
+		conn := ps.getConnection()
+		defer closeConnection(conn)
+		args := make([]interface{}, 1, l*2+1)
+		args[0] = ctx
+		for _, p := range pairs {
+			args = append(args, p.Left, p.Right)
+		}
+		_ = conn.Send("HSET", args...)
+	}
+}
+
+func (ps *store) Load(ctx string, key interface{}) interface{} {
+	conn := ps.getConnection()
+	defer closeConnection(conn)
+	v, _ := conn.Do("HGET", ctx, key)
+	return v
+}
+
+func (ps *store) Delete(ctx string, keys ...interface{}) {
+	switch l := len(keys); l {
+	case 0:
+		break
+	case 1:
+		conn := ps.getConnection()
+		defer closeConnection(conn)
+		_ = conn.Send("HDEL", ctx, keys[0])
+	default:
+		conn := ps.getConnection()
+		defer closeConnection(conn)
+		args := make([]interface{}, 1, l+1)
+		args[0] = ctx
+		args = append(args, keys...)
+		_ = conn.Send("HDEL", args...)
+	}
 }
 
 // collectGarbage deletes all Peers from the Storage which are older than the
@@ -678,12 +707,12 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFa
 // - If the change happens after the HLEN, we will not even attempt to make the
 //	 transaction. The infohash key will remain in the addressFamil hash and
 //	 we'll attempt to clean it up the next time collectGarbage runs.
-func (ps *peerStore) collectGarbage(cutoff time.Time) error {
+func (ps *store) collectGarbage(cutoff time.Time) error {
 	cutoffUnix := cutoff.UnixNano()
 	start := time.Now()
 
 	conn := ps.getConnection()
-	defer conn.Close()
+	defer closeConnection(conn)
 
 	for _, group := range ps.groups() {
 		// list all infohashes in the group
@@ -701,7 +730,7 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 				return err
 			}
 
-			var pk serializedPeer
+			var pk storage.SerializedPeer
 			var removedPeerCount int64
 			for index, ihField := range ihList {
 				if index%2 == 1 { // value
@@ -711,7 +740,7 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 					}
 					if mtime <= cutoffUnix {
 						log.Debug("storage: deleting peer", log.Fields{
-							"Peer": decodePeerKey(pk).String(),
+							"Peer": pk.ToPeer(),
 						})
 						ret, err := redis.Int64(conn.Do("HDEL", ihStr, pk))
 						if err != nil {
@@ -721,7 +750,7 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 						removedPeerCount += ret
 					}
 				} else { // key
-					pk = serializedPeer([]byte(ihField))
+					pk = storage.SerializedPeer(ihField)
 				}
 			}
 			// DECR seeder/leecher counter
@@ -750,10 +779,10 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 				// in other words, it's removed automatically after `HDEL` the last field.
 				//_, err := conn.Do("DEL", ihStr)
 
-				conn.Send("MULTI")
-				conn.Send("HDEL", group, ihStr)
+				_ = conn.Send("MULTI")
+				_ = conn.Send("HDEL", group, ihStr)
 				if isSeeder {
-					conn.Send("DECR", ps.infohashCountKey(group))
+					_ = conn.Send("DECR", ps.infohashCountKey(group))
 				}
 				_, err = redis.Values(conn.Do("EXEC"))
 				if err != nil && err != redis.ErrNil {
@@ -778,7 +807,7 @@ func (ps *peerStore) collectGarbage(cutoff time.Time) error {
 	return nil
 }
 
-func (ps *peerStore) Stop() stop.Result {
+func (ps *store) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
 		close(ps.closed)
@@ -790,6 +819,6 @@ func (ps *peerStore) Stop() stop.Result {
 	return c.Result()
 }
 
-func (ps *peerStore) LogFields() log.Fields {
+func (ps *store) LogFields() log.Fields {
 	return ps.cfg.LogFields()
 }

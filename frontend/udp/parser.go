@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/chihaya/chihaya/bittorrent"
+	bittorrent "github.com/chihaya/chihaya/bittorrent"
 )
 
 const (
@@ -113,7 +113,12 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 	}
 
 	ih, err := bittorrent.NewInfoHash(infohash)
-	if err != nil{
+	if err != nil {
+		return nil, err
+	}
+
+	peerId, err := bittorrent.NewPeerID(peerID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -128,7 +133,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		NumWantProvided: true,
 		EventProvided:   true,
 		Peer: bittorrent.Peer{
-			ID:   bittorrent.NewPeerID(peerID),
+			ID:   peerId,
 			IP:   bittorrent.IP{IP: ip},
 			Port: port,
 		},
@@ -227,7 +232,7 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 		pageSize = bittorrent.InfoHashV2Len
 	}
 	for len(r.Packet) >= pageSize {
-		if ih, err := bittorrent.NewInfoHash(r.Packet[:pageSize]); err != nil{
+		if ih, err := bittorrent.NewInfoHash(r.Packet[:pageSize]); err != nil {
 			return nil, err
 		} else {
 			infohashes = append(infohashes, ih)
