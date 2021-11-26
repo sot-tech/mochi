@@ -21,12 +21,12 @@ func init() {
 // Config - implementation of list container configuration.
 type Config struct {
 	// HashList static list of HEX-encoded InfoHashes.
-	HashList   []string `yaml:"hash_list"`
+	HashList []string `yaml:"hash_list"`
 	// If Invert set to true, all InfoHashes stored in HashList should be blacklisted.
-	Invert     bool     `yaml:"invert"`
+	Invert bool `yaml:"invert"`
 	// StorageCtx is the name of storage context where to store hash list.
 	// It might be table name, REDIS record key or something else, depending on storage.
-	StorageCtx string   `yaml:"storage_ctx"`
+	StorageCtx string `yaml:"storage_ctx"`
 }
 
 // DUMMY used as value placeholder if storage needs some value with
@@ -68,9 +68,9 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 // List work structure of hash list. Might be reused in another containers.
 type List struct {
 	// Invert see Config.Invert description.
-	Invert     bool
+	Invert bool
 	// Storage implementation where hashes are stored for approval checks.
-	Storage    storage.Storage
+	Storage storage.Storage
 	// StorageCtx see Config.StorageCtx description.
 	StorageCtx string
 }

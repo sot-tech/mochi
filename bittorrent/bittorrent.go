@@ -50,11 +50,11 @@ type InfoHash string
 
 const (
 	// InfoHashV1Len is the same as sha1.Size
-	InfoHashV1Len          = sha1.Size
+	InfoHashV1Len = sha1.Size
 	// InfoHashV2Len ... sha256.Size
-	InfoHashV2Len          = sha256.Size
+	InfoHashV2Len = sha256.Size
 	// NoneInfoHash dummy invalid InfoHash
-	NoneInfoHash  InfoHash = ""
+	NoneInfoHash InfoHash = ""
 )
 
 var (
