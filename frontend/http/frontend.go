@@ -244,11 +244,11 @@ func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
 		srv.Addr = f.HTTPSAddr
 		srv.TLSConfig = f.tlsCfg
 		f.tlsSrv = srv
-		err = srv.ListenAndServe()
+		err = srv.ListenAndServeTLS("", "")
 	} else {
 		srv.Addr = f.Addr
 		f.srv = srv
-		err = f.tlsSrv.ListenAndServeTLS("", "")
+		err = srv.ListenAndServe()
 	}
 	// Start the HTTP server.
 	if err != http.ErrServerClosed {
