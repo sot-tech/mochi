@@ -81,7 +81,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 	}
 
 	infohash := r.Packet[16:36]
-	peerID := r.Packet[36:56]
+	peerIDBytes := r.Packet[36:56]
 	downloaded := binary.BigEndian.Uint64(r.Packet[56:64])
 	left := binary.BigEndian.Uint64(r.Packet[64:72])
 	uploaded := binary.BigEndian.Uint64(r.Packet[72:80])
@@ -117,7 +117,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, err
 	}
 
-	peerId, err := bittorrent.NewPeerID(peerID)
+	peerID, err := bittorrent.NewPeerID(peerIDBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		NumWantProvided: true,
 		EventProvided:   true,
 		Peer: bittorrent.Peer{
-			ID:   peerId,
+			ID:   peerID,
 			IP:   bittorrent.IP{IP: ip},
 			Port: port,
 		},
@@ -227,24 +227,26 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 
 	// Allocate a list of infohashes and append it to the list until we're out.
 	var infohashes []bittorrent.InfoHash
+	var err error
+	var request *bittorrent.ScrapeRequest
 	pageSize := bittorrent.InfoHashV1Len
 	if isV2 {
 		pageSize = bittorrent.InfoHashV2Len
 	}
 	for len(r.Packet) >= pageSize {
-		if ih, err := bittorrent.NewInfoHash(r.Packet[:pageSize]); err != nil {
-			return nil, err
-		} else {
+		var ih bittorrent.InfoHash
+		if ih, err = bittorrent.NewInfoHash(r.Packet[:pageSize]); err == nil {
 			infohashes = append(infohashes, ih)
 			r.Packet = r.Packet[pageSize:]
+		} else {
+			break
 		}
 	}
-
-	// Sanitize the request.
-	request := &bittorrent.ScrapeRequest{InfoHashes: infohashes}
-	if err := bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes); err != nil {
-		return nil, err
+	if err == nil {
+		// Sanitize the request.
+		request = &bittorrent.ScrapeRequest{InfoHashes: infohashes}
+		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
 	}
 
-	return request, nil
+	return request, err
 }

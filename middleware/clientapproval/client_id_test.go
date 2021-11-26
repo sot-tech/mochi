@@ -47,11 +47,11 @@ func TestClientID(t *testing.T) {
 		t.Run(tt.peerID, func(t *testing.T) {
 			var clientID ClientID
 			copy(clientID[:], tt.clientID)
-			peerId, err := bittorrent.NewPeerID([]byte(tt.peerID))
+			peerID, err := bittorrent.NewPeerID([]byte(tt.peerID))
 			if err != nil {
 				t.Error(err)
 			}
-			parsedID := NewClientID(peerId)
+			parsedID := NewClientID(peerID)
 			if parsedID != clientID {
 				t.Error("Incorrectly parsed peer ID", tt.peerID, "as", parsedID)
 			}

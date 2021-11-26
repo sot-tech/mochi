@@ -452,6 +452,7 @@ func (bh *benchHolder) ScrapeSwarm1kInfohash(b *testing.B) {
 	})
 }
 
+// RunBenchmarks starts series of benchmarks
 func RunBenchmarks(b *testing.B, newStorage benchStorageConstructor) {
 	bh := benchHolder{st: newStorage}
 	b.Run("BenchmarkNop", bh.Nop)

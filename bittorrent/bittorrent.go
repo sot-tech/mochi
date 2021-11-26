@@ -14,11 +14,13 @@ import (
 	"time"
 )
 
+// PeerIDLen is length of peer id field in bytes
 const PeerIDLen = 20
 
 // PeerID represents a peer ID.
 type PeerID [PeerIDLen]byte
 
+// InvalidPeerIDSizeError holds error about invalid PeerID size
 var InvalidPeerIDSizeError = errors.New("peer ID must be 20 bytes")
 
 // NewPeerID creates a PeerID from a byte slice.
@@ -47,13 +49,20 @@ func (p PeerID) RawString() string {
 type InfoHash string
 
 const (
+	// InfoHashV1Len is the same as sha1.Size
 	InfoHashV1Len          = sha1.Size
+	// InfoHashV2Len ... sha256.Size
 	InfoHashV2Len          = sha256.Size
+	// NoneInfoHash dummy invalid InfoHash
 	NoneInfoHash  InfoHash = ""
 )
 
-var InvalidHashTypeError = errors.New("info hash must be provided as byte slice or raw/hex string")
-var InvalidHashSizeError = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
+var (
+	// InvalidHashTypeError holds error about invalid InfoHash input type
+	InvalidHashTypeError = errors.New("info hash must be provided as byte slice or raw/hex string")
+	// InvalidHashSizeError holds error about invalid InfoHash size
+	InvalidHashSizeError = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
+)
 
 // TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
 // If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
@@ -89,10 +98,8 @@ func NewInfoHash(b interface{}) (InfoHash, error) {
 	l := len(ba)
 	if l != InfoHashV1Len && l != InfoHashV2Len {
 		return NoneInfoHash, InvalidHashSizeError
-	} else {
-		buf := InfoHash(ba)
-		return buf, nil
 	}
+	return InfoHash(ba), nil
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.

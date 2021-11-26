@@ -6,12 +6,15 @@ import (
 	"net"
 )
 
+// Pair - some key-value pair, used for BulkPut
 type Pair struct {
 	Left, Right interface{}
 }
 
+// SerializedPeer concatenation of PeerID, net port and IP-address
 type SerializedPeer string
 
+// NewSerializedPeer builds SerializedPeer from bittorrent.Peer
 func NewSerializedPeer(p bittorrent.Peer) SerializedPeer {
 	b := make([]byte, bittorrent.PeerIDLen+2+len(p.IP.IP))
 	copy(b[:bittorrent.PeerIDLen], p.ID[:])
@@ -21,13 +24,14 @@ func NewSerializedPeer(p bittorrent.Peer) SerializedPeer {
 	return SerializedPeer(b)
 }
 
+// ToPeer parses SerializedPeer to bittorrent.Peer
 func (pk SerializedPeer) ToPeer() bittorrent.Peer {
-	peerId, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
+	peerID, err := bittorrent.NewPeerID([]byte(pk[:bittorrent.PeerIDLen]))
 	if err != nil {
 		panic(err)
 	}
 	peer := bittorrent.Peer{
-		ID:   peerId,
+		ID:   peerID,
 		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen : bittorrent.PeerIDLen+2])),
 		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
 

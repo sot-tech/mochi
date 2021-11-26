@@ -1,6 +1,7 @@
 // Package directory implements container which
 // checks if hash present in any of torrent file
-// placed in some directory
+// placed in some directory.
+// Note: Unlike List, this container also stores torrent name as value
 package directory
 
 import (
@@ -17,14 +18,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Name of this container for registry
 const Name = "directory"
 
 func init() {
 	container.Register(Name, build)
 }
 
+// Config - implementation of directory container configuration.
+// Extends list.Config because uses the same storage and Approved function.
 type Config struct {
 	list.Config
+	// Path in filesystem where torrent files stored and should be watched
 	Path string `yaml:"path"`
 }
 
@@ -100,6 +105,7 @@ type directory struct {
 	watcher *dirwatch.Instance
 }
 
+// Stop closes watching of torrent directory
 func (d *directory) Stop() stop.Result {
 	d.watcher.Close()
 	return stop.AlreadyStopped

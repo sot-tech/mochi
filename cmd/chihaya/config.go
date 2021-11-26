@@ -70,12 +70,11 @@ func ParseConfigFile(path string) (*ConfigFile, error) {
 	}
 
 	f, err := os.Open(os.ExpandEnv(path))
-	if err != nil {
-		return nil, err
-	} else {
+	if err == nil {
 		defer f.Close()
 		cfgFile := new(ConfigFile)
 		err = yaml.NewDecoder(f).Decode(cfgFile)
 		return cfgFile, err
 	}
+	return nil, err
 }

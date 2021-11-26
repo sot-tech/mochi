@@ -8,7 +8,9 @@ import (
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
 	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
+	// import directory watcher to enable appropriate support
 	_ "github.com/chihaya/chihaya/middleware/torrentapproval/container/directory"
+	// import static list to enable appropriate support
 	_ "github.com/chihaya/chihaya/middleware/torrentapproval/container/list"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"

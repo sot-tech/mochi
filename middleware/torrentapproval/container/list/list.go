@@ -11,18 +11,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Name of this container for registry.
 const Name = "list"
 
 func init() {
 	container.Register(Name, build)
 }
 
+// Config - implementation of list container configuration.
 type Config struct {
+	// HashList static list of HEX-encoded InfoHashes.
 	HashList   []string `yaml:"hash_list"`
+	// If Invert set to true, all InfoHashes stored in HashList should be blacklisted.
 	Invert     bool     `yaml:"invert"`
+	// StorageCtx is the name of storage context where to store hash list.
+	// It might be table name, REDIS record key or something else, depending on storage.
 	StorageCtx string   `yaml:"storage_ctx"`
 }
 
+// DUMMY used as value placeholder if storage needs some value with
 const DUMMY = "_"
 
 func build(confBytes []byte, st storage.Storage) (container.Container, error) {
@@ -58,12 +65,19 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	return l, nil
 }
 
+// List work structure of hash list. Might be reused in another containers.
 type List struct {
+	// Invert see Config.Invert description.
 	Invert     bool
+	// Storage implementation where hashes are stored for approval checks.
 	Storage    storage.Storage
+	// StorageCtx see Config.StorageCtx description.
 	StorageCtx string
 }
 
+// Approved checks if specified hash is approved or not.
+// If List.Invert set to true and hash found in storage, function will return false,
+// that means that hash is blacklisted.
 func (l *List) Approved(hash bittorrent.InfoHash) bool {
 	b := l.Storage.Contains(l.StorageCtx, hash.RawString())
 	if len(hash) == bittorrent.InfoHashV2Len {
