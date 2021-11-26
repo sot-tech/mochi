@@ -148,7 +148,7 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	quit := make(chan os.Signal)
+	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	reload := makeReloadChan()
@@ -209,7 +209,7 @@ func RootPreRunCmdFunc(cmd *cobra.Command, _ []string) error {
 
 // RootPostRunCmdFunc handles clean up of any state initialized by command line
 // flags.
-func RootPostRunCmdFunc(cmd *cobra.Command, args []string) error {
+func RootPostRunCmdFunc(_ *cobra.Command, _ []string) error {
 	return nil
 }
 

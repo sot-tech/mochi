@@ -172,7 +172,7 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 		}
 	}
 
-	if cfg.HTTPSAddr == "" || f.tlsCfg == nil {
+	if (cfg.HTTPSAddr == "") != (f.tlsCfg == nil) {
 		return nil, errors.New("must specify both https_addr, tls_cert_path and tls_key_path")
 	}
 

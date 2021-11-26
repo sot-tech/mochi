@@ -50,7 +50,7 @@ func TestHandleAnnounce(t *testing.T) {
 	require.NotNil(t, h)
 
 	ctx := context.Background()
-	req := &bittorrent.AnnounceRequest{}
+	req := &bittorrent.AnnounceRequest{InfoHash: "1234567890ABCDEF0000"}
 	resp := &bittorrent.AnnounceResponse{}
 
 	nCtx, err := h.HandleAnnounce(ctx, req, resp)
