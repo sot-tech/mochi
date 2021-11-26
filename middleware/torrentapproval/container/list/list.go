@@ -23,7 +23,7 @@ type Config struct {
 	StorageCtx string   `yaml:"storage_ctx"`
 }
 
-const DUMMY = true
+const DUMMY = "_"
 
 func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	c := new(Config)

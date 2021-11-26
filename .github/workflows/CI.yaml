@@ -24,8 +24,8 @@ jobs:
                 run: go build -v ./cmd/...
             -   name: Vet
                 run: go vet ./...
-            -   name: Imports
-                uses: Jerome1337/goimports-action@v1.0.3
+#            -   name: Imports
+#                uses: Jerome1337/goimports-action@v1.0.3
             -   name: Format
                 uses: Jerome1337/gofmt-action@v1.0.4
             -   name: Lint

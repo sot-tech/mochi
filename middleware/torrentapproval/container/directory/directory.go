@@ -1,10 +1,9 @@
 // Package directory implements container which
-// checks if hash present in any of *.torrent file
+// checks if hash present in any of torrent file
 // placed in some directory
 package directory
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/util/dirwatch"
@@ -14,6 +13,7 @@ import (
 	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"
+	"github.com/minio/sha256-simd"
 	"gopkg.in/yaml.v2"
 )
 
@@ -53,39 +53,46 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	}
 	go func() {
 		for event := range d.watcher.Events {
-			switch event.Change {
-			case dirwatch.Added:
-				data := make([]storage.Pair, 1, 2)
-				data[0] = storage.Pair{Left: event.InfoHash[:], Right: list.DUMMY}
-				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
-					data = append(data, storage.Pair{Left: v2ih.RawString(), Right: list.DUMMY})
-				} else {
-					log.Err(err)
+			var mi *metainfo.MetaInfo
+			if mi, err = metainfo.LoadFromFile(event.TorrentFilePath); err == nil {
+				s256 := sha256.New()
+				s256.Write(mi.InfoBytes)
+				v2hash, _ := bittorrent.NewInfoHash(s256.Sum(nil))
+				switch event.Change {
+				case dirwatch.Added:
+					var name string
+					if info, err := mi.UnmarshalInfo(); err == nil {
+						name = info.Name
+					} else {
+						log.Warn(err)
+					}
+					if len(name) == 0 {
+						name = list.DUMMY
+					}
+					d.Storage.BulkPut(c.StorageCtx,
+						storage.Pair{
+							Left:  event.InfoHash.AsString(),
+							Right: name,
+						}, storage.Pair{
+							Left:  v2hash.RawString(),
+							Right: name,
+						}, storage.Pair{
+							Left:  v2hash.TruncateV1().RawString(),
+							Right: name,
+						})
+				case dirwatch.Removed:
+					d.Storage.Delete(c.StorageCtx,
+						event.InfoHash.AsString(),
+						v2hash.RawString(),
+						v2hash.TruncateV1().RawString(),
+					)
 				}
-				d.Storage.BulkPut(c.StorageCtx, data...)
-			case dirwatch.Removed:
-				data := make([]interface{}, 1, 2)
-				data[0] = event.InfoHash[:]
-				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
-					data = append(data, v2ih.RawString())
-				} else {
-					log.Err(err)
-				}
-				d.Storage.Delete(c.StorageCtx, data...)
+			} else {
+				log.Err(err)
 			}
 		}
 	}()
 	return d, err
-}
-
-func v2InfoHash(path string) (ih bittorrent.InfoHash, err error) {
-	var mi *metainfo.MetaInfo
-	if mi, err = metainfo.LoadFromFile(path); err == nil {
-		hash := sha256.New()
-		hash.Write(mi.InfoBytes)
-		ih, err = bittorrent.NewInfoHash(hash.Sum(nil))
-	}
-	return
 }
 
 type directory struct {

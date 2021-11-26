@@ -1,5 +1,5 @@
 //go:build e2e
-// +build e2e
+//+build e2e
 
 package main
 
@@ -70,15 +70,10 @@ func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func generateInfohash() bittorrent.InfoHash {
+func test(addr string, delay time.Duration) error {
 	b := make([]byte, bittorrent.InfoHashV1Len)
 	rand.Read(b)
 	ih, _ := bittorrent.NewInfoHash(b)
-	return ih
-}
-
-func test(addr string, delay time.Duration) error {
-	ih := generateInfohash().TruncateV1()
 	return testWithInfohash(ih, addr, delay)
 }
 
@@ -137,8 +132,8 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 		return fmt.Errorf("expected 1 peers, got %d", len(resp.Peers))
 	}
 
-	if resp.Peers[0].Port != 10001 {
-		return fmt.Errorf("expected port 10001, got %d ", resp.Peers[0].Port)
+	if resp.Peers[0].Port != int(req.Port) {
+		return fmt.Errorf("expected port %d, got %d ", req.Port, resp.Peers[0].Port)
 	}
 
 	return nil

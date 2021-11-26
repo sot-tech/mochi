@@ -8,11 +8,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/pkg/errors"
 	"net"
 	"time"
-
-	"github.com/chihaya/chihaya/pkg/log"
 )
 
 const PeerIDLen = 20

@@ -3,11 +3,9 @@ package clientapproval
 import (
 	"context"
 	"fmt"
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 var cases = []struct {

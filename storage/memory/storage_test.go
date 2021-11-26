@@ -1,14 +1,13 @@
 package memory
 
 import (
+	"github.com/chihaya/chihaya/storage"
 	"github.com/chihaya/chihaya/storage/test"
 	"testing"
 	"time"
-
-	s "github.com/chihaya/chihaya/storage"
 )
 
-func createNew() s.Storage {
+func createNew() storage.Storage {
 	ps, err := New(Config{
 		ShardCount:                  1024,
 		GarbageCollectionInterval:   10 * time.Minute,

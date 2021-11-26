@@ -6,11 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/chihaya/chihaya/storage"
-	"gopkg.in/yaml.v2"
-
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
+	"github.com/chihaya/chihaya/storage"
+	"gopkg.in/yaml.v2"
 )
 
 // Name is the name by which this middleware is registered with Chihaya.

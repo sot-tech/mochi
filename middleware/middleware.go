@@ -5,9 +5,8 @@ package middleware
 import (
 	"errors"
 	"github.com/chihaya/chihaya/storage"
-	"sync"
-
 	"gopkg.in/yaml.v2"
+	"sync"
 )
 
 var (

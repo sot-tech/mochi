@@ -13,21 +13,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/chihaya/chihaya/storage"
-	"net/http"
-	"strings"
-	"time"
-
 	jc "github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
 	"github.com/SermoDigital/jose/jwt"
-	"github.com/mendsley/gojwk"
-	"gopkg.in/yaml.v2"
-
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
 	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
+	"github.com/chihaya/chihaya/storage"
+	"github.com/mendsley/gojwk"
+	"gopkg.in/yaml.v2"
+	"net/http"
+	"strings"
+	"time"
 )
 
 // Name is the name by which this middleware is registered with Chihaya.
@@ -106,7 +104,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 				return
 			case <-time.After(cfg.JWKUpdateInterval):
 				log.Debug("performing fetch of JWKs")
-				h.updateKeys()
+				_ = h.updateKeys()
 			}
 		}
 	}()

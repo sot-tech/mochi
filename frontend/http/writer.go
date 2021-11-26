@@ -2,11 +2,10 @@ package http
 
 import (
 	"github.com/anacrolix/torrent/bencode"
-	"net/http"
-	"time"
-
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/pkg/log"
+	"net/http"
+	"time"
 )
 
 type strMap map[string]interface{}

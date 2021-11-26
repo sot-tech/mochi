@@ -3,11 +3,9 @@ package varinterval
 import (
 	"context"
 	"fmt"
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 var configTests = []struct {

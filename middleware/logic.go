@@ -2,13 +2,12 @@ package middleware
 
 import (
 	"context"
-	"time"
-
 	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/frontend"
 	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"
+	"time"
 )
 
 // ResponseConfig holds the configuration used for the actual response.

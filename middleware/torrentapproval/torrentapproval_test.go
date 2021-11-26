@@ -3,14 +3,12 @@ package torrentapproval
 import (
 	"context"
 	"fmt"
+	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/middleware"
 	"github.com/chihaya/chihaya/storage/memory"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 	"testing"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/chihaya/chihaya/bittorrent"
 )
 
 var cases = []struct {

@@ -1,14 +1,13 @@
 package test
 
 import (
+	"github.com/chihaya/chihaya/bittorrent"
 	"github.com/chihaya/chihaya/storage"
 	"math/rand"
 	"net"
 	"runtime"
 	"sync/atomic"
 	"testing"
-
-	"github.com/chihaya/chihaya/bittorrent"
 )
 
 type benchData struct {

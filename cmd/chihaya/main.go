@@ -2,14 +2,6 @@ package main
 
 import (
 	"errors"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"os"
-	"os/signal"
-	"runtime"
-	"strings"
-	"syscall"
-
 	"github.com/chihaya/chihaya/frontend/http"
 	"github.com/chihaya/chihaya/frontend/udp"
 	"github.com/chihaya/chihaya/middleware"
@@ -17,6 +9,13 @@ import (
 	"github.com/chihaya/chihaya/pkg/metrics"
 	"github.com/chihaya/chihaya/pkg/stop"
 	"github.com/chihaya/chihaya/storage"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"os"
+	"os/signal"
+	"runtime"
+	"strings"
+	"syscall"
 )
 
 var e2eCmd *cobra.Command

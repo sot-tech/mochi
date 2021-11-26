@@ -1,12 +1,10 @@
 package test
 
 import (
-	"github.com/chihaya/chihaya/storage"
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/chihaya/chihaya/storage"
+	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 // PeerEqualityFunc is the boolean function to use to check two Peers for
