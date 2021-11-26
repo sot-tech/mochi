@@ -42,15 +42,14 @@ func (d driver) NewHook(optionBytes []byte, storage storage.Storage) (middleware
 	}
 
 	var confBytes []byte
-	if confBytes, err = yaml.Marshal(cfg.Options); err != nil {
-		return nil, err
+	var h *hook
+	if confBytes, err = yaml.Marshal(cfg.Options); err == nil {
+		var c container.Container
+		if c, err = container.GetContainer(cfg.Name, confBytes, storage); err == nil {
+			h = &hook{c}
+		}
 	}
-
-	if c, err := container.GetContainer(cfg.Name, confBytes, storage); err == nil {
-		return &hook{c}, nil
-	} else {
-		return nil, err
-	}
+	return h, err
 }
 
 // ErrTorrentUnapproved is the error returned when a torrent hash is invalid.

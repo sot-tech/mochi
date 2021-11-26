@@ -20,8 +20,8 @@ const PeerIDLen = 20
 // PeerID represents a peer ID.
 type PeerID [PeerIDLen]byte
 
-// InvalidPeerIDSizeError holds error about invalid PeerID size
-var InvalidPeerIDSizeError = errors.New("peer ID must be 20 bytes")
+// ErrInvalidPeerIDSize holds error about invalid PeerID size
+var ErrInvalidPeerIDSize = errors.New("peer ID must be 20 bytes")
 
 // NewPeerID creates a PeerID from a byte slice.
 //
@@ -29,7 +29,7 @@ var InvalidPeerIDSizeError = errors.New("peer ID must be 20 bytes")
 func NewPeerID(b []byte) (PeerID, error) {
 	var p PeerID
 	if len(b) != PeerIDLen {
-		return p, InvalidPeerIDSizeError
+		return p, ErrInvalidPeerIDSize
 	}
 	copy(p[:], b)
 	return p, nil
@@ -58,10 +58,10 @@ const (
 )
 
 var (
-	// InvalidHashTypeError holds error about invalid InfoHash input type
-	InvalidHashTypeError = errors.New("info hash must be provided as byte slice or raw/hex string")
-	// InvalidHashSizeError holds error about invalid InfoHash size
-	InvalidHashSizeError = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
+	// ErrInvalidHashType holds error about invalid InfoHash input type
+	ErrInvalidHashType = errors.New("info hash must be provided as byte slice or raw/hex string")
+	// ErrInvalidHashSize holds error about invalid InfoHash size
+	ErrInvalidHashSize = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
 )
 
 // TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
@@ -74,7 +74,7 @@ func (i InfoHash) TruncateV1() InfoHash {
 // NewInfoHash creates an InfoHash from a byte slice or raw/hex string.
 func NewInfoHash(b interface{}) (InfoHash, error) {
 	if b == nil {
-		return NoneInfoHash, InvalidHashTypeError
+		return NoneInfoHash, ErrInvalidHashType
 	}
 	var ba []byte
 	switch t := b.(type) {
@@ -97,7 +97,7 @@ func NewInfoHash(b interface{}) (InfoHash, error) {
 	}
 	l := len(ba)
 	if l != InfoHashV1Len && l != InfoHashV2Len {
-		return NoneInfoHash, InvalidHashSizeError
+		return NoneInfoHash, ErrInvalidHashSize
 	}
 	return InfoHash(ba), nil
 }
