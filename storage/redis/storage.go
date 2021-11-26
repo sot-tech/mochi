@@ -24,8 +24,8 @@
 package redis
 
 import (
-	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -609,22 +609,30 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 func (ps *store) Put(ctx string, key, value interface{}) {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
-	_ = conn.Send("HSET", ctx, key, value)
+	_, err := conn.Do("HSET", ctx, key, value)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (ps *store) Contains(ctx string, key interface{}) bool {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
-	exist, _ := redis.Bool(conn.Do("HEXISTS", ctx, key))
+	exist, err := redis.Bool(conn.Do("HEXISTS", ctx, key))
+	if err != nil {
+		panic(err)
+	}
 	return exist
 }
+
+const argNumErrorMsg = "ERR wrong number of arguments"
 
 func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 	switch l := len(pairs); l {
 	case 0:
 		break
 	case 1:
-		ps.Put(ctx, fmt.Sprint(pairs[0].Left), pairs[0].Right)
+		ps.Put(ctx, pairs[0].Left, pairs[0].Right)
 	default:
 		conn := ps.getConnection()
 		defer closeConnection(conn)
@@ -633,14 +641,29 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 		for _, p := range pairs {
 			args = append(args, p.Left, p.Right)
 		}
-		_ = conn.Send("HSET", args...)
+		_, err := conn.Do("HSET", args...)
+		if err != nil {
+			if strings.Contains(err.Error(), argNumErrorMsg) {
+				log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
+				for _, p := range pairs {
+					if _, err := conn.Do("HSET", ctx, p.Left, p.Right); err != nil {
+						panic(err)
+					}
+				}
+			} else {
+				panic(err)
+			}
+		}
 	}
 }
 
 func (ps *store) Load(ctx string, key interface{}) interface{} {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
-	v, _ := conn.Do("HGET", ctx, key)
+	v, err := conn.Do("HGET", ctx, key)
+	if err != nil {
+		panic(err)
+	}
 	return v
 }
 
@@ -651,14 +674,29 @@ func (ps *store) Delete(ctx string, keys ...interface{}) {
 	case 1:
 		conn := ps.getConnection()
 		defer closeConnection(conn)
-		_ = conn.Send("HDEL", ctx, keys[0])
+		_, err := conn.Do("HDEL", ctx, keys[0])
+		if err != nil {
+			panic(err)
+		}
 	default:
 		conn := ps.getConnection()
 		defer closeConnection(conn)
 		args := make([]interface{}, 1, l+1)
 		args[0] = ctx
 		args = append(args, keys...)
-		_ = conn.Send("HDEL", args...)
+		_, err := conn.Do("HDEL", args...)
+		if err != nil {
+			if strings.Contains(err.Error(), argNumErrorMsg) {
+				log.Warn("This REDIS version/implementation does not support variadic arguments for HDEL")
+				for _, k := range keys {
+					if _, err := conn.Do("HDEL", ctx, k); err != nil {
+						panic(err)
+					}
+				}
+			} else {
+				panic(err)
+			}
+		}
 	}
 }
 

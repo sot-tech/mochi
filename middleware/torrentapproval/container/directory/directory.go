@@ -58,7 +58,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 				data := make([]storage.Pair, 1, 2)
 				data[0] = storage.Pair{Left: event.InfoHash[:], Right: list.DUMMY}
 				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
-					data = append(data, storage.Pair{Left: v2ih, Right: list.DUMMY})
+					data = append(data, storage.Pair{Left: v2ih.RawString(), Right: list.DUMMY})
 				} else {
 					log.Err(err)
 				}
@@ -67,7 +67,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 				data := make([]interface{}, 1, 2)
 				data[0] = event.InfoHash[:]
 				if v2ih, err := v2InfoHash(event.TorrentFilePath); err == nil {
-					data = append(data, v2ih)
+					data = append(data, v2ih.RawString())
 				} else {
 					log.Err(err)
 				}

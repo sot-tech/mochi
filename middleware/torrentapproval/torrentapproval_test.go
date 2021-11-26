@@ -2,7 +2,6 @@ package torrentapproval
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"github.com/chihaya/chihaya/middleware"
 	"github.com/chihaya/chihaya/storage/memory"
@@ -83,10 +82,7 @@ func TestHandleAnnounce(t *testing.T) {
 			req := &bittorrent.AnnounceRequest{}
 			resp := &bittorrent.AnnounceResponse{}
 
-			hashbytes, err := hex.DecodeString(tt.ih)
-			require.Nil(t, err)
-
-			hashinfo, err := bittorrent.NewInfoHash(hashbytes)
+			hashinfo, err := bittorrent.NewInfoHash(tt.ih)
 			require.Nil(t, err)
 
 			req.InfoHash = hashinfo

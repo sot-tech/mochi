@@ -534,7 +534,7 @@ func (ps *store) Delete(ctx string, keys ...interface{}) {
 	if len(keys) > 0 {
 		if m, found := ps.contexts.Load(ctx); found {
 			m := m.(*sync.Map)
-			for k := range keys {
+			for _, k := range keys {
 				m.Delete(asKey(k))
 			}
 		}

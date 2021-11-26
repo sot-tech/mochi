@@ -6,6 +6,7 @@ package bittorrent
 import (
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"github.com/pkg/errors"
 	"net"
@@ -35,7 +36,7 @@ func NewPeerID(b []byte) (PeerID, error) {
 
 // String implements fmt.Stringer, returning the base16 encoded PeerID.
 func (p PeerID) String() string {
-	return fmt.Sprintf("%x", p[:])
+	return hex.EncodeToString(p[:])
 }
 
 // RawString returns a 20-byte string of the raw bytes of the ID.
@@ -52,6 +53,7 @@ const (
 	NoneInfoHash  InfoHash = ""
 )
 
+var InvalidHashTypeError = errors.New("info hash must be provided as byte slice or raw/hex string")
 var InvalidHashSizeError = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
 
 // TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
@@ -61,30 +63,42 @@ func (i InfoHash) TruncateV1() InfoHash {
 	return i[:InfoHashV1Len]
 }
 
-// ValidateInfoHash validates input bytes size and returns it
-// if size one of InfoHashV1Len or InfoHashV2Len.
-// In other case 0 and non-nil error returned
-func ValidateInfoHash(b []byte) (int, error) {
-	l := len(b)
-	if l != InfoHashV1Len && l != InfoHashV2Len {
-		return 0, InvalidHashSizeError
+// NewInfoHash creates an InfoHash from a byte slice or raw/hex string.
+func NewInfoHash(b interface{}) (InfoHash, error) {
+	if b == nil {
+		return NoneInfoHash, InvalidHashTypeError
 	}
-	return l, nil
-}
-
-// NewInfoHash creates an InfoHash from a byte slice.
-func NewInfoHash(b []byte) (InfoHash, error) {
-	if _, err := ValidateInfoHash(b); err != nil {
-		return NoneInfoHash, err
+	var ba []byte
+	switch t := b.(type) {
+	case [InfoHashV1Len]byte:
+		ba = t[:]
+	case [InfoHashV2Len]byte:
+		ba = t[:]
+	case []byte:
+		ba = t
+	case string:
+		l := len(t)
+		if l == InfoHashV1Len*2 || l == InfoHashV2Len*2 {
+			var err error
+			if ba, err = hex.DecodeString(t); err != nil {
+				return NoneInfoHash, err
+			}
+		} else {
+			ba = []byte(t)
+		}
+	}
+	l := len(ba)
+	if l != InfoHashV1Len && l != InfoHashV2Len {
+		return NoneInfoHash, InvalidHashSizeError
 	} else {
-		buf := InfoHash(b)
+		buf := InfoHash(ba)
 		return buf, nil
 	}
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.
 func (i InfoHash) String() string {
-	return fmt.Sprintf("%x", i[:])
+	return hex.EncodeToString([]byte(i))
 }
 
 // RawString returns a string of the raw bytes of the InfoHash.

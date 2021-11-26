@@ -1,14 +1,11 @@
 # Redis Storage
 
-This storage implementation separates Chihaya from its storage service.
-Chihaya achieves HA by storing all peer data in Redis.
-Multiple instances of Chihaya can use the same redis instance concurrently.
-The storage service can get HA by clustering.
-If one instance of Chihaya goes down, peer data will still be available in Redis.
+This storage implementation separates Chihaya from its storage service. Chihaya achieves HA by storing all peer data in
+Redis. Multiple instances of Chihaya can use the same redis instance concurrently. The storage service can get HA by
+clustering. If one instance of Chihaya goes down, peer data will still be available in Redis.
 
-The HA of storage service is not considered here.
-In case Redis runs as a single node, peer data will be unavailable if the node is down.
-You should consider setting up a Redis cluster for Chihaya in production.
+The HA of storage service is not considered here. In case Redis runs as a single node, peer data will be unavailable if
+the node is down. You should consider setting up a Redis cluster for Chihaya in production.
 
 This storage implementation is currently orders of magnitude slower than the in-memory implementation.
 
@@ -52,10 +49,10 @@ chihaya:
 
 ## Implementation
 
-Seeders and Leechers for a particular InfoHash are stored within a redis hash.
-The InfoHash is used as key, _peer keys_ are the fields, last modified times are values.
-Peer keys are derived from peers and contain Peer ID, IP, and Port.
-All the InfoHashes (swarms) are also stored in a redis hash, with IP family as the key, infohash as field, and last modified time as value.
+Seeders and Leechers for a particular InfoHash are stored within a redis hash. The InfoHash is used as key, _peer keys_
+are the fields, last modified times are values. Peer keys are derived from peers and contain Peer ID, IP, and Port. All
+the InfoHashes (swarms) are also stored in a redis hash, with IP family as the key, infohash as field, and last modified
+time as value.
 
 Here is an example:
 
@@ -73,9 +70,8 @@ Here is an example:
   - <peer 3 key>: <modification time>
 ```
 
-
-In this case, prometheus would record two swarms, three seeders, and one leecher.
-These three keys per address family are used to record the count of swarms, seeders, and leechers.
+In this case, prometheus would record two swarms, three seeders, and one leecher. These three keys per address family
+are used to record the count of swarms, seeders, and leechers.
 
 ```
 - IPv4_infohash_count: 2
