@@ -53,7 +53,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	}
 	d.watcher = w
 	if len(d.StorageCtx) == 0 {
-		log.Info("Storage context not set, using default value: " + container.DefaultStorageCtxName)
+		log.Info("storage context not set, using default value: " + container.DefaultStorageCtxName)
 		d.StorageCtx = container.DefaultStorageCtxName
 	}
 	go func() {
@@ -63,6 +63,12 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 				s256 := sha256.New()
 				s256.Write(mi.InfoBytes)
 				v2hash, _ := bittorrent.NewInfoHash(s256.Sum(nil))
+				lf := log.Fields{
+					"file":      event.TorrentFilePath,
+					"v1hash":    event.InfoHash.String(),
+					"v2hash":    v2hash.String(),
+					"v2to1hash": v2hash.TruncateV1().String(),
+				}
 				switch event.Change {
 				case dirwatch.Added:
 					var name string
@@ -74,7 +80,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 					if len(name) == 0 {
 						name = list.DUMMY
 					}
-					d.Storage.BulkPut(c.StorageCtx,
+					d.Storage.BulkPut(d.StorageCtx,
 						storage.Pair{
 							Left:  event.InfoHash.AsString(),
 							Right: name,
@@ -85,12 +91,14 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 							Left:  v2hash.TruncateV1().RawString(),
 							Right: name,
 						})
+					log.Debug("approval torrent added", lf)
 				case dirwatch.Removed:
 					d.Storage.Delete(c.StorageCtx,
 						event.InfoHash.AsString(),
 						v2hash.RawString(),
 						v2hash.TruncateV1().RawString(),
 					)
+					log.Debug("approval torrent deleted", lf)
 				}
 			} else {
 				log.Err(err)

@@ -68,7 +68,10 @@ var (
 // If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
 // according to BEP52.
 func (i InfoHash) TruncateV1() InfoHash {
-	return i[:InfoHashV1Len]
+	if len(i) == InfoHashV2Len {
+		return i[:InfoHashV1Len]
+	}
+	return i
 }
 
 // NewInfoHash creates an InfoHash from a byte slice or raw/hex string.

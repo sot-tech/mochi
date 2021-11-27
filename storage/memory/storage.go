@@ -98,7 +98,7 @@ func (cfg Config) Validate() Config {
 		})
 	}
 
-	if cfg.PrometheusReportingInterval <= 0 {
+	if cfg.PrometheusReportingInterval < 0 {
 		validcfg.PrometheusReportingInterval = defaultPrometheusReportingInterval
 		log.Warn("falling back to default configuration", log.Fields{
 			"name":     Name + ".PrometheusReportingInterval",

@@ -24,28 +24,35 @@ func init() {
 	middleware.RegisterDriver(Name, driver{})
 }
 
+type baseConfig struct {
+	// Source - name of container for initial values
+	Source string `yaml:"initial_source"`
+	// Configuration depends on used container
+	Configuration map[string]interface{} `yaml:"configuration"`
+}
+
 type driver struct{}
 
 func (d driver) NewHook(optionBytes []byte, storage storage.Storage) (middleware.Hook, error) {
-	var cfg middleware.Config
+	var cfg baseConfig
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
 	}
 
-	if len(cfg.Name) == 0 {
+	if len(cfg.Source) == 0 {
 		return nil, fmt.Errorf("invalid options for middleware %s: name not provided", Name)
 	}
 
-	if cfg.Options == nil {
+	if cfg.Configuration == nil {
 		return nil, fmt.Errorf("invalid options for middleware %s: options not provided", Name)
 	}
 
 	var confBytes []byte
 	var h *hook
-	if confBytes, err = yaml.Marshal(cfg.Options); err == nil {
+	if confBytes, err = yaml.Marshal(cfg.Configuration); err == nil {
 		var c container.Container
-		if c, err = container.GetContainer(cfg.Name, confBytes, storage); err == nil {
+		if c, err = container.GetContainer(cfg.Source, confBytes, storage); err == nil {
 			h = &hook{c}
 		}
 	}

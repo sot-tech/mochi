@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/middleware"
 	"github.com/chihaya/chihaya/storage/memory"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -12,15 +11,15 @@ import (
 )
 
 var cases = []struct {
-	cfg      middleware.Config
+	cfg      baseConfig
 	ih       string
 	approved bool
 }{
 	// Infohash is whitelisted
 	{
-		middleware.Config{
-			Name: "list",
-			Options: map[string]interface{}{
+		baseConfig{
+			Source: "list",
+			Configuration: map[string]interface{}{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
@@ -29,9 +28,9 @@ var cases = []struct {
 	},
 	// Infohash is not whitelisted
 	{
-		middleware.Config{
-			Name: "list",
-			Options: map[string]interface{}{
+		baseConfig{
+			Source: "list",
+			Configuration: map[string]interface{}{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
@@ -40,9 +39,9 @@ var cases = []struct {
 	},
 	// Infohash is not blacklisted
 	{
-		middleware.Config{
-			Name: "list",
-			Options: map[string]interface{}{
+		baseConfig{
+			Source: "list",
+			Configuration: map[string]interface{}{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 				"invert":    true,
 			},
@@ -52,9 +51,9 @@ var cases = []struct {
 	},
 	// Infohash is blacklisted
 	{
-		middleware.Config{
-			Name: "list",
-			Options: map[string]interface{}{
+		baseConfig{
+			Source: "list",
+			Configuration: map[string]interface{}{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 				"invert":    true,
 			},
