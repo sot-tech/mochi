@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"context"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/storage"
 )
 
 // Hook abstracts the concept of anything that needs to interact with a

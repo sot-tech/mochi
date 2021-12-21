@@ -1,4 +1,4 @@
-// Package redis implements the storage interface for a Chihaya
+// Package redis implements the storage interface for a Conf
 // BitTorrent tracker keeping peer data in redis with hash.
 // There two categories of hash:
 //
@@ -32,14 +32,14 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"gopkg.in/yaml.v2"
 
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/chihaya/chihaya/pkg/timecache"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
+	"github.com/sot-tech/mochi/pkg/timecache"
+	"github.com/sot-tech/mochi/storage"
 )
 
-// Name is the name by which this peer store is registered with Chihaya.
+// Name is the name by which this peer store is registered with Conf.
 const Name = "redis"
 
 // Default config constants.
@@ -850,7 +850,7 @@ func (ps *store) Stop() stop.Result {
 	go func() {
 		close(ps.closed)
 		ps.wg.Wait()
-		log.Info("storage: exiting. chihaya does not clear data in redis when exiting. chihaya keys have prefix 'IPv{4,6}_'.")
+		log.Info("storage: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix 'IPv{4,6}_'.")
 		c.Done()
 	}()
 

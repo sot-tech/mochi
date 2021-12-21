@@ -1,8 +1,8 @@
 package memory
 
 import (
-	"github.com/chihaya/chihaya/storage"
-	"github.com/chihaya/chihaya/storage/test"
+	"github.com/sot-tech/mochi/storage"
+	"github.com/sot-tech/mochi/storage/test"
 	"testing"
 	"time"
 )

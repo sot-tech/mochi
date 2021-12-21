@@ -4,9 +4,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 var (

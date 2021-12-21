@@ -3,8 +3,8 @@ package torrentapproval
 import (
 	"context"
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/storage/memory"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/storage/memory"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 	"testing"

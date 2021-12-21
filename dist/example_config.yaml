@@ -1,4 +1,4 @@
-chihaya:
+mochi:
     # The interval communicated with BitTorrent clients informing them how
     # frequently they should announce in between client events.
     announce_interval: 30m
@@ -169,7 +169,7 @@ chihaya:
     #- name: jwt
     #  options:
     #    issuer: "https://issuer.com"
-    #    audience: "https://chihaya.issuer.com"
+    #    audience: "https://some.issuer.com"
     #    jwk_set_url: "https://issuer.com/keys"
     #    jwk_set_update_interval: 5m
 

@@ -1,7 +1,7 @@
 package clientapproval
 
 import (
-	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/sot-tech/mochi/bittorrent"
 	"testing"
 )
 

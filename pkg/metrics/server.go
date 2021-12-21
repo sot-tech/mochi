@@ -9,8 +9,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 // Server represents a standalone HTTP server for serving a Prometheus metrics

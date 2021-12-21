@@ -4,7 +4,7 @@
 // - https://github.com/webtorrent/bittorrent-peerid/blob/master/lib/utils.js
 package clientapproval
 
-import "github.com/chihaya/chihaya/bittorrent"
+import "github.com/sot-tech/mochi/bittorrent"
 
 // ClientID represents the part of a PeerID that identifies a Peer's client
 // software.

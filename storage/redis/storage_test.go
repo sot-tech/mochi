@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	s "github.com/chihaya/chihaya/storage"
-	"github.com/chihaya/chihaya/storage/test"
+	s "github.com/sot-tech/mochi/storage"
+	"github.com/sot-tech/mochi/storage/test"
 )
 
 func createNew() s.Storage {

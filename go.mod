@@ -1,4 +1,4 @@
-module github.com/chihaya/chihaya
+module github.com/sot-tech/mochi
 
 go 1.16
 

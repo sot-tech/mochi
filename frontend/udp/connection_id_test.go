@@ -12,7 +12,7 @@ import (
 	"github.com/minio/sha256-simd"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chihaya/chihaya/pkg/log"
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 var golden = []struct {

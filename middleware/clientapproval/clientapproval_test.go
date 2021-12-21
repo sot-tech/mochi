@@ -3,7 +3,7 @@ package clientapproval
 import (
 	"context"
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

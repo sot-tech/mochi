@@ -1,4 +1,4 @@
-// Package memory implements the storage interface for a Chihaya
+// Package memory implements the storage interface for a Conf
 // BitTorrent tracker keeping peer data in memory.
 package memory
 
@@ -12,14 +12,14 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/chihaya/chihaya/pkg/timecache"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
+	"github.com/sot-tech/mochi/pkg/timecache"
+	"github.com/sot-tech/mochi/storage"
 )
 
-// Name is the name by which this peer store is registered with Chihaya.
+// Name is the name by which this peer store is registered with Conf.
 const Name = "memory"
 
 // Default config constants.

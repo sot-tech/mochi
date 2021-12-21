@@ -27,7 +27,7 @@ This middleware provides the following parameters for configuration:
 An example config might look like this:
 
 ```yaml
-chihaya:
+mochi:
   prehooks:
     - name: interval variation
       config:

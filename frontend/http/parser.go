@@ -4,7 +4,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/sot-tech/mochi/bittorrent"
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.

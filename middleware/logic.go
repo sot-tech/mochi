@@ -2,18 +2,18 @@ package middleware
 
 import (
 	"context"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/frontend"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/frontend"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
+	"github.com/sot-tech/mochi/storage"
 	"time"
 )
 
 // ResponseConfig holds the configuration used for the actual response.
 //
 // TODO(jzelinskie): Evaluate whether we would like to make this optional.
-// We can make Chihaya extensible enough that you can program a new response
+// We can make Conf extensible enough that you can program a new response
 // generator at the cost of making it possible for users to create config that
 // won't compose a functional tracker.
 type ResponseConfig struct {

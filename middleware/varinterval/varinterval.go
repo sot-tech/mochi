@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/middleware"
-	"github.com/chihaya/chihaya/middleware/pkg/random"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/middleware/pkg/random"
+	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v2"
 	"sync"
 	"time"
 )
 
-// Name is the name by which this middleware is registered with Chihaya.
+// Name is the name by which this middleware is registered with Conf.
 const Name = "interval variation"
 
 func init() {

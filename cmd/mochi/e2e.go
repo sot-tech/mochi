@@ -12,15 +12,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/pkg/log"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 func init() {
 	e2eCmd = &cobra.Command{
 		Use:   "e2e",
 		Short: "exec e2e tests",
-		Long:  "Execute the Chihaya end-to-end test suite",
+		Long:  "Execute the Conf end-to-end test suite",
 		RunE:  EndToEndRunCmdFunc,
 	}
 
@@ -30,7 +30,7 @@ func init() {
 }
 
 // EndToEndRunCmdFunc implements a Cobra command that runs the end-to-end test
-// suite for a Chihaya build.
+// suite for a Conf build.
 func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
 	delay, err := cmd.Flags().GetDuration("delay")
 	if err != nil {
@@ -94,7 +94,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 	resp, err := tracker.Announce{
 		TrackerUrl: url,
 		Request:    req,
-		UserAgent:  "chihaya-e2e",
+		UserAgent:  "mochi-e2e",
 	}.Do()
 	if err != nil {
 		return errors.Wrap(err, "announce failed")
@@ -122,7 +122,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 	resp, err = tracker.Announce{
 		TrackerUrl: url,
 		Request:    req,
-		UserAgent:  "chihaya-e2e",
+		UserAgent:  "mochi-e2e",
 	}.Do()
 	if err != nil {
 		return errors.Wrap(err, "announce failed")

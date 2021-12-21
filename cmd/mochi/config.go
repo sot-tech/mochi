@@ -6,19 +6,19 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/chihaya/chihaya/frontend/http"
-	"github.com/chihaya/chihaya/frontend/udp"
-	"github.com/chihaya/chihaya/middleware"
+	"github.com/sot-tech/mochi/frontend/http"
+	"github.com/sot-tech/mochi/frontend/udp"
+	"github.com/sot-tech/mochi/middleware"
 
 	// Imports to register middleware drivers.
-	_ "github.com/chihaya/chihaya/middleware/clientapproval"
-	_ "github.com/chihaya/chihaya/middleware/jwt"
-	_ "github.com/chihaya/chihaya/middleware/torrentapproval"
-	_ "github.com/chihaya/chihaya/middleware/varinterval"
+	_ "github.com/sot-tech/mochi/middleware/clientapproval"
+	_ "github.com/sot-tech/mochi/middleware/jwt"
+	_ "github.com/sot-tech/mochi/middleware/torrentapproval"
+	_ "github.com/sot-tech/mochi/middleware/varinterval"
 
 	// Imports to register storage drivers.
-	_ "github.com/chihaya/chihaya/storage/memory"
-	_ "github.com/chihaya/chihaya/storage/redis"
+	_ "github.com/sot-tech/mochi/storage/memory"
+	_ "github.com/sot-tech/mochi/storage/redis"
 )
 
 type storageConfig struct {
@@ -26,7 +26,7 @@ type storageConfig struct {
 	Config interface{} `yaml:"config"`
 }
 
-// Config represents the configuration used for executing Chihaya.
+// Config represents the configuration used for executing Conf.
 type Config struct {
 	middleware.ResponseConfig `yaml:",inline"`
 	MetricsAddr               string              `yaml:"metrics_addr"`
@@ -57,7 +57,7 @@ func (cfg Config) PostHookNames() (names []string) {
 
 // ConfigFile represents a namespaced YAML configation file.
 type ConfigFile struct {
-	Chihaya Config `yaml:"chihaya"`
+	Conf Config `yaml:"mochi"`
 }
 
 // ParseConfigFile returns a new ConfigFile given the path to a YAML

@@ -16,19 +16,19 @@ import (
 	jc "github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
 	"github.com/SermoDigital/jose/jwt"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/middleware"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/chihaya/chihaya/storage"
 	"github.com/mendsley/gojwk"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
+	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v2"
 	"net/http"
 	"strings"
 	"time"
 )
 
-// Name is the name by which this middleware is registered with Chihaya.
+// Name is the name by which this middleware is registered with Conf.
 const Name = "jwt"
 
 func init() {

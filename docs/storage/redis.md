@@ -16,7 +16,7 @@ When one instance of Chihaya is down, other instances can continue serving peers
 ## Configuration
 
 ```yaml
-chihaya:
+mochi:
   storage:
     name: redis
     config:

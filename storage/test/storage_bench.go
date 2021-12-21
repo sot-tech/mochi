@@ -1,8 +1,8 @@
 package test
 
 import (
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/storage"
 	"math/rand"
 	"net"
 	"runtime"

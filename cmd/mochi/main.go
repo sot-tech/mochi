@@ -2,14 +2,14 @@ package main
 
 import (
 	"errors"
-	"github.com/chihaya/chihaya/frontend/http"
-	"github.com/chihaya/chihaya/frontend/udp"
-	"github.com/chihaya/chihaya/middleware"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/pkg/metrics"
-	"github.com/chihaya/chihaya/pkg/stop"
-	"github.com/chihaya/chihaya/storage"
 	"github.com/sirupsen/logrus"
+	"github.com/sot-tech/mochi/frontend/http"
+	"github.com/sot-tech/mochi/frontend/udp"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/metrics"
+	"github.com/sot-tech/mochi/pkg/stop"
+	"github.com/sot-tech/mochi/storage"
 	"github.com/spf13/cobra"
 	"os"
 	"os/signal"
@@ -20,7 +20,7 @@ import (
 
 var e2eCmd *cobra.Command
 
-// Run represents the state of a running instance of Chihaya.
+// Run represents the state of a running instance of Conf.
 type Run struct {
 	configFilePath string
 	storage        storage.Storage
@@ -28,7 +28,7 @@ type Run struct {
 	sg             *stop.Group
 }
 
-// NewRun runs an instance of Chihaya.
+// NewRun runs an instance of Conf.
 func NewRun(configFilePath string) (*Run, error) {
 	r := &Run{
 		configFilePath: configFilePath,
@@ -37,7 +37,7 @@ func NewRun(configFilePath string) (*Run, error) {
 	return r, r.Start(nil)
 }
 
-// Start begins an instance of Chihaya.
+// Start begins an instance of Conf.
 // It is optional to provide an instance of the peer store to avoid the
 // creation of a new one.
 func (r *Run) Start(ps storage.Storage) error {
@@ -45,7 +45,7 @@ func (r *Run) Start(ps storage.Storage) error {
 	if err != nil {
 		return errors.New("failed to read config: " + err.Error())
 	}
-	cfg := configFile.Chihaya
+	cfg := configFile.Conf
 
 	r.sg = stop.NewGroup()
 
@@ -111,7 +111,7 @@ func combineErrors(prefix string, errs []error) error {
 	return errors.New(prefix + ": " + strings.Join(errStrs, "; "))
 }
 
-// Stop shuts down an instance of Chihaya.
+// Stop shuts down an instance of Conf.
 func (r *Run) Stop(keepPeerStore bool) (storage.Storage, error) {
 	log.Debug("stopping frontends and metrics server")
 	if errs := r.sg.Stop().Wait(); len(errs) != 0 {
@@ -134,7 +134,7 @@ func (r *Run) Stop(keepPeerStore bool) (storage.Storage, error) {
 	return r.storage, nil
 }
 
-// RootRunCmdFunc implements a Cobra command that runs an instance of Chihaya
+// RootRunCmdFunc implements a Cobra command that runs an instance of Conf
 // and handles reloading and shutdown via process signals.
 func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 	configFilePath, err := cmd.Flags().GetString("config")
@@ -214,7 +214,7 @@ func RootPostRunCmdFunc(_ *cobra.Command, _ []string) error {
 
 func main() {
 	var rootCmd = &cobra.Command{
-		Use:                "chihaya",
+		Use:                "mochi",
 		Short:              "BitTorrent Tracker",
 		Long:               "A customizable, multi-protocol BitTorrent Tracker",
 		PersistentPreRunE:  RootPreRunCmdFunc,
@@ -230,7 +230,7 @@ func main() {
 		rootCmd.PersistentFlags().Bool("nocolors", false, "disable log coloring")
 	}
 
-	rootCmd.Flags().String("config", "/etc/chihaya.yaml", "location of configuration file")
+	rootCmd.Flags().String("config", "/etc/mochi.yaml", "location of configuration file")
 
 	if e2eCmd != nil {
 		rootCmd.AddCommand(e2eCmd)

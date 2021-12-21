@@ -8,8 +8,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/chihaya/chihaya/pkg/log"
 	"github.com/pkg/errors"
+	"github.com/sot-tech/mochi/pkg/log"
 	"net"
 	"time"
 )

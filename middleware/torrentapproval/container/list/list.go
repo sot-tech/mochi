@@ -4,10 +4,10 @@ package list
 
 import (
 	"fmt"
-	"github.com/chihaya/chihaya/bittorrent"
-	"github.com/chihaya/chihaya/middleware/torrentapproval/container"
-	"github.com/chihaya/chihaya/pkg/log"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v2"
 )
 

@@ -2,7 +2,7 @@ package storage
 
 import (
 	"encoding/binary"
-	"github.com/chihaya/chihaya/bittorrent"
+	"github.com/sot-tech/mochi/bittorrent"
 	"net"
 )
 

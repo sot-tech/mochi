@@ -11,6 +11,3 @@ the configured implementation of the _Storage_ interface. PostHooks are asynchro
 has been delivered to the client. Because they are unnecessary to for generating a response, updates to the Storage for
 a particular request are done asynchronously in a PostHook.
 
-### Diagram
-
-![](https://user-images.githubusercontent.com/343539/52676700-05c45c80-2ef9-11e9-9887-8366008b4e7e.png)

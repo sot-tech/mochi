@@ -4,7 +4,7 @@ package middleware
 
 import (
 	"errors"
-	"github.com/chihaya/chihaya/storage"
+	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v2"
 	"sync"
 )
