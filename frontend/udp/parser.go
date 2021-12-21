@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	bittorrent "github.com/chihaya/chihaya/bittorrent"
+	"github.com/chihaya/chihaya/bittorrent"
 )
 
 const (

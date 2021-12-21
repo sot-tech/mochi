@@ -28,7 +28,7 @@ func init() {
 // Config - implementation of directory container configuration.
 // Extends list.Config because uses the same storage and Approved function.
 type Config struct {
-	list.Config
+	list.Config `yaml:",inline"`
 	// Path in filesystem where torrent files stored and should be watched
 	Path string `yaml:"path"`
 }
