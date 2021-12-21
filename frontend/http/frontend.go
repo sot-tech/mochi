@@ -31,6 +31,7 @@ type Config struct {
 	TLSKeyPath          string        `yaml:"tls_key_path"`
 	AnnounceRoutes      []string      `yaml:"announce_routes"`
 	ScrapeRoutes        []string      `yaml:"scrape_routes"`
+	PingRoutes          []string      `yaml:"ping_routes"`
 	EnableRequestTiming bool          `yaml:"enable_request_timing"`
 	ParseOptions        `yaml:",inline"`
 }
@@ -48,6 +49,7 @@ func (cfg Config) LogFields() log.Fields {
 		"tlsKeyPath":          cfg.TLSKeyPath,
 		"announceRoutes":      cfg.AnnounceRoutes,
 		"scrapeRoutes":        cfg.ScrapeRoutes,
+		"pingRoutes":          cfg.PingRoutes,
 		"enableRequestTiming": cfg.EnableRequestTiming,
 		"allowIPSpoofing":     cfg.AllowIPSpoofing,
 		"realIPHeader":        cfg.RealIPHeader,
@@ -182,6 +184,13 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 	}
 	for _, route := range f.ScrapeRoutes {
 		router.GET(route, f.scrapeRoute)
+	}
+
+	if len(f.PingRoutes) > 0 {
+		for _, route := range f.PingRoutes {
+			router.GET(route, f.ping)
+			router.HEAD(route, f.ping)
+		}
 	}
 
 	if cfg.Addr != "" {
@@ -363,4 +372,8 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 
 	go f.logic.AfterScrape(ctx, req, resp)
+}
+
+func (f Frontend) ping(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	w.WriteHeader(http.StatusOK)
 }

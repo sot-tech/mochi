@@ -63,6 +63,12 @@ mochi:
             - "/scrape"
             # - "/scrape.php"
 
+        # An array of routes to listen ping requests.
+        # Used just to ensure if server is operational. Returns nothing,
+        # just HTTP 200 without body. Listens both GET and HEAD HTTP methods.
+        ping_routes:
+            - "/ping"
+
         # When enabled, the IP address used to connect to the tracker will not
         # override the value clients advertise as their IP address.
         allow_ip_spoofing: false
