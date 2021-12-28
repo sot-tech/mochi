@@ -70,7 +70,7 @@ func BenchmarkHookOverhead(b *testing.B) {
 		benchHookListV6(b, hookList{})
 	})
 
-	var nopHooks hookList
+	nopHooks := make(hookList, 0, 4)
 	for i := 1; i < 4; i++ {
 		nopHooks = append(nopHooks, &nopHook{})
 		b.Run(fmt.Sprintf("%dnop-v4", i), func(b *testing.B) {

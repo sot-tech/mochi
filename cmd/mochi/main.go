@@ -103,7 +103,7 @@ func (r *Run) Start(ps storage.Storage) error {
 }
 
 func combineErrors(prefix string, errs []error) error {
-	var errStrs []string
+	errStrs := make([]string, 0, len(errs))
 	for _, err := range errs {
 		errStrs = append(errStrs, err.Error())
 	}
