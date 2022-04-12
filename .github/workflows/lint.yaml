@@ -4,7 +4,7 @@ on:
     push:
         branches:
             - "!dependabot/*"
-            - "main"
+            - "master"
     pull_request:
         branches: [ "*" ]
 jobs:
@@ -48,22 +48,8 @@ jobs:
             -   uses: "golangci/golangci-lint-action@v3"
                 with:
                     version: "v1.43"
-                    skip-go-installation: true
                     skip-pkg-cache: true
                     skip-build-cache: false
-    
-    extra-lint:
-        name: "Lint YAML & Markdown"
-        runs-on: "ubuntu-latest"
-        steps:
-            -   uses: "actions/checkout@v3"
-            -   uses: "bewuethr/yamllint-action@v1.1.1"
-                with:
-                    config-file: ".yamllint"
-            -   uses: "nosborn/github-action-markdown-cli@v3.0.1"
-                with:
-                    files: "."
-                    config_file: ".markdownlint.yaml"
     
     codeql:
         name: "Analyze with CodeQL"
