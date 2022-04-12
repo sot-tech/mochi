@@ -34,7 +34,8 @@ func (pk SerializedPeer) ToPeer() bittorrent.Peer {
 	peer := bittorrent.Peer{
 		ID:   peerID,
 		Port: binary.BigEndian.Uint16([]byte(pk[bittorrent.PeerIDLen : bittorrent.PeerIDLen+2])),
-		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])}}
+		IP:   bittorrent.IP{IP: net.IP(pk[bittorrent.PeerIDLen+2:])},
+	}
 
 	if ip := peer.IP.To4(); ip != nil {
 		peer.IP.IP = ip

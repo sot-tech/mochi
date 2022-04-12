@@ -573,7 +573,6 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 }
 
 func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily) (resp bittorrent.Scrape) {
-
 	resp.InfoHash = ih
 	addressFamily := af.String()
 	encodedInfoHash := ih.String()
@@ -816,7 +815,7 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 			if ihLen == 0 {
 				// Empty hashes are not shown among existing keys,
 				// in other words, it's removed automatically after `HDEL` the last field.
-				//_, err := conn.Do("DEL", ihStr)
+				// _, err := conn.Do("DEL", ihStr)
 
 				_ = conn.Send("MULTI")
 				_ = conn.Send("HDEL", group, ihStr)

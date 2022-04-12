@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	//Seeding global math random
+	// Seeding global math random
 	rand.Seed(GenSeed())
 }
 

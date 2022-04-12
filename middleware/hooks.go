@@ -77,14 +77,14 @@ type skipResponseHook struct{}
 // skip.
 var SkipResponseHookKey = skipResponseHook{}
 
-//type scrapeAddressType struct{}
+// type scrapeAddressType struct{}
 
 // ScrapeIsIPv6Key is the key under which to store whether or not the
 // address used to request a scrape was an IPv6 address.
 // The value is expected to be of type bool.
 // A missing value or a value that is not a bool for this key is equivalent to
 // it being set to false.
-//var ScrapeIsIPv6Key = scrapeAddressType{}
+// var ScrapeIsIPv6Key = scrapeAddressType{}
 
 type responseHook struct {
 	store storage.Storage

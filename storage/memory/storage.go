@@ -496,7 +496,7 @@ func asKey(in any) any {
 	if reflect.TypeOf(in).Comparable() {
 		return in
 	}
-	//FIXME: dirty hack
+	// FIXME: dirty hack
 	return fmt.Sprint(in)
 }
 

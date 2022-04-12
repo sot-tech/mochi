@@ -39,7 +39,7 @@ var ErrKeyNotFound = errors.New("query: value for the provided key does not exis
 
 // ErrInvalidInfohash is returned when parsing a query encounters an infohash
 // with invalid length.
-//var ErrInvalidInfohash = ClientError("provided invalid infohash")
+// var ErrInvalidInfohash = ClientError("provided invalid infohash")
 
 // ErrInvalidQueryEscape is returned when a query string contains invalid
 // escapes.
