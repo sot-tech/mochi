@@ -161,13 +161,13 @@ mochi:
     #     redis_broker: "redis://pwd@127.0.0.1:6379/0"
 
     #     # The timeout for reading a command reply from redis.
-    #     redis_read_timeout: 15s
+    #     read_timeout: 15s
 
     #     # The timeout for writing a command to redis.
-    #     redis_write_timeout: 15s
+    #     write_timeout: 15s
 
     #     # The timeout for connecting to redis server.
-    #     redis_connect_timeout: 15s
+    #     connect_timeout: 15s
 
     # This block defines configuration used for middleware executed before a
     # response has been returned to a BitTorrent client.

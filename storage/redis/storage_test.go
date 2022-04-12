@@ -22,9 +22,9 @@ func createNew() s.Storage {
 		PrometheusReportingInterval: 10 * time.Minute,
 		PeerLifetime:                30 * time.Minute,
 		RedisBroker:                 redisURL,
-		RedisReadTimeout:            10 * time.Second,
-		RedisWriteTimeout:           10 * time.Second,
-		RedisConnectTimeout:         10 * time.Second,
+		ReadTimeout:                 10 * time.Second,
+		WriteTimeout:                10 * time.Second,
+		ConnectTimeout:              10 * time.Second,
 	})
 	if err != nil {
 		panic(err)

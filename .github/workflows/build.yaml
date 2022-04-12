@@ -67,7 +67,7 @@ jobs:
                     go install --tags e2e ./cmd/mochi
                     curl -LO https://github.com/jzelinskie/faq/releases/download/0.0.6/faq-linux-amd64
                     chmod +x faq-linux-amd64
-                    ./faq-linux-amd64 '.mochi.storage = {"config":{"gc_interval":"3m","peer_lifetime":"31m","prometheus_reporting_interval":"1s","redis_broker":"redis://127.0.0.1:6379/0","redis_connect_timeout":"15s","redis_read_timeout":"15s","redis_write_timeout":"15s"},"name":"redis"}' ./dist/example_config.yaml > ./dist/example_redis_config.yaml
+                    ./faq-linux-amd64 '.mochi.storage = {"config":{"gc_interval":"3m","peer_lifetime":"31m","prometheus_reporting_interval":"1s","redis_broker":"redis://127.0.0.1:6379/0","connect_timeout":"15s","read_timeout":"15s","write_timeout":"15s"},"name":"redis"}' ./dist/example_config.yaml > ./dist/example_redis_config.yaml
                     cat ./dist/example_redis_config.yaml
             -   name: "Run end-to-end tests"
                 run: |

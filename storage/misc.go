@@ -48,3 +48,7 @@ func (pk SerializedPeer) ToPeer() bittorrent.Peer {
 
 	return peer
 }
+
+func (pk SerializedPeer) String() string {
+	return string(pk)
+}

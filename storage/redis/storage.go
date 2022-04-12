@@ -24,13 +24,14 @@
 package redis
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
+	"github.com/go-redis/redis/v8"
 	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -48,11 +49,13 @@ const (
 	defaultPrometheusReportingInterval = time.Second * 1
 	defaultGarbageCollectionInterval   = time.Minute * 3
 	defaultPeerLifetime                = time.Minute * 30
-	defaultRedisBroker                 = "redis://myRedis@127.0.0.1:6379/0"
-	defaultRedisReadTimeout            = time.Second * 15
-	defaultRedisWriteTimeout           = time.Second * 15
-	defaultRedisConnectTimeout         = time.Second * 15
+	defaultRedisAddress                = "127.0.0.1:6379"
+	defaultReadTimeout                 = time.Second * 15
+	defaultWriteTimeout                = time.Second * 15
+	defaultConnectTimeout              = time.Second * 15
 )
+
+var ErrSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
 
 func init() {
 	// Register the storage driver.
@@ -83,23 +86,30 @@ type Config struct {
 	GarbageCollectionInterval   time.Duration `yaml:"gc_interval"`
 	PrometheusReportingInterval time.Duration `yaml:"prometheus_reporting_interval"`
 	PeerLifetime                time.Duration `yaml:"peer_lifetime"`
-	RedisBroker                 string        `yaml:"redis_broker"`
-	RedisReadTimeout            time.Duration `yaml:"redis_read_timeout"`
-	RedisWriteTimeout           time.Duration `yaml:"redis_write_timeout"`
-	RedisConnectTimeout         time.Duration `yaml:"redis_connect_timeout"`
+	Addresses                   []string      `yaml:"addresses"`
+	Login                       string        `yaml:"login"`
+	Password                    string        `yaml:"password"`
+	Sentinel                    bool          `yaml:"sentinel"`
+	SentinelMaster              string        `yaml:"sentinel_master"`
+	Cluster                     bool          `yaml:"cluster"`
+	DB                          int           `yaml:"db"`
+	PoolSize                    int           `yaml:"pool_size"`
+	ReadTimeout                 time.Duration `yaml:"read_timeout"`
+	WriteTimeout                time.Duration `yaml:"write_timeout"`
+	ConnectTimeout              time.Duration `yaml:"connect_timeout"`
 }
 
 // LogFields renders the current config as a set of Logrus fields.
 func (cfg Config) LogFields() log.Fields {
 	return log.Fields{
-		"name":                Name,
-		"gcInterval":          cfg.GarbageCollectionInterval,
-		"promReportInterval":  cfg.PrometheusReportingInterval,
-		"peerLifetime":        cfg.PeerLifetime,
-		"redisBroker":         cfg.RedisBroker,
-		"redisReadTimeout":    cfg.RedisReadTimeout,
-		"redisWriteTimeout":   cfg.RedisWriteTimeout,
-		"redisConnectTimeout": cfg.RedisConnectTimeout,
+		"name":               Name,
+		"gcInterval":         cfg.GarbageCollectionInterval,
+		"promReportInterval": cfg.PrometheusReportingInterval,
+		"peerLifetime":       cfg.PeerLifetime,
+		"addresses":          cfg.Addresses,
+		"readTimeout":        cfg.ReadTimeout,
+		"writeTimeout":       cfg.WriteTimeout,
+		"connectTimeout":     cfg.ConnectTimeout,
 	}
 }
 
@@ -107,126 +117,160 @@ func (cfg Config) LogFields() log.Fields {
 // default values replacing anything that is invalid.
 //
 // This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
-	validcfg := cfg
+func (cfg Config) Validate() (Config, error) {
 
-	if cfg.RedisBroker == "" {
-		validcfg.RedisBroker = defaultRedisBroker
+	if cfg.Sentinel && cfg.Cluster {
+		return cfg, ErrSentinelAndClusterChecked
+	}
+
+	validCfg := cfg
+
+	addresses := make([]string, 0)
+	if n := len(cfg.Addresses); n > 0 {
+		for _, a := range cfg.Addresses {
+			if len(strings.TrimSpace(a)) > 0 {
+				addresses = append(addresses, a)
+			}
+		}
+	}
+	validCfg.Addresses = addresses
+	if len(cfg.Addresses) == 0 {
+		validCfg.Addresses = []string{defaultRedisAddress}
 		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".RedisBroker",
-			"provided": cfg.RedisBroker,
-			"default":  validcfg.RedisBroker,
+			"name":     Name + ".Addresses",
+			"provided": cfg.Addresses,
+			"default":  validCfg.Addresses,
 		})
 	}
 
-	if cfg.RedisReadTimeout <= 0 {
-		validcfg.RedisReadTimeout = defaultRedisReadTimeout
+	if cfg.ReadTimeout <= 0 {
+		validCfg.ReadTimeout = defaultReadTimeout
 		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".RedisReadTimeout",
-			"provided": cfg.RedisReadTimeout,
-			"default":  validcfg.RedisReadTimeout,
+			"name":     Name + ".ReadTimeout",
+			"provided": cfg.ReadTimeout,
+			"default":  validCfg.ReadTimeout,
 		})
 	}
 
-	if cfg.RedisWriteTimeout <= 0 {
-		validcfg.RedisWriteTimeout = defaultRedisWriteTimeout
+	if cfg.WriteTimeout <= 0 {
+		validCfg.WriteTimeout = defaultWriteTimeout
 		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".RedisWriteTimeout",
-			"provided": cfg.RedisWriteTimeout,
-			"default":  validcfg.RedisWriteTimeout,
+			"name":     Name + ".WriteTimeout",
+			"provided": cfg.WriteTimeout,
+			"default":  validCfg.WriteTimeout,
 		})
 	}
 
-	if cfg.RedisConnectTimeout <= 0 {
-		validcfg.RedisConnectTimeout = defaultRedisConnectTimeout
+	if cfg.ConnectTimeout <= 0 {
+		validCfg.ConnectTimeout = defaultConnectTimeout
 		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".RedisConnectTimeout",
-			"provided": cfg.RedisConnectTimeout,
-			"default":  validcfg.RedisConnectTimeout,
+			"name":     Name + ".ConnectTimeout",
+			"provided": cfg.ConnectTimeout,
+			"default":  validCfg.ConnectTimeout,
 		})
 	}
 
 	if cfg.GarbageCollectionInterval <= 0 {
-		validcfg.GarbageCollectionInterval = defaultGarbageCollectionInterval
+		validCfg.GarbageCollectionInterval = defaultGarbageCollectionInterval
 		log.Warn("falling back to default configuration", log.Fields{
 			"name":     Name + ".GarbageCollectionInterval",
 			"provided": cfg.GarbageCollectionInterval,
-			"default":  validcfg.GarbageCollectionInterval,
+			"default":  validCfg.GarbageCollectionInterval,
 		})
 	}
 
 	if cfg.PrometheusReportingInterval < 0 {
-		validcfg.PrometheusReportingInterval = defaultPrometheusReportingInterval
+		validCfg.PrometheusReportingInterval = defaultPrometheusReportingInterval
 		log.Warn("falling back to default configuration", log.Fields{
 			"name":     Name + ".PrometheusReportingInterval",
 			"provided": cfg.PrometheusReportingInterval,
-			"default":  validcfg.PrometheusReportingInterval,
+			"default":  validCfg.PrometheusReportingInterval,
 		})
 	}
 
 	if cfg.PeerLifetime <= 0 {
-		validcfg.PeerLifetime = defaultPeerLifetime
+		validCfg.PeerLifetime = defaultPeerLifetime
 		log.Warn("falling back to default configuration", log.Fields{
 			"name":     Name + ".PeerLifetime",
 			"provided": cfg.PeerLifetime,
-			"default":  validcfg.PeerLifetime,
+			"default":  validCfg.PeerLifetime,
 		})
 	}
 
-	return validcfg
+	return validCfg, nil
+}
+
+func connect(cfg Config) (*store, error) {
+	var err error
+	db := &store{
+		// FIXME: get context from parent
+		ctx: context.TODO(),
+	}
+	switch {
+	case cfg.Cluster:
+		db.con = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:        cfg.Addresses,
+			Username:     cfg.Login,
+			Password:     cfg.Password,
+			DialTimeout:  cfg.ConnectTimeout,
+			ReadTimeout:  cfg.ReadTimeout,
+			WriteTimeout: cfg.WriteTimeout,
+			PoolSize:     cfg.PoolSize,
+		})
+	case cfg.Sentinel:
+		db.con = redis.NewFailoverClient(&redis.FailoverOptions{
+			SentinelAddrs:    cfg.Addresses,
+			SentinelUsername: cfg.Login,
+			SentinelPassword: cfg.Password,
+			DialTimeout:      cfg.ConnectTimeout,
+			ReadTimeout:      cfg.ReadTimeout,
+			WriteTimeout:     cfg.WriteTimeout,
+			PoolSize:         cfg.PoolSize,
+			DB:               cfg.DB,
+		})
+	default:
+		db.con = redis.NewClient(&redis.Options{
+			Addr:         cfg.Addresses[0],
+			Username:     cfg.Login,
+			Password:     cfg.Password,
+			DialTimeout:  cfg.ConnectTimeout,
+			ReadTimeout:  cfg.ReadTimeout,
+			WriteTimeout: cfg.WriteTimeout,
+			PoolSize:     cfg.PoolSize,
+			DB:           cfg.DB,
+		})
+	}
+	if err = db.con.Ping(db.ctx).Err(); err == nil && !errors.Is(err, redis.Nil) {
+		err = nil
+	} else {
+		db = nil
+		_ = db.con.Close()
+	}
+	return db, err
 }
 
 // New creates a new Storage backed by redis.
-func New(provided Config) (storage.Storage, error) {
-	cfg := provided.Validate()
-
-	u, err := parseRedisURL(cfg.RedisBroker)
+func New(conf Config) (storage.Storage, error) {
+	cfg, err := conf.Validate()
 	if err != nil {
 		return nil, err
 	}
 
-	ps := &store{
-		cfg:    cfg,
-		rb:     newRedisBackend(&provided, u, ""),
-		closed: make(chan struct{}),
+	ps, err := connect(cfg)
+	if err != nil {
+		return nil, err
 	}
+	ps.closed = make(chan any)
+	ps.logFields = cfg.LogFields()
 
 	// Start a goroutine for garbage collection.
 	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
-		for {
-			select {
-			case <-ps.closed:
-				return
-			case <-time.After(cfg.GarbageCollectionInterval):
-				before := time.Now().Add(-cfg.PeerLifetime)
-				log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
-				if err = ps.collectGarbage(before); err != nil {
-					log.Error("storage: collectGarbage error", log.Fields{"before": before, "error": err})
-				}
-			}
-		}
-	}()
+	go ps.runGC(cfg.GarbageCollectionInterval, cfg.PeerLifetime)
 
 	if cfg.PrometheusReportingInterval > 0 {
 		// Start a goroutine for reporting statistics to Prometheus.
 		ps.wg.Add(1)
-		go func() {
-			defer ps.wg.Done()
-			t := time.NewTicker(cfg.PrometheusReportingInterval)
-			for {
-				select {
-				case <-ps.closed:
-					t.Stop()
-					return
-				case <-t.C:
-					before := time.Now()
-					ps.populateProm()
-					log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
-				}
-			}
-		}()
+		go ps.runProm(cfg.PrometheusReportingInterval)
 	} else {
 		log.Info("prometheus disabled because of zero reporting interval")
 	}
@@ -234,53 +278,67 @@ func New(provided Config) (storage.Storage, error) {
 	return ps, nil
 }
 
+func (ps *store) runGC(gcInterval, peerLifeTime time.Duration) {
+	defer ps.wg.Done()
+	for {
+		select {
+		case <-ps.closed:
+			return
+		case <-time.After(gcInterval):
+			before := time.Now().Add(-peerLifeTime)
+			log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
+			if err := ps.collectGarbage(before); err != nil {
+				log.Error("storage: collectGarbage error", log.Fields{"before": before, "error": err})
+			}
+		}
+	}
+}
+
+func (ps *store) runProm(reportInterval time.Duration) {
+	defer ps.wg.Done()
+	t := time.NewTicker(reportInterval)
+	for {
+		select {
+		case <-ps.closed:
+			t.Stop()
+			return
+		case <-t.C:
+			before := time.Now()
+			ps.populateProm()
+			log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+		}
+	}
+}
+
 type store struct {
-	cfg Config
-	rb  *redisBackend
+	con redis.UniversalClient
+	ctx context.Context
 
-	closed chan struct{}
-	wg     sync.WaitGroup
+	closed    chan any
+	wg        sync.WaitGroup
+	logFields log.Fields
 }
 
-func (ps *store) groups() []string {
-	return []string{bittorrent.IPv4.String(), bittorrent.IPv6.String()}
-}
+var groups = []string{bittorrent.IPv4.String(), bittorrent.IPv6.String()}
 
-func (ps *store) leecherInfohashKey(af, ih string) string {
+func leecherInfohashKey(af, ih string) string {
 	return af + "_L_" + ih
 }
 
-func (ps *store) seederInfohashKey(af, ih string) string {
+func seederInfohashKey(af, ih string) string {
 	return af + "_S_" + ih
 }
 
-func (ps *store) infohashCountKey(af string) string {
+func infohashCountKey(af string) string {
 	return af + "_infohash_count"
 }
 
-func (ps *store) seederCountKey(af string) string {
+func seederCountKey(af string) string {
 	return af + "_S_count"
 }
 
-func (ps *store) leecherCountKey(af string) string {
+func leecherCountKey(af string) string {
 	return af + "_L_count"
-}
-
-func (ps *store) getConnection() redis.Conn {
-	select {
-	case <-ps.closed:
-		panic("attempted to interact with stopped redis store")
-	default:
-	}
-	return ps.rb.pool.Get()
-}
-
-func closeConnection(con redis.Conn) {
-	if con != nil {
-		if err := con.Close(); err != nil {
-			log.Err(err)
-		}
-	}
 }
 
 // populateProm aggregates metrics over all groups and then posts them to
@@ -288,29 +346,26 @@ func closeConnection(con redis.Conn) {
 func (ps *store) populateProm() {
 	var numInfohashes, numSeeders, numLeechers int64
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	for _, group := range ps.groups() {
-		if n, err := redis.Int64(conn.Do("GET", ps.infohashCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
+	for _, group := range groups {
+		if n, err := ps.con.Get(ps.ctx, infohashCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
 			log.Error("storage: GET counter failure", log.Fields{
-				"key":   ps.infohashCountKey(group),
+				"key":   infohashCountKey(group),
 				"error": err,
 			})
 		} else {
 			numInfohashes += n
 		}
-		if n, err := redis.Int64(conn.Do("GET", ps.seederCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
+		if n, err := ps.con.Get(ps.ctx, seederCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
 			log.Error("storage: GET counter failure", log.Fields{
-				"key":   ps.seederCountKey(group),
+				"key":   seederCountKey(group),
 				"error": err,
 			})
 		} else {
 			numSeeders += n
 		}
-		if n, err := redis.Int64(conn.Do("GET", ps.leecherCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
+		if n, err := ps.con.Get(ps.ctx, leecherCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
 			log.Error("storage: GET counter failure", log.Fields{
-				"key":   ps.leecherCountKey(group),
+				"key":   leecherCountKey(group),
 				"error": err,
 			})
 		} else {
@@ -327,6 +382,30 @@ func (ps *store) getClock() int64 {
 	return timecache.NowUnixNano()
 }
 
+func (ps *store) tx(txf func(tx redis.Pipeliner) error) (err error) {
+	if pipe, txErr := ps.con.TxPipelined(ps.ctx, txf); txErr == nil {
+		errs := make([]string, 0)
+		for _, c := range pipe {
+			if err := c.Err(); err == nil {
+				errs = append(errs, err.Error())
+			}
+		}
+		if len(errs) > 0 {
+			err = errors.New(strings.Join(errs, "; "))
+		}
+	} else {
+		err = txErr
+	}
+	return
+}
+
+func asNil(err error) error {
+	if err == nil || errors.Is(err, redis.Nil) {
+		return nil
+	}
+	return err
+}
+
 func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	addressFamily := p.IP.AddressFamily.String()
 	log.Debug("storage: PutSeeder", log.Fields{
@@ -334,37 +413,23 @@ func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 		"Peer":     p,
 	})
 
-	pk := storage.NewSerializedPeer(p)
-	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
-	ct := ps.getClock()
+	peerKey := storage.NewSerializedPeer(p).String()
+	encodedSeederInfoHash := seederInfohashKey(addressFamily, ih.String())
+	now := ps.getClock()
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	_ = conn.Send("MULTI")
-	_ = conn.Send("HSET", encodedSeederInfoHash, pk, ct)
-	_ = conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
-	reply, err := redis.Int64s(conn.Do("EXEC"))
-	if err != nil {
-		return err
-	}
-
-	// pk is a new field.
-	if reply[0] == 1 {
-		_, err = conn.Do("INCR", ps.seederCountKey(addressFamily))
-		if err != nil {
-			return err
+	return ps.tx(func(tx redis.Pipeliner) (err error) {
+		if err = tx.HSet(ps.ctx, encodedSeederInfoHash, peerKey, now).Err(); err != nil {
+			return
 		}
-	}
-	// encodedSeederInfoHash is a new field.
-	if reply[1] == 1 {
-		_, err = conn.Do("INCR", ps.infohashCountKey(addressFamily))
-		if err != nil {
-			return err
+		if err = ps.con.Incr(ps.ctx, seederCountKey(addressFamily)).Err(); err != nil {
+			return
 		}
-	}
-
-	return nil
+		if err = ps.con.HSet(ps.ctx, addressFamily, encodedSeederInfoHash, now).Err(); err != nil {
+			return
+		}
+		err = ps.con.Incr(ps.ctx, infohashCountKey(addressFamily)).Err()
+		return
+	})
 }
 
 func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -374,25 +439,19 @@ func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 		"Peer":     p,
 	})
 
-	pk := storage.NewSerializedPeer(p)
-
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, ih.String())
-
-	delNum, err := redis.Int64(conn.Do("HDEL", encodedSeederInfoHash, pk))
-	if err != nil {
-		return err
-	}
-	if delNum == 0 {
-		return storage.ErrResourceDoesNotExist
-	}
-	if _, err := conn.Do("DECR", ps.seederCountKey(addressFamily)); err != nil {
-		return err
+	peerKey := storage.NewSerializedPeer(p).String()
+	encodedSeederInfoHash := seederInfohashKey(addressFamily, ih.String())
+	deleted, err := ps.con.HDel(ps.ctx, encodedSeederInfoHash, peerKey).Uint64()
+	err = asNil(err)
+	if err == nil {
+		if deleted == 0 {
+			err = storage.ErrResourceDoesNotExist
+		} else {
+			err = ps.con.Decr(ps.ctx, seederCountKey(addressFamily)).Err()
+		}
 	}
 
-	return nil
+	return err
 }
 
 func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -403,28 +462,20 @@ func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	})
 
 	// Update the peer in the swarm.
-	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, ih.String())
-	pk := storage.NewSerializedPeer(p)
-	ct := ps.getClock()
+	encodedLeecherInfoHash := leecherInfohashKey(addressFamily, ih.String())
+	peerKey := storage.NewSerializedPeer(p).String()
+	now := ps.getClock()
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	_ = conn.Send("MULTI")
-	_ = conn.Send("HSET", encodedLeecherInfoHash, pk, ct)
-	_ = conn.Send("HSET", addressFamily, encodedLeecherInfoHash, ct)
-	reply, err := redis.Int64s(conn.Do("EXEC"))
-	if err != nil {
-		return err
-	}
-	// pk is a new field.
-	if reply[0] == 1 {
-		_, err = conn.Do("INCR", ps.leecherCountKey(addressFamily))
-		if err != nil {
+	return ps.tx(func(tx redis.Pipeliner) (err error) {
+		if err = tx.HSet(ps.ctx, encodedLeecherInfoHash, peerKey, now).Err(); err != nil {
+			return
+		}
+		if err = tx.HSet(ps.ctx, addressFamily, encodedLeecherInfoHash, now).Err(); err != nil {
 			return err
 		}
-	}
-	return nil
+		err = tx.Incr(ps.ctx, leecherCountKey(addressFamily)).Err()
+		return
+	})
 }
 
 func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -434,20 +485,18 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 		"Peer":     p,
 	})
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
+	peerKey := storage.NewSerializedPeer(p).String()
+	encodedLeecherInfoHash := leecherInfohashKey(addressFamily, ih.String())
 
-	pk := storage.NewSerializedPeer(p)
-	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, ih.String())
-
-	delNum, err := redis.Int64(conn.Do("HDEL", encodedLeecherInfoHash, pk))
-	if err != nil {
-		return err
+	deleted, err := ps.con.HDel(ps.ctx, encodedLeecherInfoHash, peerKey).Uint64()
+	err = asNil(err)
+	if err == nil {
+		if deleted == 0 {
+			err = storage.ErrResourceDoesNotExist
+		} else {
+			err = ps.con.Decr(ps.ctx, leecherCountKey(addressFamily)).Err()
+		}
 	}
-	if delNum == 0 {
-		return storage.ErrResourceDoesNotExist
-	}
-	_, err = conn.Do("DECR", ps.leecherCountKey(addressFamily))
 
 	return err
 }
@@ -460,42 +509,33 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) erro
 	})
 
 	encodedInfoHash := ih.String()
-	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
-	pk := storage.NewSerializedPeer(p)
-	ct := ps.getClock()
+	encodedLeecherInfoHash := leecherInfohashKey(addressFamily, encodedInfoHash)
+	encodedSeederInfoHash := seederInfohashKey(addressFamily, encodedInfoHash)
+	peerKey := storage.NewSerializedPeer(p).String()
+	now := ps.getClock()
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	_ = conn.Send("MULTI")
-	_ = conn.Send("HDEL", encodedLeecherInfoHash, pk)
-	_ = conn.Send("HSET", encodedSeederInfoHash, pk, ct)
-	_ = conn.Send("HSET", addressFamily, encodedSeederInfoHash, ct)
-	reply, err := redis.Int64s(conn.Do("EXEC"))
-	if err != nil {
+	return ps.tx(func(tx redis.Pipeliner) error {
+		deleted, err := tx.HDel(ps.ctx, encodedLeecherInfoHash, peerKey).Uint64()
+		err = asNil(err)
+		if err == nil {
+			if deleted > 0 {
+				err = tx.Decr(ps.ctx, leecherCountKey(addressFamily)).Err()
+			}
+		}
+		if err == nil {
+			err = tx.HSet(ps.ctx, encodedSeederInfoHash, peerKey, now).Err()
+		}
+		if err == nil {
+			err = tx.Incr(ps.ctx, seederCountKey(addressFamily)).Err()
+		}
+		if err == nil {
+			err = tx.HSet(ps.ctx, addressFamily, encodedSeederInfoHash, now).Err()
+		}
+		if err == nil {
+			err = tx.Incr(ps.ctx, infohashCountKey(addressFamily)).Err()
+		}
 		return err
-	}
-	if reply[0] == 1 {
-		_, err = conn.Do("DECR", ps.leecherCountKey(addressFamily))
-		if err != nil {
-			return err
-		}
-	}
-	if reply[1] == 1 {
-		_, err = conn.Do("INCR", ps.seederCountKey(addressFamily))
-		if err != nil {
-			return err
-		}
-	}
-	if reply[2] == 1 {
-		_, err = conn.Do("INCR", ps.infohashCountKey(addressFamily))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	})
 }
 
 func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
@@ -508,63 +548,58 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 	})
 
 	encodedInfoHash := ih.String()
-	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
+	encodedLeecherInfoHash := leecherInfohashKey(addressFamily, encodedInfoHash)
+	encodedSeederInfoHash := seederInfohashKey(addressFamily, encodedInfoHash)
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	leechers, err := conn.Do("HKEYS", encodedLeecherInfoHash)
+	leechers, err := ps.con.HKeys(ps.ctx, encodedLeecherInfoHash).Result()
+	err = asNil(err)
 	if err != nil {
 		return nil, err
 	}
-	conLeechers := leechers.([]any)
 
-	seeders, err := conn.Do("HKEYS", encodedSeederInfoHash)
+	seeders, err := ps.con.HKeys(ps.ctx, encodedSeederInfoHash).Result()
+	err = asNil(err)
 	if err != nil {
 		return nil, err
 	}
-	conSeeders := seeders.([]any)
 
-	if len(conLeechers) == 0 && len(conSeeders) == 0 {
+	if len(leechers) == 0 && len(seeders) == 0 {
 		return nil, storage.ErrResourceDoesNotExist
 	}
 
 	if seeder {
 		// Append leechers as possible.
-		for _, pk := range conLeechers {
+		for _, peerKey := range leechers {
 			if numWant == 0 {
 				break
 			}
 
-			peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
+			peers = append(peers, storage.SerializedPeer(peerKey).ToPeer())
 			numWant--
 		}
 	} else {
 		// Append as many seeders as possible.
-		for _, pk := range conSeeders {
+		for _, peerKey := range seeders {
 			if numWant == 0 {
 				break
 			}
 
-			peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
+			peers = append(peers, storage.SerializedPeer(peerKey).ToPeer())
 			numWant--
 		}
 
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
-			announcerPK := storage.NewSerializedPeer(announcer)
-			for _, pk := range conLeechers {
-				if pk == announcerPK {
-					continue
-				}
+			announcerPK := storage.NewSerializedPeer(announcer).String()
+			for _, peerKey := range leechers {
+				if peerKey != announcerPK {
+					if numWant == 0 {
+						break
+					}
 
-				if numWant == 0 {
-					break
+					peers = append(peers, storage.SerializedPeer(peerKey).ToPeer())
+					numWant--
 				}
-
-				peers = append(peers, storage.SerializedPeer(pk.([]byte)).ToPeer())
-				numWant--
 			}
 		}
 	}
@@ -576,13 +611,11 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 	resp.InfoHash = ih
 	addressFamily := af.String()
 	encodedInfoHash := ih.String()
-	encodedLeecherInfoHash := ps.leecherInfohashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := ps.seederInfohashKey(addressFamily, encodedInfoHash)
+	encodedLeecherInfoHash := leecherInfohashKey(addressFamily, encodedInfoHash)
+	encodedSeederInfoHash := seederInfohashKey(addressFamily, encodedInfoHash)
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	leechersLen, err := redis.Int64(conn.Do("HLEN", encodedLeecherInfoHash))
+	leechersLen, err := ps.con.HLen(ps.ctx, encodedLeecherInfoHash).Result()
+	err = asNil(err)
 	if err != nil {
 		log.Error("storage: Redis HLEN failure", log.Fields{
 			"Hkey":  encodedLeecherInfoHash,
@@ -591,7 +624,8 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 		return
 	}
 
-	seedersLen, err := redis.Int64(conn.Do("HLEN", encodedSeederInfoHash))
+	seedersLen, err := ps.con.HLen(ps.ctx, encodedSeederInfoHash).Result()
+	err = asNil(err)
 	if err != nil {
 		log.Error("storage: Redis HLEN failure", log.Fields{
 			"Hkey":  encodedSeederInfoHash,
@@ -607,18 +641,14 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 }
 
 func (ps *store) Put(ctx string, key, value any) {
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-	_, err := conn.Do("HSET", ctx, key, value)
+	err := ps.con.HSet(ps.ctx, ctx, key, value).Err()
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (ps *store) Contains(ctx string, key any) bool {
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-	exist, err := redis.Bool(conn.Do("HEXISTS", ctx, key))
+	exist, err := ps.con.HExists(ps.ctx, ctx, key).Result()
 	if err != nil {
 		panic(err)
 	}
@@ -628,25 +658,17 @@ func (ps *store) Contains(ctx string, key any) bool {
 const argNumErrorMsg = "ERR wrong number of arguments"
 
 func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
-	switch l := len(pairs); l {
-	case 0:
-		break
-	case 1:
-		ps.Put(ctx, pairs[0].Left, pairs[0].Right)
-	default:
-		conn := ps.getConnection()
-		defer closeConnection(conn)
-		args := make([]any, 1, l*2+1)
-		args[0] = ctx
+	if l := len(pairs); l > 0 {
+		args := make([]any, 0, l*2)
 		for _, p := range pairs {
 			args = append(args, p.Left, p.Right)
 		}
-		_, err := conn.Do("HSET", args...)
+		err := ps.con.HSet(ps.ctx, ctx, args...).Err()
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
 				for _, p := range pairs {
-					if _, err := conn.Do("HSET", ctx, p.Left, p.Right); err != nil {
+					if err := ps.con.HSet(ps.ctx, ctx, p.Left, p.Right).Err(); err != nil {
 						panic(err)
 					}
 				}
@@ -658,9 +680,8 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 }
 
 func (ps *store) Load(ctx string, key any) any {
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-	v, err := conn.Do("HGET", ctx, key)
+	v, err := ps.con.HGet(ps.ctx, ctx, key).Result()
+	err = asNil(err)
 	if err != nil {
 		panic(err)
 	}
@@ -668,28 +689,13 @@ func (ps *store) Load(ctx string, key any) any {
 }
 
 func (ps *store) Delete(ctx string, keys ...any) {
-	switch l := len(keys); l {
-	case 0:
-		break
-	case 1:
-		conn := ps.getConnection()
-		defer closeConnection(conn)
-		_, err := conn.Do("HDEL", ctx, keys[0])
-		if err != nil {
-			panic(err)
-		}
-	default:
-		conn := ps.getConnection()
-		defer closeConnection(conn)
-		args := make([]any, 1, l+1)
-		args[0] = ctx
-		args = append(args, keys...)
-		_, err := conn.Do("HDEL", args...)
+	if len(keys) > 0 {
+		err := asNil(ps.con.HDel(ps.ctx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				log.Warn("This REDIS version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
-					if _, err := conn.Do("HDEL", ctx, k); err != nil {
+					if err := asNil(ps.con.HDel(ps.ctx, ctx, k).Err()); err != nil {
 						panic(err)
 					}
 				}
@@ -749,12 +755,10 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 	cutoffUnix := cutoff.UnixNano()
 	start := time.Now()
 
-	conn := ps.getConnection()
-	defer closeConnection(conn)
-
-	for _, group := range ps.groups() {
+	for _, group := range groups {
 		// list all infohashes in the group
-		infohashesList, err := redis.Strings(conn.Do("HKEYS", group))
+		infohashesList, err := ps.con.HKeys(ps.ctx, group).Result()
+		err = asNil(err)
 		if err != nil {
 			return err
 		}
@@ -763,67 +767,64 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 			isSeeder := len(ihStr) > 5 && ihStr[5:6] == "S"
 
 			// list all (peer, timeout) pairs for the ih
-			ihList, err := redis.Strings(conn.Do("HGETALL", ihStr))
+			ihList, err := ps.con.HGetAll(ps.ctx, ihStr).Result()
+			err = asNil(err)
 			if err != nil {
 				return err
 			}
 
-			var pk storage.SerializedPeer
 			var removedPeerCount int64
-			for index, ihField := range ihList {
-				if index%2 == 1 { // value
-					mtime, err := strconv.ParseInt(ihField, 10, 64)
+			for k, v := range ihList {
+				peerKey := storage.SerializedPeer(k)
+				mtime, err := strconv.ParseInt(v, 10, 64)
+				if err != nil {
+					return err
+				}
+				if mtime <= cutoffUnix {
+					log.Debug("storage: deleting peer", log.Fields{
+						"Peer": peerKey.ToPeer(),
+					})
+					ret, err := ps.con.HDel(ps.ctx, ihStr, peerKey.String()).Result()
 					if err != nil {
 						return err
 					}
-					if mtime <= cutoffUnix {
-						log.Debug("storage: deleting peer", log.Fields{
-							"Peer": pk.ToPeer(),
-						})
-						ret, err := redis.Int64(conn.Do("HDEL", ihStr, pk))
-						if err != nil {
-							return err
-						}
 
-						removedPeerCount += ret
-					}
-				} else { // key
-					pk = storage.SerializedPeer(ihField)
+					removedPeerCount += ret
 				}
 			}
 			// DECR seeder/leecher counter
-			decrCounter := ps.leecherCountKey(group)
+			decrCounter := leecherCountKey(group)
 			if isSeeder {
-				decrCounter = ps.seederCountKey(group)
+				decrCounter = seederCountKey(group)
 			}
 			if removedPeerCount > 0 {
-				if _, err := conn.Do("DECRBY", decrCounter, removedPeerCount); err != nil {
+				if err := ps.con.DecrBy(ps.ctx, decrCounter, removedPeerCount).Err(); err != nil {
 					return err
 				}
 			}
 
 			// use WATCH to avoid race condition
 			// https://redis.io/topics/transactions
-			_, err = conn.Do("WATCH", ihStr)
+			_, err = ps.con.Watch(ps.ctx, ihStr)
 			if err != nil {
 				return err
 			}
-			ihLen, err := redis.Int64(conn.Do("HLEN", ihStr))
+			ihLen, err := ps.con.HLen(ps.ctx, ihStr).Result()
 			if err != nil {
 				return err
 			}
 			if ihLen == 0 {
 				// Empty hashes are not shown among existing keys,
 				// in other words, it's removed automatically after `HDEL` the last field.
-				// _, err := conn.Do("DEL", ihStr)
+				// _, err := ps.con.Del(ps.ctx, ihStr)
 
-				_ = conn.Send("MULTI")
-				_ = conn.Send("HDEL", group, ihStr)
+				_ = ps.con.Multi(ps.ctx)
+				_ = ps.con.HDel(ps.ctx, group, ihStr)
 				if isSeeder {
-					_ = conn.Send("DECR", ps.infohashCountKey(group))
+					_ = ps.con.Decr(ps.ctx, infohashCountKey(group))
 				}
-				_, err = redis.Values(conn.Do("EXEC"))
-				if err != nil && !errors.Is(err, redis.ErrNil) {
+				_, err = redis.Values(ps.con.Exec(ps.ctx))
+				if err != nil && !errors.Is(err, redis.Nil) {
 					log.Error("storage: Redis EXEC failure", log.Fields{
 						"group":    group,
 						"infohash": ihStr,
@@ -831,7 +832,7 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 					})
 				}
 			} else {
-				if _, err = conn.Do("UNWATCH"); err != nil && !errors.Is(err, redis.ErrNil) {
+				if _, err = ps.con.Unwatch(ps.ctx); err != nil && !errors.Is(err, redis.Nil) {
 					log.Error("storage: Redis UNWATCH failure", log.Fields{"error": err})
 				}
 			}
@@ -858,5 +859,9 @@ func (ps *store) Stop() stop.Result {
 }
 
 func (ps *store) LogFields() log.Fields {
-	return ps.cfg.LogFields()
+	fields := make(log.Fields, len(ps.logFields))
+	for k, v := range ps.logFields {
+		fields[k] = v
+	}
+	return fields
 }

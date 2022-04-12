@@ -6,8 +6,6 @@ require (
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/anacrolix/torrent v1.42.0
-	github.com/go-redsync/redsync/v4 v4.5.0
-	github.com/gomodule/redigo v1.8.8
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mendsley/gojwk v0.0.0-20141217222730-4d5ec6e58103
 	github.com/minio/sha256-simd v1.0.0
@@ -15,6 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.12.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/stretchr/testify v1.7.1
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
@@ -29,8 +28,8 @@ require (
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
