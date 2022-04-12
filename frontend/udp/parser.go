@@ -94,8 +94,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 
 	ip := r.IP
 	ipProvided := false
-	ipBytes := r.Packet[84:ipEnd]
-	if opts.AllowIPSpoofing {
+	if ipBytes := r.Packet[84:ipEnd]; opts.AllowIPSpoofing {
 		// Make sure the bytes are copied to a new slice.
 		copy(ip, ipBytes)
 		ipProvided = true

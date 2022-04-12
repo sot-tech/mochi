@@ -1,5 +1,5 @@
-// Package rand_seed just seeds (math) rand.Rand
-package rand_seed
+// Package randseed just seeds (math) rand.Rand
+package randseed
 
 import (
 	cr "crypto/rand"

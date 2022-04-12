@@ -5,7 +5,7 @@ import (
 
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
-	_ "github.com/sot-tech/mochi/pkg/rand_seed"
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 	_ "github.com/sot-tech/mochi/storage/memory"
 )
@@ -22,8 +22,7 @@ func TestStartStopRaceIssue437(t *testing.T) {
 		t.Fatal(err)
 	}
 	errC := fe.Stop()
-	errs := <-errC
-	if len(errs) != 0 {
-		t.Fatal(errs[0])
+	if errs := <-errC; len(errs) != 0 {
+		t.Fatal(errs)
 	}
 }

@@ -167,6 +167,7 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 		var err error
 		f.tlsCfg = &tls.Config{
 			Certificates: make([]tls.Certificate, 1),
+			MinVersion:   tls.VersionTLS12,
 		}
 		f.tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
 		if err != nil {

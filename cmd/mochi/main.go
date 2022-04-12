@@ -14,7 +14,7 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	_ "github.com/sot-tech/mochi/pkg/rand_seed"
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	"github.com/spf13/cobra"

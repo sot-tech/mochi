@@ -54,7 +54,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 		for _, hashString := range c.HashList {
 			ih, err := bittorrent.NewInfoHash(hashString)
 			if err != nil {
-				return nil, fmt.Errorf("whitelist : %s : %v", hashString, err)
+				return nil, fmt.Errorf("whitelist : %s : %w", hashString, err)
 			}
 			init = append(init, storage.Pair{Left: ih.RawString(), Right: DUMMY})
 			if len(ih) == bittorrent.InfoHashV2Len {

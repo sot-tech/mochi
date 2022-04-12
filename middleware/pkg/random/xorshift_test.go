@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
-	_ "github.com/sot-tech/mochi/pkg/rand_seed"
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/stretchr/testify/require"
 )
 

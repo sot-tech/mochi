@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/rand_seed"
+	"github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -28,7 +28,7 @@ func generateInfohashes() (a [1000]bittorrent.InfoHash) {
 }
 
 func generatePeers() (a [1000]bittorrent.Peer) {
-	r := rand.New(rand.NewSource(rand_seed.GenSeed()))
+	r := rand.New(rand.NewSource(randseed.GenSeed()))
 	for i := range a {
 		ip := make([]byte, 4)
 		n, err := r.Read(ip)
