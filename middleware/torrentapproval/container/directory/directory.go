@@ -15,7 +15,7 @@ import (
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Name of this container for registry
@@ -36,7 +36,7 @@ type Config struct {
 func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
-		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
+		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
 	var err error
 	d := &directory{
@@ -49,7 +49,7 @@ func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	}
 	var w *dirwatch.Instance
 	if w, err = dirwatch.New(c.Path); err != nil {
-		return nil, fmt.Errorf("unable to initialize directory watch: %v", err)
+		return nil, fmt.Errorf("unable to initialize directory watch: %w", err)
 	}
 	d.watcher = w
 	if len(d.StorageCtx) == 0 {

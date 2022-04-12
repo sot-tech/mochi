@@ -1,24 +1,26 @@
 package redis
 
 import (
+	"context"
 	"errors"
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/redigo"
+	redigolib "github.com/gomodule/redigo/redis"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-redsync/redsync"
-	"github.com/gomodule/redigo/redis"
 )
 
 // redisBackend represents a redis handler.
 type redisBackend struct {
-	pool    *redis.Pool
+	pool    *redigolib.Pool
 	redsync *redsync.Redsync
 }
 
 // newRedisBackend creates a redisBackend instance.
 func newRedisBackend(cfg *Config, u *redisURL, socketPath string) *redisBackend {
+	context.Background()
 	rc := &redisConnector{
 		URL:            u,
 		SocketPath:     socketPath,
@@ -27,16 +29,11 @@ func newRedisBackend(cfg *Config, u *redisURL, socketPath string) *redisBackend 
 		ConnectTimeout: cfg.RedisConnectTimeout,
 	}
 	pool := rc.NewPool()
-	rs := redsync.New([]redsync.Pool{pool})
+	rs := redsync.New(redigo.NewPool(pool))
 	return &redisBackend{
 		pool:    pool,
 		redsync: rs,
 	}
-}
-
-// open returns or creates instance of Redis connection.
-func (rb *redisBackend) open() redis.Conn {
-	return rb.pool.Get()
 }
 
 type redisConnector struct {
@@ -48,11 +45,11 @@ type redisConnector struct {
 }
 
 // NewPool returns a new pool of Redis connections
-func (rc *redisConnector) NewPool() *redis.Pool {
-	return &redis.Pool{
+func (rc *redisConnector) NewPool() *redigolib.Pool {
+	return &redigolib.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
+		Dial: func() (redigolib.Conn, error) {
 			c, err := rc.open()
 			if err != nil {
 				return nil, err
@@ -68,8 +65,8 @@ func (rc *redisConnector) NewPool() *redis.Pool {
 			return c, err
 		},
 		// PINGs connections that have been idle more than 10 seconds
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			if time.Since(t) < time.Duration(10*time.Second) {
+		TestOnBorrow: func(c redigolib.Conn, t time.Time) error {
+			if time.Since(t) < 10*time.Second {
 				return nil
 			}
 			_, err := c.Do("PING")
@@ -79,23 +76,23 @@ func (rc *redisConnector) NewPool() *redis.Pool {
 }
 
 // Open a new Redis connection
-func (rc *redisConnector) open() (redis.Conn, error) {
-	var opts = []redis.DialOption{
-		redis.DialDatabase(rc.URL.DB),
-		redis.DialReadTimeout(rc.ReadTimeout),
-		redis.DialWriteTimeout(rc.WriteTimeout),
-		redis.DialConnectTimeout(rc.ConnectTimeout),
+func (rc *redisConnector) open() (redigolib.Conn, error) {
+	opts := []redigolib.DialOption{
+		redigolib.DialDatabase(rc.URL.DB),
+		redigolib.DialReadTimeout(rc.ReadTimeout),
+		redigolib.DialWriteTimeout(rc.WriteTimeout),
+		redigolib.DialConnectTimeout(rc.ConnectTimeout),
 	}
 
 	if rc.URL.Password != "" {
-		opts = append(opts, redis.DialPassword(rc.URL.Password))
+		opts = append(opts, redigolib.DialPassword(rc.URL.Password))
 	}
 
 	if rc.SocketPath != "" {
-		return redis.Dial("unix", rc.SocketPath, opts...)
+		return redigolib.Dial("unix", rc.SocketPath, opts...)
 	}
 
-	return redis.Dial("tcp", rc.URL.Host, opts...)
+	return redigolib.Dial("tcp", rc.URL.Host, opts...)
 }
 
 // A redisURL represents a parsed redisURL
@@ -119,7 +116,7 @@ func parseRedisURL(target string) (*redisURL, error) {
 		return nil, errors.New("no redis scheme found")
 	}
 
-	db := 0 //default redis db
+	db := 0 // default redis db
 	parts := strings.Split(u.Path, "/")
 	if len(parts) != 1 {
 		db, err = strconv.Atoi(parts[1])

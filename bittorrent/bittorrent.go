@@ -75,7 +75,7 @@ func (i InfoHash) TruncateV1() InfoHash {
 }
 
 // NewInfoHash creates an InfoHash from a byte slice or raw/hex string.
-func NewInfoHash(b interface{}) (InfoHash, error) {
+func NewInfoHash(b any) (InfoHash, error) {
 	if b == nil {
 		return NoneInfoHash, ErrInvalidHashType
 	}

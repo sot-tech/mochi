@@ -55,7 +55,6 @@ func (cfg Config) Validate() Config {
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
-		rand.Seed(time.Now().UnixNano())
 		pkeyRunes := make([]rune, 64)
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
@@ -117,14 +116,13 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 		logic:   logic,
 		Config:  cfg,
 		genPool: &sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return NewConnectionIDGenerator(cfg.PrivateKey)
 			},
 		},
 	}
 
-	err := f.listen()
-	if err != nil {
+	if err := f.listen(); err != nil {
 		return nil, err
 	}
 
@@ -185,10 +183,10 @@ func (t *Frontend) serve() error {
 
 		// Read a UDP packet into a reusable buffer.
 		buffer := pool.Get()
-		n, addr, err := t.socket.ReadFromUDP(buffer)
+		n, addr, err := t.socket.ReadFromUDP(*buffer)
 		if err != nil {
 			pool.Put(buffer)
-			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// A temporary failure is not fatal; just pretend it never happened.
 				continue
 			}
@@ -217,7 +215,7 @@ func (t *Frontend) serve() error {
 			}
 			action, af, err := t.handleRequest(
 				// Make sure the IP is copied, not referenced.
-				Request{buffer[:n], append([]byte{}, addr.IP...)},
+				Request{(*buffer)[:n], append([]byte{}, addr.IP...)},
 				ResponseWriter{t.socket, addr},
 			)
 			if t.EnableRequestTiming {
@@ -244,8 +242,7 @@ type ResponseWriter struct {
 
 // Write implements the io.Writer interface for a ResponseWriter.
 func (w ResponseWriter) Write(b []byte) (int, error) {
-	w.socket.WriteToUDP(b, w.addr)
-	return len(b), nil
+	return w.socket.WriteToUDP(b, w.addr)
 }
 
 // handleRequest parses and responds to a UDP Request.

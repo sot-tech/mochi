@@ -260,7 +260,7 @@ func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
 		err = srv.ListenAndServe()
 	}
 	// Start the HTTP server.
-	if err != http.ErrServerClosed {
+	if !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

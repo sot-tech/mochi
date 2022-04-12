@@ -9,7 +9,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Name is the name by which this middleware is registered with Conf.
@@ -27,7 +27,7 @@ func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook,
 	var cfg Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
+		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
 	}
 
 	return NewHook(cfg)
@@ -82,7 +82,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 	return h, nil
 }
 
-func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
+func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
 	clientID := NewClientID(req.Peer.ID)
 
 	if len(h.approved) > 0 {

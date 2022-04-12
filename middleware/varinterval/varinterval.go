@@ -8,7 +8,7 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/pkg/random"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"sync"
 	"time"
 )
@@ -28,7 +28,7 @@ func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook,
 	var cfg Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
+		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
 	}
 
 	return NewHook(cfg)
@@ -75,16 +75,13 @@ type hook struct {
 
 // NewHook creates a middleware to randomly modify the announce interval from
 // the given config.
-func NewHook(cfg Config) (middleware.Hook, error) {
-	err := checkConfig(cfg)
-	if err != nil {
-		return nil, err
+func NewHook(cfg Config) (h middleware.Hook, err error) {
+	if err = checkConfig(cfg); err == nil {
+		h = &hook{
+			cfg: cfg,
+		}
 	}
-
-	h := &hook{
-		cfg: cfg,
-	}
-	return h, nil
+	return
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
@@ -102,14 +99,12 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 		if h.cfg.ModifyMinInterval {
 			resp.MinInterval += add
 		}
-
-		return ctx, nil
 	}
 
 	return ctx, nil
 }
 
-func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
 	// Scrapes are not altered.
 	return ctx, nil
 }

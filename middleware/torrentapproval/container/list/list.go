@@ -8,7 +8,7 @@ import (
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Name of this container for registry.
@@ -35,7 +35,7 @@ const DUMMY = "_"
 func build(confBytes []byte, st storage.Storage) (container.Container, error) {
 	c := new(Config)
 	if err := yaml.Unmarshal(confBytes, c); err != nil {
-		return nil, fmt.Errorf("unable to deserialise configuration: %v", err)
+		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
 	l := &List{
 		Invert:     c.Invert,

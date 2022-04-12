@@ -31,7 +31,7 @@ func SetOutput(to io.Writer) {
 }
 
 // Fields is a map of logging fields.
-type Fields map[string]interface{}
+type Fields map[string]any
 
 // LogFields implements Fielder for Fields.
 func (f Fields) LogFields() Fields {
@@ -87,7 +87,7 @@ func mergeFielders(fielders ...Fielder) logrus.Fields {
 }
 
 // Debug logs at the debug level if debug logging is enabled.
-func Debug(v interface{}, fielders ...Fielder) {
+func Debug(v any, fielders ...Fielder) {
 	if debug {
 		if len(fielders) != 0 {
 			l.WithFields(mergeFielders(fielders...)).Debug(v)
@@ -98,7 +98,7 @@ func Debug(v interface{}, fielders ...Fielder) {
 }
 
 // Info logs at the info level.
-func Info(v interface{}, fielders ...Fielder) {
+func Info(v any, fielders ...Fielder) {
 	if len(fielders) != 0 {
 		l.WithFields(mergeFielders(fielders...)).Info(v)
 	} else {
@@ -107,7 +107,7 @@ func Info(v interface{}, fielders ...Fielder) {
 }
 
 // Warn logs at the warning level.
-func Warn(v interface{}, fielders ...Fielder) {
+func Warn(v any, fielders ...Fielder) {
 	if len(fielders) != 0 {
 		l.WithFields(mergeFielders(fielders...)).Warn(v)
 	} else {
@@ -116,7 +116,7 @@ func Warn(v interface{}, fielders ...Fielder) {
 }
 
 // Error logs at the error level.
-func Error(v interface{}, fielders ...Fielder) {
+func Error(v any, fielders ...Fielder) {
 	if len(fielders) != 0 {
 		l.WithFields(mergeFielders(fielders...)).Error(v)
 	} else {
@@ -125,7 +125,7 @@ func Error(v interface{}, fielders ...Fielder) {
 }
 
 // Fatal logs at the fatal level and exits with a status code != 0.
-func Fatal(v interface{}, fielders ...Fielder) {
+func Fatal(v any, fielders ...Fielder) {
 	if len(fielders) != 0 {
 		l.WithFields(mergeFielders(fielders...)).Fatal(v)
 	} else {

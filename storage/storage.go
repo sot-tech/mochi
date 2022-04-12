@@ -16,7 +16,7 @@ var (
 
 // Driver is the interface used to initialize a new type of Storage.
 type Driver interface {
-	NewStorage(cfg interface{}) (Storage, error)
+	NewStorage(cfg any) (Storage, error)
 }
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
@@ -107,27 +107,26 @@ type Storage interface {
 	// Put used to place arbitrary k-v data with specified context
 	// into storage. ctx parameter used to group data
 	// (i.e. data only for specific middleware module)
-	Put(ctx string, key, value interface{})
+	Put(ctx string, key, value any)
 
 	// BulkPut used to place array of k-v data in specified context.
 	// Useful when several data entries should be added in single transaction/connection
 	BulkPut(ctx string, pairs ...Pair)
 
 	// Contains checks if any data in specified context exist
-	Contains(ctx string, key interface{}) bool
+	Contains(ctx string, key any) bool
 
 	// Load used to get arbitrary data in specified context by its key
-	Load(ctx string, key interface{}) interface{}
+	Load(ctx string, key any) any
 
 	// Delete used to delete arbitrary data in specified context by its keys
-	Delete(ctx string, keys ...interface{})
+	Delete(ctx string, keys ...any)
 
-	// stop.Stopper is an interface that expects a Stop method to stop the
-	// Storage.
+	// Stopper is an interface that expects a Stop method to stop the Storage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper
 
-	// log.Fielder returns a loggable version of the data used to configure and
+	// Fielder returns a loggable version of the data used to configure and
 	// operate a particular Storage.
 	log.Fielder
 }
@@ -158,7 +157,7 @@ func RegisterDriver(name string, d Driver) {
 // the list of registered Drivers.
 //
 // If a driver does not exist, returns ErrDriverDoesNotExist.
-func NewStorage(name string, cfg interface{}) (ps Storage, err error) {
+func NewStorage(name string, cfg any) (ps Storage, err error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 

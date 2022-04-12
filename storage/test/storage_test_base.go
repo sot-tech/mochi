@@ -198,7 +198,7 @@ func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 
 func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 	pairs := make([]storage.Pair, 0, len(testData))
-	keys := make([]interface{}, 0, len(testData))
+	keys := make([]any, 0, len(testData))
 	for _, c := range testData {
 		key := c.peer.String()
 		keys = append(keys, key)

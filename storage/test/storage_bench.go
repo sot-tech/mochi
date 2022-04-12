@@ -2,6 +2,7 @@ package test
 
 import (
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/rand_seed"
 	"github.com/sot-tech/mochi/storage"
 	"math/rand"
 	"net"
@@ -26,7 +27,7 @@ func generateInfohashes() (a [1000]bittorrent.InfoHash) {
 }
 
 func generatePeers() (a [1000]bittorrent.Peer) {
-	r := rand.New(rand.NewSource(0))
+	r := rand.New(rand.NewSource(rand_seed.GenSeed()))
 	for i := range a {
 		ip := make([]byte, 4)
 		n, err := r.Read(ip)
@@ -49,9 +50,11 @@ func generatePeers() (a [1000]bittorrent.Peer) {
 	return
 }
 
-type benchExecFunc func(int, storage.Storage, *benchData) error
-type benchSetupFunc func(storage.Storage, *benchData) error
-type benchStorageConstructor func() storage.Storage
+type (
+	benchExecFunc           func(int, storage.Storage, *benchData) error
+	benchSetupFunc          func(storage.Storage, *benchData) error
+	benchStorageConstructor func() storage.Storage
+)
 
 type benchHolder struct {
 	st benchStorageConstructor
@@ -187,6 +190,7 @@ func (bh *benchHolder) PutDelete1kInfohash(b *testing.B) {
 	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infohashes[i%1000], bd.peers[0])
 		if err != nil {
+			return err
 		}
 		return ps.DeleteSeeder(bd.infohashes[i%1000], bd.peers[0])
 	})

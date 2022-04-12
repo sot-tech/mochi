@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/frontend/http"
 	"github.com/sot-tech/mochi/frontend/udp"
@@ -22,8 +22,8 @@ import (
 )
 
 type storageConfig struct {
-	Name   string      `yaml:"name"`
-	Config interface{} `yaml:"config"`
+	Name   string `yaml:"name"`
+	Config any    `yaml:"config"`
 }
 
 // Config represents the configuration used for executing Conf.

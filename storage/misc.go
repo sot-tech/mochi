@@ -8,7 +8,7 @@ import (
 
 // Pair - some key-value pair, used for BulkPut
 type Pair struct {
-	Left, Right interface{}
+	Left, Right any
 }
 
 // SerializedPeer concatenation of PeerID, net port and IP-address

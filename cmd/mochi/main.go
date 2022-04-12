@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"github.com/sirupsen/logrus"
 	"github.com/sot-tech/mochi/frontend/http"
@@ -8,10 +9,10 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
+	_ "github.com/sot-tech/mochi/pkg/rand_seed"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	"github.com/spf13/cobra"
-	"os"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -147,15 +148,13 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	reload := makeReloadChan()
+	shutdown, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	reload, _ := signal.NotifyContext(context.Background(), ReloadSignals...)
 
 	for {
 		select {
-		case <-reload:
-			log.Info("reloading; received SIGUSR1")
+		case <-reload.Done():
+			log.Info("reloading; received reload signal")
 			peerStore, err := r.Stop(true)
 			if err != nil {
 				return err
@@ -164,8 +163,8 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 			if err := r.Start(peerStore); err != nil {
 				return err
 			}
-		case <-quit:
-			log.Info("shutting down; received SIGINT/SIGTERM")
+		case <-shutdown.Done():
+			log.Info("shutting down; received shutdown signal")
 			if _, err := r.Stop(false); err != nil {
 				return err
 			}
@@ -213,7 +212,7 @@ func RootPostRunCmdFunc(_ *cobra.Command, _ []string) error {
 }
 
 func main() {
-	var rootCmd = &cobra.Command{
+	rootCmd := &cobra.Command{
 		Use:                "mochi",
 		Short:              "BitTorrent Tracker",
 		Long:               "A customizable, multi-protocol BitTorrent Tracker",
@@ -224,11 +223,7 @@ func main() {
 
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
 	rootCmd.PersistentFlags().Bool("json", false, "enable json logging")
-	if runtime.GOOS == "windows" {
-		rootCmd.PersistentFlags().Bool("nocolors", true, "disable log coloring")
-	} else {
-		rootCmd.PersistentFlags().Bool("nocolors", false, "disable log coloring")
-	}
+	rootCmd.PersistentFlags().Bool("nocolors", runtime.GOOS == "windows", "disable log coloring")
 
 	rootCmd.Flags().String("config", "/etc/mochi.yaml", "location of configuration file")
 

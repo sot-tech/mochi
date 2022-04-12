@@ -1,15 +1,13 @@
 package random
 
 import (
+	_ "github.com/sot-tech/mochi/pkg/rand_seed"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestIntn(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	s0, s1 := rand.Uint64(), rand.Uint64()
 	var k int
 	for i := 0; i < 10000; i++ {

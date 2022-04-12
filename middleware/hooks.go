@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -36,12 +37,12 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 	switch {
 	case req.Event == bittorrent.Stopped:
 		err = h.store.DeleteSeeder(req.InfoHash, req.Peer)
-		if err != nil && err != storage.ErrResourceDoesNotExist {
+		if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 			return ctx, err
 		}
 
 		err = h.store.DeleteLeecher(req.InfoHash, req.Peer)
-		if err != nil && err != storage.ErrResourceDoesNotExist {
+		if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 			return ctx, err
 		}
 	case req.Event == bittorrent.Completed:
@@ -105,7 +106,7 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) error {
 	seeding := req.Left == 0
 	peers, err := h.store.AnnouncePeers(req.InfoHash, seeding, int(req.NumWant), req.Peer)
-	if err != nil && err != storage.ErrResourceDoesNotExist {
+	if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 		return err
 	}
 

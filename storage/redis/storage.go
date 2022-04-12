@@ -24,13 +24,14 @@
 package redis
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -60,7 +61,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewStorage(icfg interface{}) (storage.Storage, error) {
+func (d driver) NewStorage(icfg any) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -271,7 +272,7 @@ func (ps *store) getConnection() redis.Conn {
 		panic("attempted to interact with stopped redis store")
 	default:
 	}
-	return ps.rb.open()
+	return ps.rb.pool.Get()
 }
 
 func closeConnection(con redis.Conn) {
@@ -291,7 +292,7 @@ func (ps *store) populateProm() {
 	defer closeConnection(conn)
 
 	for _, group := range ps.groups() {
-		if n, err := redis.Int64(conn.Do("GET", ps.infohashCountKey(group))); err != nil && err != redis.ErrNil {
+		if n, err := redis.Int64(conn.Do("GET", ps.infohashCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
 			log.Error("storage: GET counter failure", log.Fields{
 				"key":   ps.infohashCountKey(group),
 				"error": err,
@@ -299,7 +300,7 @@ func (ps *store) populateProm() {
 		} else {
 			numInfohashes += n
 		}
-		if n, err := redis.Int64(conn.Do("GET", ps.seederCountKey(group))); err != nil && err != redis.ErrNil {
+		if n, err := redis.Int64(conn.Do("GET", ps.seederCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
 			log.Error("storage: GET counter failure", log.Fields{
 				"key":   ps.seederCountKey(group),
 				"error": err,
@@ -307,7 +308,7 @@ func (ps *store) populateProm() {
 		} else {
 			numSeeders += n
 		}
-		if n, err := redis.Int64(conn.Do("GET", ps.leecherCountKey(group))); err != nil && err != redis.ErrNil {
+		if n, err := redis.Int64(conn.Do("GET", ps.leecherCountKey(group))); err != nil && !errors.Is(err, redis.ErrNil) {
 			log.Error("storage: GET counter failure", log.Fields{
 				"key":   ps.leecherCountKey(group),
 				"error": err,
@@ -448,7 +449,7 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	}
 	_, err = conn.Do("DECR", ps.leecherCountKey(addressFamily))
 
-	return nil
+	return err
 }
 
 func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -517,13 +518,13 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 	if err != nil {
 		return nil, err
 	}
-	conLeechers := leechers.([]interface{})
+	conLeechers := leechers.([]any)
 
 	seeders, err := conn.Do("HKEYS", encodedSeederInfoHash)
 	if err != nil {
 		return nil, err
 	}
-	conSeeders := seeders.([]interface{})
+	conSeeders := seeders.([]any)
 
 	if len(conLeechers) == 0 && len(conSeeders) == 0 {
 		return nil, storage.ErrResourceDoesNotExist
@@ -606,7 +607,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 	return
 }
 
-func (ps *store) Put(ctx string, key, value interface{}) {
+func (ps *store) Put(ctx string, key, value any) {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
 	_, err := conn.Do("HSET", ctx, key, value)
@@ -615,7 +616,7 @@ func (ps *store) Put(ctx string, key, value interface{}) {
 	}
 }
 
-func (ps *store) Contains(ctx string, key interface{}) bool {
+func (ps *store) Contains(ctx string, key any) bool {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
 	exist, err := redis.Bool(conn.Do("HEXISTS", ctx, key))
@@ -636,7 +637,7 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 	default:
 		conn := ps.getConnection()
 		defer closeConnection(conn)
-		args := make([]interface{}, 1, l*2+1)
+		args := make([]any, 1, l*2+1)
 		args[0] = ctx
 		for _, p := range pairs {
 			args = append(args, p.Left, p.Right)
@@ -657,7 +658,7 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 	}
 }
 
-func (ps *store) Load(ctx string, key interface{}) interface{} {
+func (ps *store) Load(ctx string, key any) any {
 	conn := ps.getConnection()
 	defer closeConnection(conn)
 	v, err := conn.Do("HGET", ctx, key)
@@ -667,7 +668,7 @@ func (ps *store) Load(ctx string, key interface{}) interface{} {
 	return v
 }
 
-func (ps *store) Delete(ctx string, keys ...interface{}) {
+func (ps *store) Delete(ctx string, keys ...any) {
 	switch l := len(keys); l {
 	case 0:
 		break
@@ -681,7 +682,7 @@ func (ps *store) Delete(ctx string, keys ...interface{}) {
 	default:
 		conn := ps.getConnection()
 		defer closeConnection(conn)
-		args := make([]interface{}, 1, l+1)
+		args := make([]any, 1, l+1)
 		args[0] = ctx
 		args = append(args, keys...)
 		_, err := conn.Do("HDEL", args...)
@@ -823,7 +824,7 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 					_ = conn.Send("DECR", ps.infohashCountKey(group))
 				}
 				_, err = redis.Values(conn.Do("EXEC"))
-				if err != nil && err != redis.ErrNil {
+				if err != nil && !errors.Is(err, redis.ErrNil) {
 					log.Error("storage: Redis EXEC failure", log.Fields{
 						"group":    group,
 						"infohash": ihStr,
@@ -831,7 +832,7 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 					})
 				}
 			} else {
-				if _, err = conn.Do("UNWATCH"); err != nil && err != redis.ErrNil {
+				if _, err = conn.Do("UNWATCH"); err != nil && !errors.Is(err, redis.ErrNil) {
 					log.Error("storage: Redis UNWATCH failure", log.Fields{"error": err})
 				}
 			}

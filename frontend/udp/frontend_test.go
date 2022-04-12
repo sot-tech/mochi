@@ -5,6 +5,7 @@ import (
 
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
+	_ "github.com/sot-tech/mochi/pkg/rand_seed"
 	"github.com/sot-tech/mochi/storage"
 	_ "github.com/sot-tech/mochi/storage/memory"
 )

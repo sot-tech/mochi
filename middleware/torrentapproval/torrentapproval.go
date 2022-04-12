@@ -14,7 +14,7 @@ import (
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Name is the name by which this middleware is registered with Conf.
@@ -28,7 +28,7 @@ type baseConfig struct {
 	// Source - name of container for initial values
 	Source string `yaml:"initial_source"`
 	// Configuration depends on used container
-	Configuration map[string]interface{} `yaml:"configuration"`
+	Configuration map[string]any `yaml:"configuration"`
 }
 
 type driver struct{}
@@ -37,7 +37,7 @@ func (d driver) NewHook(optionBytes []byte, storage storage.Storage) (middleware
 	var cfg baseConfig
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
+		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
 	}
 
 	if len(cfg.Source) == 0 {

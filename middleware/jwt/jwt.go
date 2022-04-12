@@ -22,7 +22,7 @@ import (
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"strings"
 	"time"
@@ -43,7 +43,7 @@ func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook,
 	var cfg Config
 	err := yaml.Unmarshal(optionBytes, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %s", Name, err)
+		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
 	}
 
 	return NewHook(cfg)
@@ -92,8 +92,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 	}
 
 	log.Debug("performing initial fetch of JWKs")
-	err := h.updateKeys()
-	if err != nil {
+	if err := h.updateKeys(); err != nil {
 		return nil, errors.New("failed to fetch initial JWK Set: " + err.Error())
 	}
 
@@ -156,7 +155,7 @@ func (h *hook) Stop() stop.Result {
 	return c.Result()
 }
 
-func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {
+func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
 	if req.Params == nil {
 		return ctx, ErrMissingJWT
 	}

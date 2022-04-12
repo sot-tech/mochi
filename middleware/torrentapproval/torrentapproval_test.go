@@ -6,7 +6,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/storage/memory"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"testing"
 )
 
@@ -19,7 +19,7 @@ var cases = []struct {
 	{
 		baseConfig{
 			Source: "list",
-			Configuration: map[string]interface{}{
+			Configuration: map[string]any{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
@@ -30,7 +30,7 @@ var cases = []struct {
 	{
 		baseConfig{
 			Source: "list",
-			Configuration: map[string]interface{}{
+			Configuration: map[string]any{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 			},
 		},
@@ -41,7 +41,7 @@ var cases = []struct {
 	{
 		baseConfig{
 			Source: "list",
-			Configuration: map[string]interface{}{
+			Configuration: map[string]any{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 				"invert":    true,
 			},
@@ -53,7 +53,7 @@ var cases = []struct {
 	{
 		baseConfig{
 			Source: "list",
-			Configuration: map[string]interface{}{
+			Configuration: map[string]any{
 				"hash_list": []string{"3532cf2d327fad8448c075b4cb42c8136964a435"},
 				"invert":    true,
 			},

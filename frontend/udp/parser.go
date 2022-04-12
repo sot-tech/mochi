@@ -23,9 +23,9 @@ const (
 
 // Option-Types as described in BEP 41 and BEP 45.
 const (
-	optionEndOfOptions byte = 0x0
-	optionNOP               = 0x1
-	optionURLData           = 0x2
+	optionEndOfOptions = 0x0
+	optionNOP          = 0x1
+	optionURLData      = 0x2
 )
 
 var (
@@ -80,6 +80,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, errMalformedPacket
 	}
 
+	// XXX: pure V2 hashes will cause invalid parsing
 	infohash := r.Packet[16:36]
 	peerIDBytes := r.Packet[36:56]
 	downloaded := binary.BigEndian.Uint64(r.Packet[56:64])
@@ -93,10 +94,10 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 
 	ip := r.IP
 	ipProvided := false
-	ipbytes := r.Packet[84:ipEnd]
+	ipBytes := r.Packet[84:ipEnd]
 	if opts.AllowIPSpoofing {
 		// Make sure the bytes are copied to a new slice.
-		copy(ip, net.IP(ipbytes))
+		copy(ip, ipBytes)
 		ipProvided = true
 	}
 	if !opts.AllowIPSpoofing && r.IP == nil {
@@ -152,7 +153,7 @@ type buffer struct {
 }
 
 var bufferFree = sync.Pool{
-	New: func() interface{} { return new(buffer) },
+	New: func() any { return new(buffer) },
 }
 
 func newBuffer() *buffer {
@@ -171,7 +172,7 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 		return bittorrent.ParseURLData("")
 	}
 
-	var buf = newBuffer()
+	buf := newBuffer()
 	defer buf.free()
 
 	for i := 0; i < len(packet); {

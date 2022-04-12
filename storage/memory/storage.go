@@ -5,12 +5,13 @@ package memory
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"runtime"
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -37,7 +38,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewStorage(icfg interface{}) (storage.Storage, error) {
+func (d driver) NewStorage(icfg any) (storage.Storage, error) {
 	// Marshal the config back into bytes.
 	bytes, err := yaml.Marshal(icfg)
 	if err != nil {
@@ -80,7 +81,7 @@ func (cfg Config) LogFields() log.Fields {
 func (cfg Config) Validate() Config {
 	validcfg := cfg
 
-	if cfg.ShardCount <= 0 {
+	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
 		validcfg.ShardCount = defaultShardCount
 		log.Warn("falling back to default configuration", log.Fields{
 			"name":     Name + ".ShardCount",
@@ -488,7 +489,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorrent.Ad
 	return
 }
 
-func asKey(in interface{}) interface{} {
+func asKey(in any) any {
 	if in == nil {
 		panic("unable to use nil map key")
 	}
@@ -499,12 +500,12 @@ func asKey(in interface{}) interface{} {
 	return fmt.Sprint(in)
 }
 
-func (ps *store) Put(ctx string, key, value interface{}) {
+func (ps *store) Put(ctx string, key, value any) {
 	m, _ := ps.contexts.LoadOrStore(ctx, new(sync.Map))
 	m.(*sync.Map).Store(asKey(key), value)
 }
 
-func (ps *store) Contains(ctx string, key interface{}) bool {
+func (ps *store) Contains(ctx string, key any) bool {
 	var exist bool
 	if m, found := ps.contexts.Load(ctx); found {
 		_, exist = m.(*sync.Map).Load(asKey(key))
@@ -522,15 +523,15 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
 	}
 }
 
-func (ps *store) Load(ctx string, key interface{}) interface{} {
-	var v interface{}
+func (ps *store) Load(ctx string, key any) any {
+	var v any
 	if m, found := ps.contexts.Load(ctx); found {
 		v, _ = m.(*sync.Map).Load(asKey(key))
 	}
 	return v
 }
 
-func (ps *store) Delete(ctx string, keys ...interface{}) {
+func (ps *store) Delete(ctx string, keys ...any) {
 	if len(keys) > 0 {
 		if m, found := ps.contexts.Load(ctx); found {
 			m := m.(*sync.Map)

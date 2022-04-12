@@ -138,7 +138,7 @@ func BenchmarkConnectionIDGenerator_Generate(b *testing.B) {
 	createdAt := time.Now()
 
 	pool := &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return NewConnectionIDGenerator(key)
 		},
 	}
@@ -176,7 +176,7 @@ func BenchmarkConnectionIDGenerator_Validate(b *testing.B) {
 	cid := NewConnectionID(ip, createdAt, key)
 
 	pool := &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return NewConnectionIDGenerator(key)
 		},
 	}

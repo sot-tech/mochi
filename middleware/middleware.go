@@ -5,7 +5,7 @@ package middleware
 import (
 	"errors"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"sync"
 )
 
@@ -67,8 +67,8 @@ func New(name string, optionBytes []byte, storage storage.Storage) (Hook, error)
 
 // Config is the generic configuration format used for all registered Hooks.
 type Config struct {
-	Name    string                 `yaml:"name"`
-	Options map[string]interface{} `yaml:"options"`
+	Name    string         `yaml:"name"`
+	Options map[string]any `yaml:"options"`
 }
 
 // HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
