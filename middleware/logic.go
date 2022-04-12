@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"context"
+	"time"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"time"
 )
 
 // ResponseConfig holds the configuration used for the actual response.

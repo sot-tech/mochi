@@ -1,10 +1,11 @@
 package test
 
 import (
+	"testing"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/storage"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 // PeerEqualityFunc is the boolean function to use to check two Peers for

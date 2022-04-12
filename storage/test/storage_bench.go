@@ -1,14 +1,15 @@
 package test
 
 import (
-	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/rand_seed"
-	"github.com/sot-tech/mochi/storage"
 	"math/rand"
 	"net"
 	"runtime"
 	"sync/atomic"
 	"testing"
+
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/rand_seed"
+	"github.com/sot-tech/mochi/storage"
 )
 
 type benchData struct {

@@ -6,6 +6,7 @@ package directory
 
 import (
 	"fmt"
+
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/util/dirwatch"
 	"github.com/minio/sha256-simd"

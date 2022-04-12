@@ -1,8 +1,9 @@
 package test
 
 import (
-	"github.com/sot-tech/mochi/bittorrent"
 	"net"
+
+	"github.com/sot-tech/mochi/bittorrent"
 )
 
 var (

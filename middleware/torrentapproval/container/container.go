@@ -2,9 +2,10 @@ package container
 
 import (
 	"errors"
+	"sync"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/storage"
-	"sync"
 )
 
 // DefaultStorageCtxName default ctx name if value from configuration is not set

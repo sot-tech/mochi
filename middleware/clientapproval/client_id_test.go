@@ -1,8 +1,9 @@
 package clientapproval
 
 import (
-	"github.com/sot-tech/mochi/bittorrent"
 	"testing"
+
+	"github.com/sot-tech/mochi/bittorrent"
 )
 
 func TestClientID(t *testing.T) {

@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/pkg/random"
 	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v3"
-	"sync"
-	"time"
 )
 
 // Name is the name by which this middleware is registered with Conf.

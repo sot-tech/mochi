@@ -2,8 +2,9 @@ package storage
 
 import (
 	"encoding/binary"
-	"github.com/sot-tech/mochi/bittorrent"
 	"net"
+
+	"github.com/sot-tech/mochi/bittorrent"
 )
 
 // Pair - some key-value pair, used for BulkPut

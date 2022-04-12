@@ -2,11 +2,12 @@ package http
 
 import (
 	"errors"
+	"net/http"
+	"time"
+
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/log"
-	"net/http"
-	"time"
 )
 
 // WriteError communicates an error to a BitTorrent client over HTTP.

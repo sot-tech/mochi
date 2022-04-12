@@ -3,13 +3,14 @@ package redis
 import (
 	"context"
 	"errors"
-	"github.com/go-redsync/redsync/v4"
-	"github.com/go-redsync/redsync/v4/redis/redigo"
-	redigolib "github.com/gomodule/redigo/redis"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/redigo"
+	redigolib "github.com/gomodule/redigo/redis"
 )
 
 // redisBackend represents a redis handler.

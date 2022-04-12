@@ -1,10 +1,11 @@
 package random
 
 import (
-	_ "github.com/sot-tech/mochi/pkg/rand_seed"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
+
+	_ "github.com/sot-tech/mochi/pkg/rand_seed"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIntn(t *testing.T) {

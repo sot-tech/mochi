@@ -1,10 +1,11 @@
 package memory
 
 import (
-	"github.com/sot-tech/mochi/storage"
-	"github.com/sot-tech/mochi/storage/test"
 	"testing"
 	"time"
+
+	"github.com/sot-tech/mochi/storage"
+	"github.com/sot-tech/mochi/storage/test"
 )
 
 func createNew() storage.Storage {

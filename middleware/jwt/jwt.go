@@ -13,6 +13,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	jc "github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
 	"github.com/SermoDigital/jose/jwt"
@@ -23,9 +27,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v3"
-	"net/http"
-	"strings"
-	"time"
 )
 
 // Name is the name by which this middleware is registered with Conf.

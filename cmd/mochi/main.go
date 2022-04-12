@@ -3,6 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"os/signal"
+	"runtime"
+	"strings"
+	"syscall"
+
 	"github.com/sirupsen/logrus"
 	"github.com/sot-tech/mochi/frontend/http"
 	"github.com/sot-tech/mochi/frontend/udp"
@@ -13,10 +18,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	"github.com/spf13/cobra"
-	"os/signal"
-	"runtime"
-	"strings"
-	"syscall"
 )
 
 var e2eCmd *cobra.Command

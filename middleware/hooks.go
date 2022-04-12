@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/storage"
 )

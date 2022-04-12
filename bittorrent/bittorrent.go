@@ -8,10 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/sot-tech/mochi/pkg/log"
 	"net"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 // PeerIDLen is length of peer id field in bytes

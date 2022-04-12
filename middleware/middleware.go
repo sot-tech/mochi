@@ -4,9 +4,10 @@ package middleware
 
 import (
 	"errors"
+	"sync"
+
 	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v3"
-	"sync"
 )
 
 var (
