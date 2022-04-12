@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/storage/memory"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/storage/memory"
 )
 
 var cases = []struct {

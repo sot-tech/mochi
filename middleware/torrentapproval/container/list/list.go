@@ -5,11 +5,12 @@ package list
 import (
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v3"
 )
 
 // Name of this container for registry.

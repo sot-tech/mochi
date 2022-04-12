@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/sot-tech/mochi/frontend/http"
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
@@ -17,7 +19,6 @@ import (
 	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"github.com/spf13/cobra"
 )
 
 var e2eCmd *cobra.Command

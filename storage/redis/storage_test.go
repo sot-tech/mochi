@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
+
 	s "github.com/sot-tech/mochi/storage"
 	"github.com/sot-tech/mochi/storage/test"
 )

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/bencode"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/log"
 )
@@ -65,7 +66,6 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 		if len(IPv6CompactDict) > 0 {
 			bdict["peers6"] = IPv6CompactDict
 		}
-
 	} else {
 		// Add the peers to the dictionary.
 		peers := make([]map[string]any, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers))

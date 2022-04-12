@@ -9,13 +9,15 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
+	"gopkg.in/yaml.v3"
+
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
+
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v3"
 )
 
 // Name is the name by which this middleware is registered with Conf.

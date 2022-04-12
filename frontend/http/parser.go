@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net"
 	"net/http"
 
@@ -91,7 +92,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 
 	// Determine the number of peers the client wants in the response.
 	numwant, err := qp.Uint("numwant", 32)
-	if err != nil && err != bittorrent.ErrKeyNotFound {
+	if err != nil && !errors.Is(err, bittorrent.ErrKeyNotFound) {
 		return nil, bittorrent.ClientError("failed to parse parameter: numwant")
 	}
 	// If there were no errors, the user actually provided the numwant.

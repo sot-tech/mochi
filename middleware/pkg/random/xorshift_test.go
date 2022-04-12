@@ -4,8 +4,9 @@ import (
 	"math/rand"
 	"testing"
 
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 func TestIntn(t *testing.T) {

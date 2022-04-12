@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sot-tech/mochi/bittorrent"
 )
 
 var configTests = []struct {

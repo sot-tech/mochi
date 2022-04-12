@@ -6,8 +6,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/sot-tech/mochi/storage"
 	"gopkg.in/yaml.v3"
+
+	"github.com/sot-tech/mochi/storage"
 )
 
 var (

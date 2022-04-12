@@ -7,10 +7,11 @@ import (
 	"errors"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/storage"
-	"gopkg.in/yaml.v3"
 )
 
 // Name is the name by which this middleware is registered with Conf.
