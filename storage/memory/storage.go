@@ -611,7 +611,9 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 func (ps *store) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
-		close(ps.closed)
+		if ps.closed != nil {
+			close(ps.closed)
+		}
 		ps.wg.Wait()
 
 		// Explicitly deallocate our storage.

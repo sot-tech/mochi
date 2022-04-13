@@ -50,7 +50,7 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 		err = h.store.GraduateLeecher(req.InfoHash, req.Peer)
 		return ctx, err
 	case req.Left == 0:
-		// Completed events will also have Key == 0, but by making this
+		// Completed events will also have Left == 0, but by making this
 		// an extra case we can treat "old" seeders differently from
 		// graduating leechers. (Calling PutSeeder is probably faster
 		// than calling GraduateLeecher.)
@@ -110,6 +110,7 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 	if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 		return err
 	}
+	err = nil
 
 	// Some clients expect a minimum of their own peer representation returned to
 	// them if they are the only peer in a swarm.
