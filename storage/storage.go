@@ -14,6 +14,12 @@ var (
 	drivers  = make(map[string]Driver)
 )
 
+// Entry - some key-value pair, used for BulkPut
+type Entry struct {
+	Key   string
+	Value any
+}
+
 // Driver is the interface used to initialize a new type of Storage.
 type Driver interface {
 	NewStorage(cfg any) (Storage, error)
@@ -107,20 +113,20 @@ type Storage interface {
 	// Put used to place arbitrary k-v data with specified context
 	// into storage. ctx parameter used to group data
 	// (i.e. data only for specific middleware module)
-	Put(ctx string, key, value any)
+	Put(ctx string, value Entry) error
 
 	// BulkPut used to place array of k-v data in specified context.
 	// Useful when several data entries should be added in single transaction/connection
-	BulkPut(ctx string, pairs ...Pair)
+	BulkPut(ctx string, pairs ...Entry) error
 
 	// Contains checks if any data in specified context exist
-	Contains(ctx string, key any) bool
+	Contains(ctx string, key string) (bool, error)
 
 	// Load used to get arbitrary data in specified context by its key
-	Load(ctx string, key any) any
+	Load(ctx string, key string) (any, error)
 
 	// Delete used to delete arbitrary data in specified context by its keys
-	Delete(ctx string, keys ...any)
+	Delete(ctx string, keys ...string) error
 
 	// Stopper is an interface that expects a Stop method to stop the Storage.
 	// For more details see the documentation in the stop package.

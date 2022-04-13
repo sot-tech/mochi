@@ -68,7 +68,7 @@ serves multiple transports or networks, metrics for them should be separable.
 
 It is recommended to publish one Prometheus `HistogramVec` with:
 
-- A name like `chihaya_PROTOCOL_response_duration_milliseconds`
+- A name like `mochi_PROTOCOL_response_duration_milliseconds`
 - A value holding the duration in milliseconds of the reported request
 - Labels for:
 	- `action` (= `announce`, `scrape`, ...)

@@ -186,8 +186,8 @@ type peerShard struct {
 
 type swarm struct {
 	// map serialized peer to mtime
-	seeders  map[storage.SerializedPeer]int64
-	leechers map[storage.SerializedPeer]int64
+	seeders  map[string]int64
+	leechers map[string]int64
 }
 
 type store struct {
@@ -214,7 +214,7 @@ func (ps *store) populateProm() {
 		s.RUnlock()
 	}
 
-	storage.PromInfohashesCount.Set(float64(numInfohashes))
+	storage.PromInfoHashesCount.Set(float64(numInfohashes))
 	storage.PromSeedersCount.Set(float64(numSeeders))
 	storage.PromLeechersCount.Set(float64(numLeechers))
 }
@@ -246,15 +246,15 @@ func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	default:
 	}
 
-	pk := storage.NewSerializedPeer(p)
+	pk := p.RawString()
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[storage.SerializedPeer]int64),
-			leechers: make(map[storage.SerializedPeer]int64),
+			seeders:  make(map[string]int64),
+			leechers: make(map[string]int64),
 		}
 	}
 
@@ -277,7 +277,7 @@ func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	default:
 	}
 
-	pk := storage.NewSerializedPeer(p)
+	pk := p.RawString()
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
@@ -310,15 +310,15 @@ func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	default:
 	}
 
-	pk := storage.NewSerializedPeer(p)
+	pk := p.RawString()
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[storage.SerializedPeer]int64),
-			leechers: make(map[storage.SerializedPeer]int64),
+			seeders:  make(map[string]int64),
+			leechers: make(map[string]int64),
 		}
 	}
 
@@ -341,7 +341,7 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	default:
 	}
 
-	pk := storage.NewSerializedPeer(p)
+	pk := p.RawString()
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
@@ -374,15 +374,15 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) erro
 	default:
 	}
 
-	pk := storage.NewSerializedPeer(p)
+	pk := p.RawString()
 
 	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
-			seeders:  make(map[storage.SerializedPeer]int64),
-			leechers: make(map[storage.SerializedPeer]int64),
+			seeders:  make(map[string]int64),
+			leechers: make(map[string]int64),
 		}
 	}
 
@@ -426,8 +426,8 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 			if numWant == 0 {
 				break
 			}
-
-			peers = append(peers, pk.ToPeer())
+			p, _ := bittorrent.NewPeer(pk)
+			peers = append(peers, p)
 			numWant--
 		}
 	} else {
@@ -437,15 +437,15 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 			if numWant == 0 {
 				break
 			}
-
-			peers = append(peers, pk.ToPeer())
+			p, _ := bittorrent.NewPeer(pk)
+			peers = append(peers, p)
 			numWant--
 		}
 
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
 			leechers := shard.swarms[ih].leechers
-			announcerPK := storage.NewSerializedPeer(announcer)
+			announcerPK := announcer.RawString()
 			for pk := range leechers {
 				if pk == announcerPK {
 					continue
@@ -454,8 +454,8 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 				if numWant == 0 {
 					break
 				}
-
-				peers = append(peers, pk.ToPeer())
+				p, _ := bittorrent.NewPeer(pk)
+				peers = append(peers, p)
 				numWant--
 			}
 		}
@@ -500,38 +500,40 @@ func asKey(in any) any {
 	return fmt.Sprint(in)
 }
 
-func (ps *store) Put(ctx string, key, value any) {
+func (ps *store) Put(ctx string, value storage.Entry) error {
 	m, _ := ps.contexts.LoadOrStore(ctx, new(sync.Map))
-	m.(*sync.Map).Store(asKey(key), value)
+	m.(*sync.Map).Store(value.Key, value.Value)
+	return nil
 }
 
-func (ps *store) Contains(ctx string, key any) bool {
+func (ps *store) Contains(ctx string, key string) (bool, error) {
 	var exist bool
 	if m, found := ps.contexts.Load(ctx); found {
 		_, exist = m.(*sync.Map).Load(asKey(key))
 	}
-	return exist
+	return exist, nil
 }
 
-func (ps *store) BulkPut(ctx string, pairs ...storage.Pair) {
+func (ps *store) BulkPut(ctx string, pairs ...storage.Entry) error {
 	if len(pairs) > 0 {
 		c, _ := ps.contexts.LoadOrStore(ctx, new(sync.Map))
 		m := c.(*sync.Map)
 		for _, p := range pairs {
-			m.Store(asKey(p.Left), p.Right)
+			m.Store(asKey(p.Key), p.Value)
 		}
 	}
+	return nil
 }
 
-func (ps *store) Load(ctx string, key any) any {
+func (ps *store) Load(ctx string, key string) (any, error) {
 	var v any
 	if m, found := ps.contexts.Load(ctx); found {
 		v, _ = m.(*sync.Map).Load(asKey(key))
 	}
-	return v
+	return v, nil
 }
 
-func (ps *store) Delete(ctx string, keys ...any) {
+func (ps *store) Delete(ctx string, keys ...string) error {
 	if len(keys) > 0 {
 		if m, found := ps.contexts.Load(ctx); found {
 			m := m.(*sync.Map)
@@ -540,6 +542,7 @@ func (ps *store) Delete(ctx string, keys ...any) {
 			}
 		}
 	}
+	return nil
 }
 
 // collectGarbage deletes all Peers from the Storage which are older than the

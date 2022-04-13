@@ -11,21 +11,29 @@ import (
 	"github.com/sot-tech/mochi/storage/test"
 )
 
+var conf = Config{
+	GarbageCollectionInterval:   10 * time.Minute,
+	PrometheusReportingInterval: 10 * time.Minute,
+	PeerLifetime:                30 * time.Minute,
+	ReadTimeout:                 10 * time.Second,
+	WriteTimeout:                10 * time.Second,
+	ConnectTimeout:              10 * time.Second,
+}
+
 func createNew() s.Storage {
-	rs, err := miniredis.Run()
+	var ps s.Storage
+	var err error
+	ps, err = New(conf)
 	if err != nil {
-		panic(err)
+		fmt.Println("unable to create real Redis connection: ", err, " using simulator")
+		var rs *miniredis.Miniredis
+		rs, err = miniredis.Run()
+		if err != nil {
+			panic(err)
+		}
+		conf.Addresses = []string{rs.Addr()}
+		ps, err = New(conf)
 	}
-	redisURL := fmt.Sprintf("redis://@%s/0", rs.Addr())
-	ps, err := New(Config{
-		GarbageCollectionInterval:   10 * time.Minute,
-		PrometheusReportingInterval: 10 * time.Minute,
-		PeerLifetime:                30 * time.Minute,
-		RedisBroker:                 redisURL,
-		ReadTimeout:                 10 * time.Second,
-		WriteTimeout:                10 * time.Second,
-		ConnectTimeout:              10 * time.Second,
-	})
 	if err != nil {
 		panic(err)
 	}

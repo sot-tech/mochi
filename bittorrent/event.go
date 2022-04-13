@@ -55,10 +55,11 @@ func NewEvent(eventStr string) (Event, error) {
 }
 
 // String implements Stringer for an event.
-func (e Event) String() string {
+func (e Event) String() (s string) {
 	if name, ok := eventToString[e]; ok {
-		return name
+		s = name
+	} else {
+		s = "<unknown>"
 	}
-
-	panic("bittorrent: event has no associated name")
+	return
 }

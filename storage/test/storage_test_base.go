@@ -171,64 +171,75 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 
 func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 	for _, c := range testData {
-		th.st.Put("test", c.peer.String(), c.ih.RawString())
+		err := th.st.Put("test", storage.Entry{Key: c.peer.String(), Value: c.ih.RawString()})
+		require.Nil(t, err)
 
 		// check if exist in ctx we put
-		contains := th.st.Contains("test", c.peer.String())
+		contains, err := th.st.Contains("test", c.peer.String())
+		require.Nil(t, err)
 		require.True(t, contains)
 
 		// check if not exist in another ctx
-		contains = th.st.Contains("", c.peer.String())
+		contains, err = th.st.Contains("", c.peer.String())
+		require.Nil(t, err)
 		require.False(t, contains)
 
 		// check value and type in ctx we put
-		out := th.st.Load("test", c.peer.String())
+		out, err := th.st.Load("test", c.peer.String())
+		require.Nil(t, err)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
 		require.Equal(t, c.ih, ih)
 
 		// check value is nil in another ctx
-		dummy := th.st.Load("", c.peer.String())
+		dummy, err := th.st.Load("", c.peer.String())
+		require.Nil(t, err)
 		require.Nil(t, dummy)
 
-		th.st.Delete("test", c.peer.String())
+		err = th.st.Delete("test", c.peer.String())
+		require.Nil(t, err)
 
-		contains = th.st.Contains("peers", c.peer.String())
+		contains, err = th.st.Contains("peers", c.peer.String())
+		require.Nil(t, err)
 		require.False(t, contains)
 	}
 }
 
 func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
-	pairs := make([]storage.Pair, 0, len(testData))
-	keys := make([]any, 0, len(testData))
+	pairs := make([]storage.Entry, 0, len(testData))
+	keys := make([]string, 0, len(testData))
 	for _, c := range testData {
 		key := c.peer.String()
 		keys = append(keys, key)
-		pairs = append(pairs, storage.Pair{
-			Left:  key,
-			Right: c.ih.RawString(),
+		pairs = append(pairs, storage.Entry{
+			Key:   key,
+			Value: c.ih.RawString(),
 		})
 	}
-	th.st.BulkPut("test", pairs...)
+	err := th.st.BulkPut("test", pairs...)
+	require.Nil(t, err)
 
 	// check if exist in ctx we put
 	for _, k := range keys {
-		contains := th.st.Contains("test", k)
+		contains, err := th.st.Contains("test", k)
+		require.Nil(t, err)
 		require.True(t, contains)
 	}
 
 	// check value and type in ctx we put
 	for _, p := range pairs {
-		out := th.st.Load("test", p.Left)
+		out, _ := th.st.Load("test", p.Key)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
-		require.Equal(t, p.Right, ih.RawString())
+		require.Equal(t, p.Value, ih.RawString())
 	}
 
-	th.st.Delete("test", keys...)
+	err = th.st.Delete("test", keys...)
+	require.Nil(t, err)
 
 	for _, k := range keys {
-		contains := th.st.Contains("test", k)
+		contains, err := th.st.Contains("test", k)
+		require.Nil(t, err)
 		require.False(t, contains)
 	}
 }

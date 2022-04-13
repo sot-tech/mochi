@@ -6,6 +6,7 @@ package bittorrent
 import (
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -23,7 +24,7 @@ const PeerIDLen = 20
 type PeerID [PeerIDLen]byte
 
 // ErrInvalidPeerIDSize holds error about invalid PeerID size
-var ErrInvalidPeerIDSize = errors.New("peer ID must be 20 bytes")
+var ErrInvalidPeerIDSize = fmt.Errorf("peer ID must be %d bytes", PeerIDLen)
 
 // NewPeerID creates a PeerID from a byte slice.
 //
@@ -63,7 +64,7 @@ var (
 	// ErrInvalidHashType holds error about invalid InfoHash input type
 	ErrInvalidHashType = errors.New("info hash must be provided as byte slice or raw/hex string")
 	// ErrInvalidHashSize holds error about invalid InfoHash size
-	ErrInvalidHashSize = errors.New("info hash must be either 20 (for torrent V1) or 32 (V2) bytes")
+	ErrInvalidHashSize = fmt.Errorf("info hash must be either %d (for torrent V1) or %d (V2) bytes", InfoHashV1Len, InfoHashV2Len)
 )
 
 // TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
@@ -77,12 +78,12 @@ func (i InfoHash) TruncateV1() InfoHash {
 }
 
 // NewInfoHash creates an InfoHash from a byte slice or raw/hex string.
-func NewInfoHash(b any) (InfoHash, error) {
-	if b == nil {
+func NewInfoHash(data any) (InfoHash, error) {
+	if data == nil {
 		return NoneInfoHash, ErrInvalidHashType
 	}
 	var ba []byte
-	switch t := b.(type) {
+	switch t := data.(type) {
 	case [InfoHashV1Len]byte:
 		ba = t[:]
 	case [InfoHashV2Len]byte:
@@ -225,7 +226,7 @@ func (af AddressFamily) String() string {
 	case IPv6:
 		return "IPv6"
 	default:
-		panic("tried to print unknown AddressFamily")
+		return "<unknown>"
 	}
 }
 
@@ -253,11 +254,58 @@ type Peer struct {
 	Port uint16
 }
 
+// PeerMinimumLen is the least allowed length of string serialized Peer
+const PeerMinimumLen = PeerIDLen + 2 + net.IPv4len
+
+var (
+	// ErrInvalidAddressFamily holds error about invalid address family
+	ErrInvalidAddressFamily = fmt.Errorf("address family must be %d(IPv4) or %d(IPv6)", IPv4, IPv6)
+
+	// ErrInvalidPeerDataSize holds error about invalid Peer data size
+	ErrInvalidPeerDataSize = fmt.Errorf("invalid peer data it must be at least %d bytes (InfoHash + Port + IPv4)", PeerMinimumLen)
+)
+
+// NewPeer constructs Peer from serialized by Peer.RawString data: PeerID[20by]Port[2by]net.IP[4/16by]
+func NewPeer(data string) (Peer, error) {
+	var peer Peer
+	if len(data) < PeerMinimumLen {
+		return peer, ErrInvalidPeerDataSize
+	}
+	peerID, err := NewPeerID([]byte(data[:PeerIDLen]))
+	if err == nil {
+		peer = Peer{
+			ID:   peerID,
+			Port: binary.BigEndian.Uint16([]byte(data[PeerIDLen : PeerIDLen+2])),
+			IP:   IP{IP: net.IP(data[PeerIDLen+2:])},
+		}
+
+		if ip := peer.IP.To4(); ip != nil {
+			peer.IP.IP = ip
+			peer.IP.AddressFamily = IPv4
+		} else if len(peer.IP.IP) == net.IPv6len { // implies toReturn.IP.To4() == nil
+			peer.IP.AddressFamily = IPv6
+		} else {
+			err = ErrInvalidAddressFamily
+		}
+	}
+
+	return peer, err
+}
+
 // String implements fmt.Stringer to return a human-readable representation.
 // The string will have the format <PeerID>@[<IP>]:<port>, for example
 // "0102030405060708090a0b0c0d0e0f1011121314@[10.11.12.13]:1234"
 func (p Peer) String() string {
 	return fmt.Sprintf("%s@[%s]:%d", p.ID.String(), p.IP.String(), p.Port)
+}
+
+// RawString generates concatenation of PeerID, net port and IP-address
+func (p Peer) RawString() string {
+	b := make([]byte, PeerIDLen+2+len(p.IP.IP))
+	copy(b[:PeerIDLen], p.ID[:])
+	binary.BigEndian.PutUint16(b[PeerIDLen:PeerIDLen+2], p.Port)
+	copy(b[PeerIDLen+2:], p.IP.IP)
+	return string(b)
 }
 
 // LogFields renders the current peer as a set of Logrus fields.

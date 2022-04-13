@@ -103,8 +103,7 @@ func compact4(peer bittorrent.Peer) (buf []byte) {
 	} else {
 		buf = ip
 	}
-	buf = append(buf, byte(peer.Port>>8))
-	buf = append(buf, byte(peer.Port&0xff))
+	buf = append(buf, byte(peer.Port>>8), byte(peer.Port))
 	return
 }
 
@@ -114,8 +113,7 @@ func compact6(peer bittorrent.Peer) (buf []byte) {
 	} else {
 		buf = ip
 	}
-	buf = append(buf, byte(peer.Port>>8))
-	buf = append(buf, byte(peer.Port&0xff))
+	buf = append(buf, byte(peer.Port>>8), byte(peer.Port))
 	return
 }
 

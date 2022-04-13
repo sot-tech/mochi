@@ -50,7 +50,7 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 		err = h.store.GraduateLeecher(req.InfoHash, req.Peer)
 		return ctx, err
 	case req.Left == 0:
-		// Completed events will also have Left == 0, but by making this
+		// Completed events will also have Key == 0, but by making this
 		// an extra case we can treat "old" seeders differently from
 		// graduating leechers. (Calling PutSeeder is probably faster
 		// than calling GraduateLeecher.)
@@ -124,14 +124,29 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 
 	switch req.IP.AddressFamily {
 	case bittorrent.IPv4:
-		resp.IPv4Peers = peers
+		resp.IPv4Peers = mergePeers(resp.IPv4Peers, peers)
 	case bittorrent.IPv6:
-		resp.IPv6Peers = peers
+		resp.IPv6Peers = mergePeers(resp.IPv6Peers, peers)
 	default:
-		panic("attempted to append peer that is neither IPv4 nor IPv6")
+		err = bittorrent.ErrInvalidAddressFamily
 	}
 
-	return nil
+	return err
+}
+
+func mergePeers(p0, p1 []bittorrent.Peer) (result []bittorrent.Peer) {
+	peers := make(map[string]bittorrent.Peer, len(p0)+len(p1))
+	for _, p := range p0 {
+		peers[p.RawString()] = p
+	}
+	for _, p := range p1 {
+		peers[p.RawString()] = p
+	}
+	result = make([]bittorrent.Peer, 0, len(peers))
+	for _, v := range peers {
+		result = append(result, v)
+	}
+	return
 }
 
 func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {

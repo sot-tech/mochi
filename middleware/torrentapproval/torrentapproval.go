@@ -6,10 +6,11 @@ import (
 	"context"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
-	"gopkg.in/yaml.v3"
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
