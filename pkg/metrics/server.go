@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/pprof"
+	"net/netip"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -18,6 +19,18 @@ import (
 // endpoint.
 type Server struct {
 	srv *http.Server
+}
+
+// AddressFamily returns the label value for reporting the address family of an IP address.
+func AddressFamily(ip netip.Addr) string {
+	switch {
+	case ip.Is4(), ip.Is4In6():
+		return "IPv4"
+	case ip.Is6():
+		return "IPv6"
+	default:
+		return "<unknown>"
+	}
 }
 
 // Stop shuts down the server.

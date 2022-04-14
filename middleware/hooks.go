@@ -96,7 +96,7 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	s := h.store.ScrapeSwarm(req.InfoHash, req.IP.AddressFamily)
+	s := h.store.ScrapeSwarm(req.InfoHash, req.Peer)
 	resp.Incomplete = s.Incomplete
 	resp.Complete = s.Complete
 
@@ -106,7 +106,8 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 
 func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) error {
 	seeding := req.Left == 0
-	peers, err := h.store.AnnouncePeers(req.InfoHash, seeding, int(req.NumWant), req.Peer)
+	max := int(req.NumWant)
+	peers, err := h.store.AnnouncePeers(req.InfoHash, seeding, max, req.Peer)
 	if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 		return err
 	}
@@ -123,19 +124,19 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 		peers = append(peers, req.Peer)
 	}
 
-	switch req.IP.AddressFamily {
-	case bittorrent.IPv4:
-		resp.IPv4Peers = mergePeers(resp.IPv4Peers, peers)
-	case bittorrent.IPv6:
-		resp.IPv6Peers = mergePeers(resp.IPv6Peers, peers)
+	switch addr := req.Peer.Addr(); {
+	case addr.Is4(), addr.Is4In6():
+		resp.IPv4Peers = mergePeers(resp.IPv4Peers, peers, max)
+	case addr.Is6():
+		resp.IPv6Peers = mergePeers(resp.IPv6Peers, peers, max)
 	default:
-		err = bittorrent.ErrInvalidAddressFamily
+		err = bittorrent.ErrInvalidIP
 	}
 
 	return err
 }
 
-func mergePeers(p0, p1 []bittorrent.Peer) (result []bittorrent.Peer) {
+func mergePeers(p0, p1 []bittorrent.Peer, max int) (result []bittorrent.Peer) {
 	peers := make(map[string]bittorrent.Peer, len(p0)+len(p1))
 	for _, p := range p0 {
 		peers[p.RawString()] = p
@@ -145,7 +146,11 @@ func mergePeers(p0, p1 []bittorrent.Peer) (result []bittorrent.Peer) {
 	}
 	result = make([]bittorrent.Peer, 0, len(peers))
 	for _, v := range peers {
-		result = append(result, v)
+		if len(peers) < max {
+			result = append(result, v)
+		} else {
+			break
+		}
 	}
 	return
 }
@@ -156,7 +161,7 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 	}
 
 	for _, infoHash := range req.InfoHashes {
-		resp.Files = append(resp.Files, h.store.ScrapeSwarm(infoHash, req.AddressFamily))
+		resp.Files = append(resp.Files, h.store.ScrapeSwarm(infoHash, req.Peer))
 	}
 
 	return ctx, nil

@@ -55,33 +55,33 @@ var ErrDriverDoesNotExist = errors.New("peer store driver with that name does no
 type Storage interface {
 	// PutSeeder adds a Seeder to the Swarm identified by the provided
 	// InfoHash.
-	PutSeeder(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
+	PutSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteSeeder removes a Seeder from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteSeeder(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
+	DeleteSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// PutLeecher adds a Leecher to the Swarm identified by the provided
 	// InfoHash.
 	// If the Swarm does not exist already, it is created.
-	PutLeecher(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
+	PutLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteLeecher removes a Leecher from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteLeecher(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
+	DeleteLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// GraduateLeecher promotes a Leecher to a Seeder in the Swarm
 	// identified by the provided InfoHash.
 	//
 	// If the given Peer is not present as a Leecher or the swarm does not exist
 	// already, the Peer is added as a Seeder and no error is returned.
-	GraduateLeecher(infoHash bittorrent.InfoHash, p bittorrent.Peer) error
+	GraduateLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// AnnouncePeers is a best effort attempt to return Peers from the Swarm
 	// identified by the provided InfoHash.
@@ -98,7 +98,7 @@ type Storage interface {
 	//   leechers
 	//
 	// Returns ErrResourceDoesNotExist if the provided InfoHash is not tracked.
-	AnnouncePeers(infoHash bittorrent.InfoHash, seeder bool, numWant int, p bittorrent.Peer) (peers []bittorrent.Peer, err error)
+	AnnouncePeers(infoHash bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error)
 
 	// ScrapeSwarm returns information required to answer a Scrape request
 	// about a Swarm identified by the given InfoHash.
@@ -108,7 +108,7 @@ type Storage interface {
 	// filling the Snatches field is optional.
 	//
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
-	ScrapeSwarm(infoHash bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) bittorrent.Scrape
+	ScrapeSwarm(infoHash bittorrent.InfoHash, peer bittorrent.Peer) bittorrent.Scrape
 
 	// Put used to place arbitrary k-v data with specified context
 	// into storage. ctx parameter used to group data
@@ -117,7 +117,7 @@ type Storage interface {
 
 	// BulkPut used to place array of k-v data in specified context.
 	// Useful when several data entries should be added in single transaction/connection
-	BulkPut(ctx string, pairs ...Entry) error
+	BulkPut(ctx string, values ...Entry) error
 
 	// Contains checks if any data in specified context exist
 	Contains(ctx string, key string) (bool, error)

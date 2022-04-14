@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -41,8 +42,6 @@ var (
 	}
 
 	errMalformedPacket   = bittorrent.ClientError("malformed packet")
-	errMalformedIP       = bittorrent.ClientError("malformed IP address")
-	errMalformedEvent    = bittorrent.ClientError("malformed event ID")
 	errUnknownAction     = bittorrent.ClientError("unknown action ID")
 	errBadConnectionID   = bittorrent.ClientError("bad connection ID")
 	errUnknownOptionType = bittorrent.ClientError("unknown option type")
@@ -89,19 +88,23 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 
 	eventID := int(r.Packet[83])
 	if eventID >= len(eventIDs) {
-		return nil, errMalformedEvent
+		return nil, bittorrent.ErrUnknownEvent
 	}
 
 	ip := r.IP
 	ipProvided := false
-	if ipBytes := r.Packet[84:ipEnd]; opts.AllowIPSpoofing {
-		// Make sure the bytes are copied to a new slice.
-		copy(ip, ipBytes)
+	if opts.AllowIPSpoofing {
+		ipBytes := r.Packet[84:ipEnd]
+		spoofed, ok := netip.AddrFromSlice(ipBytes)
+		if !ok {
+			return nil, bittorrent.ErrInvalidIP
+		}
 		ipProvided = true
+		ip = spoofed
 	}
-	if !opts.AllowIPSpoofing && r.IP == nil {
+	if !opts.AllowIPSpoofing && r.IP.IsUnspecified() {
 		// We have no IP address to fallback on.
-		return nil, errMalformedIP
+		return nil, bittorrent.ErrInvalidIP
 	}
 
 	numWant := binary.BigEndian.Uint32(r.Packet[ipEnd+4 : ipEnd+8])
@@ -133,18 +136,17 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		NumWantProvided: true,
 		EventProvided:   true,
 		Peer: bittorrent.Peer{
-			ID:   peerID,
-			IP:   bittorrent.IP{IP: ip},
-			Port: port,
+			ID:       peerID,
+			AddrPort: netip.AddrPortFrom(ip, port),
 		},
 		Params: params,
 	}
 
-	if err := bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
-		return nil, err
+	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
+		request = nil
 	}
 
-	return request, nil
+	return request, err
 }
 
 type buffer struct {

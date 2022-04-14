@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"net/netip"
 	"reflect"
 	"runtime"
 	"sync"
@@ -228,12 +229,12 @@ func (ps *store) getClock() int64 {
 	return timecache.NowUnixNano()
 }
 
-func (ps *store) shardIndex(infoHash bittorrent.InfoHash, af bittorrent.AddressFamily) uint32 {
+func (ps *store) shardIndex(infoHash bittorrent.InfoHash, addr netip.Addr) uint32 {
 	// There are twice the amount of shards specified by the user, the first
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
 	// IPv6 swarms.
 	idx := binary.BigEndian.Uint32([]byte(infoHash[:4])) % (uint32(len(ps.shards)) / 2)
-	if af == bittorrent.IPv6 {
+	if addr.Is6() && !addr.Is4In6() {
 		idx += uint32(len(ps.shards) / 2)
 	}
 	return idx
@@ -248,7 +249,7 @@ func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 
 	pk := p.RawString()
 
-	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, p.Addr())]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -279,7 +280,7 @@ func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 
 	pk := p.RawString()
 
-	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, p.Addr())]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -312,7 +313,7 @@ func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
 
 	pk := p.RawString()
 
-	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, p.Addr())]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -343,7 +344,7 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 
 	pk := p.RawString()
 
-	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, p.Addr())]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -376,7 +377,7 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) erro
 
 	pk := p.RawString()
 
-	shard := ps.shards[ps.shardIndex(ih, p.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, p.Addr())]
 	shard.Lock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -404,14 +405,14 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) erro
 	return nil
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	shard := ps.shards[ps.shardIndex(ih, announcer.IP.AddressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, peer.Addr())]
 	shard.RLock()
 
 	if _, ok := shard.swarms[ih]; !ok {
@@ -445,7 +446,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
 			leechers := shard.swarms[ih].leechers
-			announcerPK := announcer.RawString()
+			announcerPK := peer.RawString()
 			for pk := range leechers {
 				if pk == announcerPK {
 					continue
@@ -465,7 +466,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorrent.AddressFamily) (resp bittorrent.Scrape) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp bittorrent.Scrape) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -473,7 +474,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, addressFamily bittorrent.Ad
 	}
 
 	resp.InfoHash = ih
-	shard := ps.shards[ps.shardIndex(ih, addressFamily)]
+	shard := ps.shards[ps.shardIndex(ih, peer.Addr())]
 	shard.RLock()
 
 	swarm, ok := shard.swarms[ih]

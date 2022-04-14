@@ -34,7 +34,7 @@ func (th *testHolder) DeleteSeeder(t *testing.T) {
 func (th *testHolder) PutLeecher(t *testing.T) {
 	for _, c := range testData {
 		peer := v4Peer
-		if c.peer.IP.AddressFamily == bittorrent.IPv6 {
+		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
 		err := th.st.PutLeecher(c.ih, peer)
@@ -52,7 +52,7 @@ func (th *testHolder) DeleteLeecher(t *testing.T) {
 func (th *testHolder) AnnouncePeers(t *testing.T) {
 	for _, c := range testData {
 		peer := v4Peer
-		if c.peer.IP.AddressFamily == bittorrent.IPv6 {
+		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
 		_, err := th.st.AnnouncePeers(c.ih, false, 50, peer)
@@ -62,7 +62,7 @@ func (th *testHolder) AnnouncePeers(t *testing.T) {
 
 func (th *testHolder) ScrapeSwarm(t *testing.T) {
 	for _, c := range testData {
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer.IP.AddressFamily)
+		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
 		require.Equal(t, uint32(0), scrape.Complete)
 		require.Equal(t, uint32(0), scrape.Incomplete)
 		require.Equal(t, uint32(0), scrape.Snatches)
@@ -72,7 +72,7 @@ func (th *testHolder) ScrapeSwarm(t *testing.T) {
 func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
 		peer := v4Peer
-		if c.peer.IP.AddressFamily == bittorrent.IPv6 {
+		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
 		err := th.st.PutLeecher(c.ih, c.peer)
@@ -87,7 +87,7 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer.IP.AddressFamily)
+		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
 		require.Equal(t, uint32(2), scrape.Incomplete)
 		require.Equal(t, uint32(0), scrape.Complete)
 
@@ -103,7 +103,7 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
 		peer := v4Peer
-		if c.peer.IP.AddressFamily == bittorrent.IPv6 {
+		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
 		err := th.st.PutSeeder(c.ih, c.peer)
@@ -114,7 +114,7 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer.IP.AddressFamily)
+		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
 		require.Equal(t, uint32(1), scrape.Incomplete)
 		require.Equal(t, uint32(1), scrape.Complete)
 
@@ -130,7 +130,7 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
 		peer := v4Peer
-		if c.peer.IP.AddressFamily == bittorrent.IPv6 {
+		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
 		err := th.st.PutLeecher(c.ih, c.peer)

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/pkg/errors"
@@ -179,17 +180,17 @@ func (r AnnounceResponse) LogFields() log.Fields {
 
 // ScrapeRequest represents the parsed parameters from a scrape request.
 type ScrapeRequest struct {
-	AddressFamily AddressFamily
-	InfoHashes    []InfoHash
-	Params        Params
+	Peer
+	InfoHashes []InfoHash
+	Params     Params
 }
 
 // LogFields renders the current response as a set of log fields.
 func (r ScrapeRequest) LogFields() log.Fields {
 	return log.Fields{
-		"addressFamily": r.AddressFamily,
-		"infoHashes":    r.InfoHashes,
-		"params":        r.Params,
+		"peer":       r.Peer,
+		"infoHashes": r.InfoHashes,
+		"params":     r.Params,
 	}
 }
 
@@ -216,54 +217,18 @@ type Scrape struct {
 	Incomplete uint32
 }
 
-// AddressFamily is the address family of an IP address.
-type AddressFamily uint8
-
-func (af AddressFamily) String() string {
-	switch af {
-	case IPv4:
-		return "IPv4"
-	case IPv6:
-		return "IPv6"
-	default:
-		return "<unknown>"
-	}
-}
-
-// AddressFamily constants.
-const (
-	IPv4 AddressFamily = iota
-	IPv6
-)
-
-// IP is a net.IP with an AddressFamily.
-type IP struct {
-	net.IP
-	AddressFamily
-}
-
-func (ip IP) String() string {
-	return ip.IP.String()
-}
-
 // Peer represents the connection details of a peer that is returned in an
 // announce response.
 type Peer struct {
-	ID   PeerID
-	IP   IP
-	Port uint16
+	ID PeerID
+	netip.AddrPort
 }
 
 // PeerMinimumLen is the least allowed length of string serialized Peer
 const PeerMinimumLen = PeerIDLen + 2 + net.IPv4len
 
-var (
-	// ErrInvalidAddressFamily holds error about invalid address family
-	ErrInvalidAddressFamily = fmt.Errorf("address family must be %d(IPv4) or %d(IPv6)", IPv4, IPv6)
-
-	// ErrInvalidPeerDataSize holds error about invalid Peer data size
-	ErrInvalidPeerDataSize = fmt.Errorf("invalid peer data it must be at least %d bytes (InfoHash + Port + IPv4)", PeerMinimumLen)
-)
+// ErrInvalidPeerDataSize holds error about invalid Peer data size
+var ErrInvalidPeerDataSize = fmt.Errorf("invalid peer data it must be at least %d bytes (InfoHash + Port + IPv4)", PeerMinimumLen)
 
 // NewPeer constructs Peer from serialized by Peer.RawString data: PeerID[20by]Port[2by]net.IP[4/16by]
 func NewPeer(data string) (Peer, error) {
@@ -271,21 +236,19 @@ func NewPeer(data string) (Peer, error) {
 	if len(data) < PeerMinimumLen {
 		return peer, ErrInvalidPeerDataSize
 	}
-	peerID, err := NewPeerID([]byte(data[:PeerIDLen]))
+	b := []byte(data)
+	peerID, err := NewPeerID(b[:PeerIDLen])
 	if err == nil {
-		peer = Peer{
-			ID:   peerID,
-			Port: binary.BigEndian.Uint16([]byte(data[PeerIDLen : PeerIDLen+2])),
-			IP:   IP{IP: net.IP(data[PeerIDLen+2:])},
-		}
-
-		if ip := peer.IP.To4(); ip != nil {
-			peer.IP.IP = ip
-			peer.IP.AddressFamily = IPv4
-		} else if len(peer.IP.IP) == net.IPv6len { // implies toReturn.IP.To4() == nil
-			peer.IP.AddressFamily = IPv6
+		if addr, isOk := netip.AddrFromSlice(b[PeerIDLen+2:]); isOk {
+			peer = Peer{
+				ID: peerID,
+				AddrPort: netip.AddrPortFrom(
+					addr,
+					binary.BigEndian.Uint16(b[PeerIDLen:PeerIDLen+2]),
+				),
+			}
 		} else {
-			err = ErrInvalidAddressFamily
+			err = ErrInvalidIP
 		}
 	}
 
@@ -296,15 +259,16 @@ func NewPeer(data string) (Peer, error) {
 // The string will have the format <PeerID>@[<IP>]:<port>, for example
 // "0102030405060708090a0b0c0d0e0f1011121314@[10.11.12.13]:1234"
 func (p Peer) String() string {
-	return fmt.Sprintf("%s@[%s]:%d", p.ID.String(), p.IP.String(), p.Port)
+	return fmt.Sprintf("%s@[%s]:%d", p.ID, p.Addr(), p.Port())
 }
 
 // RawString generates concatenation of PeerID, net port and IP-address
 func (p Peer) RawString() string {
-	b := make([]byte, PeerIDLen+2+len(p.IP.IP))
+	ip := p.Addr().Unmap()
+	b := make([]byte, PeerIDLen+2+(ip.BitLen()/8))
 	copy(b[:PeerIDLen], p.ID[:])
-	binary.BigEndian.PutUint16(b[PeerIDLen:PeerIDLen+2], p.Port)
-	copy(b[PeerIDLen+2:], p.IP.IP)
+	binary.BigEndian.PutUint16(b[PeerIDLen:PeerIDLen+2], p.Port())
+	copy(b[PeerIDLen+2:], ip.AsSlice())
 	return string(b)
 }
 
@@ -312,8 +276,8 @@ func (p Peer) RawString() string {
 func (p Peer) LogFields() log.Fields {
 	return log.Fields{
 		"ID":   p.ID,
-		"IP":   p.IP,
-		"port": p.Port,
+		"IP":   p.Addr().String(),
+		"port": p.Port(),
 	}
 }
 
@@ -321,7 +285,10 @@ func (p Peer) LogFields() log.Fields {
 func (p Peer) Equal(x Peer) bool { return p.EqualEndpoint(x) && p.ID == x.ID }
 
 // EqualEndpoint reports whether p and x have the same endpoint.
-func (p Peer) EqualEndpoint(x Peer) bool { return p.Port == x.Port && p.IP.Equal(x.IP.IP) }
+func (p Peer) EqualEndpoint(x Peer) bool {
+	return p.Port() == x.Port() &&
+		p.Addr().Compare(x.Addr()) == 0
+}
 
 // ClientError represents an error that should be exposed to the client over
 // the BitTorrent protocol implementation.

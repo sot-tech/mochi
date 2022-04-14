@@ -1,12 +1,11 @@
 package bittorrent
 
 import (
-	"errors"
 	"strings"
 )
 
 // ErrUnknownEvent is returned when New fails to return an event.
-var ErrUnknownEvent = errors.New("unknown event")
+var ErrUnknownEvent = ClientError("unknown event")
 
 // Event represents an event done by a BitTorrent client.
 type Event uint8
@@ -46,12 +45,14 @@ func init() {
 }
 
 // NewEvent returns the proper Event given a string.
-func NewEvent(eventStr string) (Event, error) {
+func NewEvent(eventStr string) (evt Event, err error) {
 	if e, ok := stringToEvent[strings.ToLower(eventStr)]; ok {
-		return e, nil
+		evt = e
+	} else {
+		evt, err = None, ErrUnknownEvent
 	}
 
-	return None, ErrUnknownEvent
+	return
 }
 
 // String implements Stringer for an event.

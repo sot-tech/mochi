@@ -1,21 +1,23 @@
 package bittorrent
 
 import (
-	"net"
+	"net/netip"
 
 	"github.com/sot-tech/mochi/pkg/log"
 )
 
-// ErrInvalidIP indicates an invalid IP for an Announce.
-var ErrInvalidIP = ClientError("invalid IP")
+var (
+	// ErrInvalidIP indicates an invalid IP for an Announce.
+	ErrInvalidIP = ClientError("invalid IP")
 
-// ErrInvalidPort indicates an invalid Port for an Announce.
-var ErrInvalidPort = ClientError("invalid port")
+	// ErrInvalidPort indicates an invalid Port for an Announce.
+	ErrInvalidPort = ClientError("invalid port")
+)
 
 // SanitizeAnnounce enforces a max and default NumWant and coerces the peer's
 // IP address into the proper format.
 func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) error {
-	if r.Port == 0 {
+	if r.Port() == 0 {
 		return ErrInvalidPort
 	}
 
@@ -25,12 +27,8 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 		r.NumWant = maxNumWant
 	}
 
-	if ip := r.Peer.IP.To4(); ip != nil {
-		r.Peer.IP.IP = ip
-		r.Peer.IP.AddressFamily = IPv4
-	} else if len(r.Peer.IP.IP) == net.IPv6len { // implies r.Peer.IP.To4() == nil
-		r.Peer.IP.AddressFamily = IPv6
-	} else {
+	r.AddrPort = netip.AddrPortFrom(r.Addr().Unmap(), r.Port())
+	if !r.Addr().IsValid() || r.Addr().IsUnspecified() {
 		return ErrInvalidIP
 	}
 

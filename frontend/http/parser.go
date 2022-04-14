@@ -2,8 +2,8 @@ package http
 
 import (
 	"errors"
-	"net"
 	"net/http"
+	"net/netip"
 
 	"github.com/sot-tech/mochi/bittorrent"
 )
@@ -28,6 +28,16 @@ const (
 	defaultMaxScrapeInfoHashes = 50
 )
 
+var (
+	errNoInfoHash                 = bittorrent.ClientError("no info hash supplied")
+	errMultipleInfoHashes         = bittorrent.ClientError("multiple info hashes supplied")
+	errInvalidPeerID              = bittorrent.ClientError("peer ID invalid or not provided")
+	errInvalidParameterLeft       = bittorrent.ClientError("parameter 'left' invalid or not provided")
+	errInvalidParameterDownloaded = bittorrent.ClientError("parameter 'downloaded' invalid or not provided")
+	errInvalidParameterUploaded   = bittorrent.ClientError("parameter 'uploaded' invalid or not provided")
+	errInvalidParameterNumWant    = bittorrent.ClientError("parameter 'num want' invalid or not provided")
+)
+
 // ParseAnnounce parses an bittorrent.AnnounceRequest from an http.Request.
 func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
 	qp, err := bittorrent.ParseURLData(r.RequestURI)
@@ -41,9 +51,8 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	var eventStr string
 	eventStr, request.EventProvided = qp.String("event")
 	if request.EventProvided {
-		request.Event, err = bittorrent.NewEvent(eventStr)
-		if err != nil {
-			return nil, bittorrent.ClientError("failed to provide valid client event")
+		if request.Event, err = bittorrent.NewEvent(eventStr); err != nil {
+			return nil, err
 		}
 	} else {
 		request.Event = bittorrent.None
@@ -56,17 +65,17 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	// Parse the infohash from the request.
 	infoHashes := qp.InfoHashes()
 	if len(infoHashes) < 1 {
-		return nil, bittorrent.ClientError("no info_hash parameter supplied")
+		return nil, errNoInfoHash
 	}
 	if len(infoHashes) > 1 {
-		return nil, bittorrent.ClientError("multiple info_hash parameters supplied")
+		return nil, errMultipleInfoHashes
 	}
 	request.InfoHash = infoHashes[0]
 
 	// Parse the PeerID from the request.
 	peerID, ok := qp.String("peer_id")
 	if !ok {
-		return nil, bittorrent.ClientError("failed to parse parameter: peer_id")
+		return nil, errInvalidPeerID
 	}
 	request.Peer.ID, err = bittorrent.NewPeerID([]byte(peerID))
 	if err != nil {
@@ -75,25 +84,25 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	// Determine the number of remaining bytes for the client.
 	request.Left, err = qp.Uint("left", 64)
 	if err != nil {
-		return nil, bittorrent.ClientError("failed to parse parameter: left")
+		return nil, errInvalidParameterLeft
 	}
 
 	// Determine the number of bytes downloaded by the client.
 	request.Downloaded, err = qp.Uint("downloaded", 64)
 	if err != nil {
-		return nil, bittorrent.ClientError("failed to parse parameter: downloaded")
+		return nil, errInvalidParameterDownloaded
 	}
 
 	// Determine the number of bytes shared by the client.
 	request.Uploaded, err = qp.Uint("uploaded", 64)
 	if err != nil {
-		return nil, bittorrent.ClientError("failed to parse parameter: uploaded")
+		return nil, errInvalidParameterUploaded
 	}
 
 	// Determine the number of peers the client wants in the response.
 	numwant, err := qp.Uint("numwant", 32)
 	if err != nil && !errors.Is(err, bittorrent.ErrKeyNotFound) {
-		return nil, bittorrent.ClientError("failed to parse parameter: numwant")
+		return nil, errInvalidParameterNumWant
 	}
 	// If there were no errors, the user actually provided the numwant.
 	request.NumWantProvided = err == nil
@@ -102,21 +111,22 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	// Parse the port where the client is listening.
 	port, err := qp.Uint("port", 16)
 	if err != nil {
-		return nil, bittorrent.ClientError("failed to parse parameter: port")
+		return nil, bittorrent.ErrInvalidPort
 	}
-	request.Peer.Port = uint16(port)
 
 	// Parse the IP address where the client is listening.
-	request.Peer.IP.IP, request.IPProvided = requestedIP(r, qp, opts)
-	if request.Peer.IP.IP == nil {
-		return nil, bittorrent.ClientError("failed to parse peer IP address")
+	ip, spoofed, err := requestedIP(r, qp, opts)
+	if err != nil {
+		return nil, bittorrent.ErrInvalidIP
+	}
+	request.Peer.AddrPort = netip.AddrPortFrom(ip, uint16(port))
+	request.IPProvided = spoofed
+
+	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
+		request = nil
 	}
 
-	if err := bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
-		return nil, err
-	}
-
-	return request, nil
+	return request, err
 }
 
 // ParseScrape parses an bittorrent.ScrapeRequest from an http.Request.
@@ -128,7 +138,7 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 
 	infoHashes := qp.InfoHashes()
 	if len(infoHashes) < 1 {
-		return nil, bittorrent.ClientError("no info_hash parameter supplied")
+		return nil, errNoInfoHash
 	}
 
 	request := &bittorrent.ScrapeRequest{
@@ -144,27 +154,29 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 }
 
 // requestedIP determines the IP address for a BitTorrent client request.
-func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (ip net.IP, provided bool) {
+func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (netip.Addr, bool, error) {
 	if opts.AllowIPSpoofing {
 		if ipstr, ok := p.String("ip"); ok {
-			return net.ParseIP(ipstr), true
+			addr, err := netip.ParseAddr(ipstr)
+			return addr, true, err
 		}
 
 		if ipstr, ok := p.String("ipv4"); ok {
-			return net.ParseIP(ipstr), true
+			addr, err := netip.ParseAddr(ipstr)
+			return addr, true, err
 		}
 
 		if ipstr, ok := p.String("ipv6"); ok {
-			return net.ParseIP(ipstr), true
+			addr, err := netip.ParseAddr(ipstr)
+			return addr, true, err
 		}
 	}
 
-	if opts.RealIPHeader != "" {
-		if ip := r.Header.Get(opts.RealIPHeader); ip != "" {
-			return net.ParseIP(ip), false
-		}
+	if ipstr := r.Header.Get(opts.RealIPHeader); ipstr != "" && opts.RealIPHeader != "" {
+		addr, err := netip.ParseAddr(ipstr)
+		return addr, false, err
 	}
 
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return net.ParseIP(host), false
+	addrPort, err := netip.ParseAddrPort(r.RemoteAddr)
+	return addrPort.Addr(), false, err
 }

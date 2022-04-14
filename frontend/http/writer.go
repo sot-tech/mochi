@@ -98,29 +98,25 @@ func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse)
 }
 
 func compact4(peer bittorrent.Peer) (buf []byte) {
-	if ip := peer.IP.To4(); ip == nil {
-		panic("non-IPv4 IP for Peer in IPv4Peers")
-	} else {
-		buf = ip
-	}
-	buf = append(buf, byte(peer.Port>>8), byte(peer.Port))
+	ip := peer.AddrPort.Addr().As4()
+	buf = append(buf, ip[:]...)
+	port := peer.AddrPort.Port()
+	buf = append(buf, byte(port>>8), byte(port&0xff))
 	return
 }
 
 func compact6(peer bittorrent.Peer) (buf []byte) {
-	if ip := peer.IP.To16(); ip == nil {
-		panic("non-IPv6 IP for Peer in IPv6Peers")
-	} else {
-		buf = ip
-	}
-	buf = append(buf, byte(peer.Port>>8), byte(peer.Port))
+	ip := peer.AddrPort.Addr().As16()
+	buf = append(buf, ip[:]...)
+	port := peer.AddrPort.Port()
+	buf = append(buf, byte(port>>8), byte(port&0xff))
 	return
 }
 
 func dict(peer bittorrent.Peer) map[string]any {
 	return map[string]any{
 		"peer id": string(peer.ID[:]),
-		"ip":      peer.IP.String(),
-		"port":    peer.Port,
+		"ip":      peer.Addr(),
+		"port":    peer.Port(),
 	}
 }

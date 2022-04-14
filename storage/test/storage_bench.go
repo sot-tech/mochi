@@ -2,13 +2,13 @@ package test
 
 import (
 	"math/rand"
-	"net"
+	"net/netip"
 	"runtime"
 	"sync/atomic"
 	"testing"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/randseed"
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -28,23 +28,25 @@ func generateInfoHashes() (a [1000]bittorrent.InfoHash) {
 }
 
 func generatePeers() (a [1000]bittorrent.Peer) {
-	r := rand.New(rand.NewSource(randseed.GenSeed()))
 	for i := range a {
 		ip := make([]byte, 4)
-		n, err := r.Read(ip)
+		n, err := rand.Read(ip)
 		if err != nil || n != 4 {
 			panic("unable to create random bytes")
 		}
 		id := [bittorrent.PeerIDLen]byte{}
-		n, err = r.Read(id[:])
+		n, err = rand.Read(id[:])
 		if err != nil || n != bittorrent.InfoHashV1Len {
 			panic("unable to create random bytes")
 		}
-		port := uint16(r.Uint32())
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			panic("unable to create ip from random bytes")
+		}
+		port := uint16(rand.Uint32())
 		a[i] = bittorrent.Peer{
-			ID:   id,
-			IP:   bittorrent.IP{IP: net.IP(ip), AddressFamily: bittorrent.IPv4},
-			Port: port,
+			ID:       id,
+			AddrPort: netip.AddrPortFrom(addr, port),
 		}
 	}
 
@@ -442,7 +444,7 @@ func (bh *benchHolder) AnnounceSeeder1kInfoHash(b *testing.B) {
 // ScrapeSwarm can run in parallel.
 func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
 	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
-		ps.ScrapeSwarm(bd.infohashes[0], bittorrent.IPv4)
+		ps.ScrapeSwarm(bd.infohashes[0], bd.peers[0])
 		return nil
 	})
 }
@@ -452,7 +454,7 @@ func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
 // ScrapeSwarm1kInfoHash can run in parallel.
 func (bh *benchHolder) ScrapeSwarm1kInfoHash(b *testing.B) {
 	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
-		ps.ScrapeSwarm(bd.infohashes[i%1000], bittorrent.IPv4)
+		ps.ScrapeSwarm(bd.infohashes[i%1000], bd.peers[0])
 		return nil
 	})
 }

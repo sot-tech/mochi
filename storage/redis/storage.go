@@ -2,24 +2,24 @@
 // BitTorrent tracker keeping peer data in redis with hash.
 // There two categories of hash:
 //
-// - IPv{4,6}_{L,S}_infohash
+// - CHI_{4,6}_{L,S}_infohash
 //	To save peers that hold the infohash, used for fast searching,
 //  deleting, and timeout handling
 //
-// - IPv{4,6}
+// - CHI_{4,6}
 //  To save all the infohashes, used for garbage collection,
 //	metrics aggregation and leecher graduation
 //
 // Tree keys are used to record the count of swarms, seeders
 // and leechers for each group (IPv4, IPv6).
 //
-// - IPv{4,6}_infohash_count
+// - CHI_{4,6}_I_C
 //	To record the number of infohashes.
 //
-// - IPv{4,6}_S_count
+// - CHI_{4,6}_S_C
 //	To record the number of seeders.
 //
-// - IPv{4,6}_L_count
+// - CHI_{4,6}_L_C
 //	To record the number of leechers.
 package redis
 
@@ -53,6 +53,19 @@ const (
 	defaultReadTimeout                 = time.Second * 15
 	defaultWriteTimeout                = time.Second * 15
 	defaultConnectTimeout              = time.Second * 15
+	prefixKey                          = "CHI_"
+	ih4Key                             = "CHI_4_I"
+	ih6Key                             = "CHI_6_I"
+	ih4SeederKey                       = "CHI_4_S_"
+	ih6SeederKey                       = "CHI_6_S_"
+	ih4LeecherKey                      = "CHI_4_L_"
+	ih6LeecherKey                      = "CHI_6_L_"
+	cnt4SeederKey                      = "CHI_4_C_S"
+	cnt6SeederKey                      = "CHI_6_C_S"
+	cnt4LeecherKey                     = "CHI_4_C_L"
+	cnt6LeecherKey                     = "CHI_6_C_L"
+	cnt4InfoHashKey                    = "CHI_4_C_I"
+	cnt6InfoHashKey                    = "CHI_6_C_I"
 )
 
 // ErrSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
@@ -264,13 +277,11 @@ func New(conf Config) (storage.Storage, error) {
 	ps.logFields = cfg.LogFields()
 
 	// Start a goroutine for garbage collection.
-	ps.wg.Add(1)
-	go ps.runGC(cfg.GarbageCollectionInterval, cfg.PeerLifetime)
+	go ps.scheduleGC(cfg.GarbageCollectionInterval, cfg.PeerLifetime)
 
 	if cfg.PrometheusReportingInterval > 0 {
 		// Start a goroutine for reporting statistics to Prometheus.
-		ps.wg.Add(1)
-		go ps.runProm(cfg.PrometheusReportingInterval)
+		go ps.schedulerProm(cfg.PrometheusReportingInterval)
 	} else {
 		log.Info("prometheus disabled because of zero reporting interval")
 	}
@@ -278,21 +289,32 @@ func New(conf Config) (storage.Storage, error) {
 	return ps, nil
 }
 
-func (ps *store) runGC(gcInterval, peerLifeTime time.Duration) {
+func (ps *store) scheduleGC(gcInterval, peerLifeTime time.Duration) {
+	ps.wg.Add(1)
 	defer ps.wg.Done()
+	t := time.NewTimer(gcInterval)
+	defer t.Stop()
 	for {
 		select {
 		case <-ps.closed:
 			return
-		case <-time.After(gcInterval):
+		case <-t.C:
 			before := time.Now().Add(-peerLifeTime)
 			log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
-			ps.collectGarbage(before)
+			cutoffUnix := before.UnixNano()
+			start := time.Now()
+			ps.gc(cutoffUnix, false)
+			ps.gc(cutoffUnix, true)
+			duration := time.Since(start).Milliseconds()
+			log.Debug("storage: recordGCDuration", log.Fields{"timeTaken(ms)": duration})
+			storage.PromGCDurationMilliseconds.Observe(float64(duration))
+			t.Reset(gcInterval)
 		}
 	}
 }
 
-func (ps *store) runProm(reportInterval time.Duration) {
+func (ps *store) schedulerProm(reportInterval time.Duration) {
+	ps.wg.Add(1)
 	defer ps.wg.Done()
 	t := time.NewTicker(reportInterval)
 	for {
@@ -317,68 +339,39 @@ type store struct {
 	logFields log.Fields
 }
 
-var groups = []string{bittorrent.IPv4.String(), bittorrent.IPv6.String()}
-
-// leecherInfoHashKey generates string IPvN_L_hash
-func leecherInfoHashKey(addressFamily, infoHash string) string {
-	return addressFamily + "_L_" + infoHash
-}
-
-// seederInfoHashKey generates string IPvN_S_hash
-func seederInfoHashKey(addressFamily, infoHash string) string {
-	return addressFamily + "_S_" + infoHash
-}
-
-// seederInfoHashKey generates string IPvN_infohash_count
-func infoHashCountKey(addressFamily string) string {
-	return addressFamily + "_infohash_count"
-}
-
-// seederInfoHashKey generates string IPvN_L_count
-func leecherCountKey(addressFamily string) string {
-	return addressFamily + "_L_count"
-}
-
-// seederInfoHashKey generates string IPvN_S_count
-func seederCountKey(addressFamily string) string {
-	return addressFamily + "_S_count"
+func (ps *store) count(key string) (n uint64) {
+	var err error
+	if n, err = ps.con.Get(ps.ctx, key).Uint64(); err != nil && !errors.Is(err, redis.Nil) {
+		log.Error("storage: GET counter failure", log.Fields{
+			"key":   key,
+			"error": err,
+		})
+	}
+	return
 }
 
 // populateProm aggregates metrics over all groups and then posts them to
 // prometheus.
 func (ps *store) populateProm() {
-	var numInfoHashes, numSeeders, numLeechers int64
-
-	for _, group := range groups {
-		if n, err := ps.con.Get(ps.ctx, infoHashCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
-			log.Error("storage: GET counter failure", log.Fields{
-				"key":   infoHashCountKey(group),
-				"error": err,
-			})
+	numInfoHashes, numSeeders, numLeechers := new(uint64), new(uint64), new(uint64)
+	fetchFn := func(v6 bool) {
+		var cntSeederKey, cntLeecherKey, cntInfoHashKey string
+		if v6 {
+			cntSeederKey, cntLeecherKey, cntInfoHashKey = cnt6SeederKey, cnt6LeecherKey, cnt6InfoHashKey
 		} else {
-			numInfoHashes += n
+			cntSeederKey, cntLeecherKey, cntInfoHashKey = cnt4SeederKey, cnt4LeecherKey, cnt4InfoHashKey
 		}
-		if n, err := ps.con.Get(ps.ctx, seederCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
-			log.Error("storage: GET counter failure", log.Fields{
-				"key":   seederCountKey(group),
-				"error": err,
-			})
-		} else {
-			numSeeders += n
-		}
-		if n, err := ps.con.Get(ps.ctx, leecherCountKey(group)).Int64(); err != nil && !errors.Is(err, redis.Nil) {
-			log.Error("storage: GET counter failure", log.Fields{
-				"key":   leecherCountKey(group),
-				"error": err,
-			})
-		} else {
-			numLeechers += n
-		}
+		*numInfoHashes += ps.count(cntInfoHashKey)
+		*numSeeders += ps.count(cntSeederKey)
+		*numLeechers += ps.count(cntLeecherKey)
 	}
 
-	storage.PromInfoHashesCount.Set(float64(numInfoHashes))
-	storage.PromSeedersCount.Set(float64(numSeeders))
-	storage.PromLeechersCount.Set(float64(numLeechers))
+	fetchFn(false)
+	fetchFn(true)
+
+	storage.PromInfoHashesCount.Set(float64(*numInfoHashes))
+	storage.PromSeedersCount.Set(float64(*numSeeders))
+	storage.PromLeechersCount.Set(float64(*numLeechers))
 }
 
 func (ps *store) getClock() int64 {
@@ -409,154 +402,185 @@ func asNil(err error) error {
 	return err
 }
 
-func (ps *store) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
-	addressFamily := p.IP.AddressFamily.String()
+func (ps *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	var ihSummaryKey, ihPeerKey, cntPeerKey, cntInfoHashKey string
 	log.Debug("storage: PutSeeder", log.Fields{
 		"InfoHash": ih,
-		"Peer":     p,
+		"Peer":     peer,
 	})
-
-	encodedSeederInfoHash := seederInfoHashKey(addressFamily, ih.RawString())
+	if peer.Addr().Is6() {
+		ihSummaryKey, ihPeerKey, cntPeerKey, cntInfoHashKey = ih6Key, ih6SeederKey, cnt6SeederKey, cnt6InfoHashKey
+	} else {
+		ihSummaryKey, ihPeerKey, cntPeerKey, cntInfoHashKey = ih4Key, ih4SeederKey, cnt4SeederKey, cnt4InfoHashKey
+	}
+	ihPeerKey += ih.RawString()
 	now := ps.getClock()
 
 	return ps.tx(func(tx redis.Pipeliner) (err error) {
-		if err = tx.HSet(ps.ctx, encodedSeederInfoHash, p.RawString(), now).Err(); err != nil {
+		if err = tx.HSet(ps.ctx, ihPeerKey, peer.RawString(), now).Err(); err != nil {
 			return
 		}
-		if err = ps.con.Incr(ps.ctx, seederCountKey(addressFamily)).Err(); err != nil {
+		if err = ps.con.Incr(ps.ctx, cntPeerKey).Err(); err != nil {
 			return
 		}
-		if err = ps.con.HSet(ps.ctx, addressFamily, encodedSeederInfoHash, now).Err(); err != nil {
+		var added int64
+		if added, err = ps.con.SAdd(ps.ctx, ihSummaryKey, ihPeerKey).Result(); err != nil {
 			return
 		}
-		err = ps.con.Incr(ps.ctx, infoHashCountKey(addressFamily)).Err()
+		if added > 0 {
+			err = ps.con.Incr(ps.ctx, cntInfoHashKey).Err()
+		}
 		return
 	})
 }
 
-func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
-	addressFamily := p.IP.AddressFamily.String()
+func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	var ihPeerKey, cntPeerKey string
 	log.Debug("storage: DeleteSeeder", log.Fields{
 		"InfoHash": ih,
-		"Peer":     p,
+		"Peer":     peer,
 	})
+	if peer.Addr().Is6() {
+		ihPeerKey, cntPeerKey = ih6SeederKey, cnt6SeederKey
+	} else {
+		ihPeerKey, cntPeerKey = ih4SeederKey, cnt4SeederKey
+	}
+	ihPeerKey += ih.RawString()
 
-	encodedSeederInfoHash := seederInfoHashKey(addressFamily, ih.RawString())
-	deleted, err := ps.con.HDel(ps.ctx, encodedSeederInfoHash, p.RawString()).Uint64()
+	deleted, err := ps.con.HDel(ps.ctx, ihPeerKey, peer.RawString()).Uint64()
 	err = asNil(err)
 	if err == nil {
 		if deleted == 0 {
 			err = storage.ErrResourceDoesNotExist
 		} else {
-			err = ps.con.Decr(ps.ctx, seederCountKey(addressFamily)).Err()
+			err = ps.con.Decr(ps.ctx, cntPeerKey).Err()
 		}
 	}
 
 	return err
 }
 
-func (ps *store) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
-	addressFamily := p.IP.AddressFamily.String()
+func (ps *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	var ihSummaryKey, ihPeerKey, cntPeerKey string
 	log.Debug("storage: PutLeecher", log.Fields{
 		"InfoHash": ih,
-		"Peer":     p,
+		"Peer":     peer,
 	})
+	if peer.Addr().Is6() {
+		ihSummaryKey, ihPeerKey, cntPeerKey = ih6Key, ih6LeecherKey, cnt6LeecherKey
+	} else {
+		ihSummaryKey, ihPeerKey, cntPeerKey = ih4Key, ih4LeecherKey, cnt4LeecherKey
+	}
+	ihPeerKey += ih.RawString()
 
-	// Update the peer in the swarm.
-	encodedLeecherInfoHash := leecherInfoHashKey(addressFamily, ih.RawString())
 	now := ps.getClock()
 
 	return ps.tx(func(tx redis.Pipeliner) (err error) {
-		if err = tx.HSet(ps.ctx, encodedLeecherInfoHash, p.RawString(), now).Err(); err != nil {
+		if err = tx.HSet(ps.ctx, ihPeerKey, peer.RawString(), now).Err(); err != nil {
 			return
 		}
-		if err = tx.HSet(ps.ctx, addressFamily, encodedLeecherInfoHash, now).Err(); err != nil {
+		if err = tx.Incr(ps.ctx, cntPeerKey).Err(); err != nil {
 			return err
 		}
-		err = tx.Incr(ps.ctx, leecherCountKey(addressFamily)).Err()
+		err = tx.HSet(ps.ctx, ihSummaryKey, ihPeerKey, now).Err()
 		return
 	})
 }
 
-func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
-	addressFamily := p.IP.AddressFamily.String()
+func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	var ihPeerKey, cntPeerKey string
 	log.Debug("storage: DeleteLeecher", log.Fields{
 		"InfoHash": ih,
-		"Peer":     p,
+		"Peer":     peer,
 	})
 
-	encodedLeecherInfoHash := leecherInfoHashKey(addressFamily, ih.RawString())
+	if peer.Addr().Is6() {
+		ihPeerKey, cntPeerKey = ih6LeecherKey, cnt6LeecherKey
+	} else {
+		ihPeerKey, cntPeerKey = ih4LeecherKey, cnt4LeecherKey
+	}
+	ihPeerKey += ih.RawString()
 
-	deleted, err := ps.con.HDel(ps.ctx, encodedLeecherInfoHash, p.RawString()).Uint64()
+	deleted, err := ps.con.HDel(ps.ctx, ihPeerKey, peer.RawString()).Uint64()
 	err = asNil(err)
 	if err == nil {
 		if deleted == 0 {
 			err = storage.ErrResourceDoesNotExist
 		} else {
-			err = ps.con.Decr(ps.ctx, leecherCountKey(addressFamily)).Err()
+			err = ps.con.Decr(ps.ctx, cntPeerKey).Err()
 		}
 	}
 
 	return err
 }
 
-func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
-	addressFamily := p.IP.AddressFamily.String()
+func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	var ihSummaryKey, ihSeederKey, ihLeecherKey, cntSeederKey, cntLeecherKey, cntInfoHashKey string
 	log.Debug("storage: GraduateLeecher", log.Fields{
 		"InfoHash": ih,
-		"Peer":     p,
+		"Peer":     peer,
 	})
 
-	encodedInfoHash := ih.RawString()
-	encodedLeecherInfoHash := leecherInfoHashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := seederInfoHashKey(addressFamily, encodedInfoHash)
-	peerKey := p.RawString()
+	if peer.Addr().Is6() {
+		ihSummaryKey, ihSeederKey, cntSeederKey = ih6Key, ih6SeederKey, cnt6SeederKey
+		ihLeecherKey, cntLeecherKey, cntInfoHashKey = ih6LeecherKey, cnt6LeecherKey, cnt6InfoHashKey
+	} else {
+		ihSummaryKey, ihSeederKey, cntSeederKey = ih4Key, ih4SeederKey, cnt4SeederKey
+		ihLeecherKey, cntLeecherKey, cntInfoHashKey = ih4LeecherKey, cnt4LeecherKey, cnt4InfoHashKey
+	}
+	infoHash, peerKey := ih.RawString(), peer.RawString()
+	ihSeederKey, ihLeecherKey = ihSeederKey+infoHash, ihLeecherKey+infoHash
+
 	now := ps.getClock()
 
 	return ps.tx(func(tx redis.Pipeliner) error {
-		deleted, err := tx.HDel(ps.ctx, encodedLeecherInfoHash, peerKey).Uint64()
+		deleted, err := tx.HDel(ps.ctx, ihLeecherKey, peerKey).Uint64()
 		err = asNil(err)
 		if err == nil {
 			if deleted > 0 {
-				err = tx.Decr(ps.ctx, leecherCountKey(addressFamily)).Err()
+				err = tx.Decr(ps.ctx, cntLeecherKey).Err()
 			}
 		}
 		if err == nil {
-			err = tx.HSet(ps.ctx, encodedSeederInfoHash, peerKey, now).Err()
+			err = tx.HSet(ps.ctx, ihSeederKey, peerKey, now).Err()
 		}
 		if err == nil {
-			err = tx.Incr(ps.ctx, seederCountKey(addressFamily)).Err()
+			err = tx.Incr(ps.ctx, cntSeederKey).Err()
 		}
 		if err == nil {
-			err = tx.HSet(ps.ctx, addressFamily, encodedSeederInfoHash, now).Err()
+			err = tx.HSet(ps.ctx, ihSummaryKey, ihSeederKey, now).Err()
 		}
 		if err == nil {
-			err = tx.Incr(ps.ctx, infoHashCountKey(addressFamily)).Err()
+			err = tx.Incr(ps.ctx, cntInfoHashKey).Err()
 		}
 		return err
 	})
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, announcer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
-	addressFamily := announcer.IP.AddressFamily.String()
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
+	var ihSeederKey, ihLeecherKey string
 	log.Debug("storage: AnnouncePeers", log.Fields{
 		"InfoHash": ih,
 		"seeder":   seeder,
 		"numWant":  numWant,
-		"Peer":     announcer,
+		"Peer":     peer,
 	})
 
-	encodedInfoHash := ih.RawString()
-	encodedLeecherInfoHash := leecherInfoHashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := seederInfoHashKey(addressFamily, encodedInfoHash)
+	if peer.Addr().Is6() {
+		ihSeederKey, ihLeecherKey = ih6SeederKey, cnt6LeecherKey
+	} else {
+		ihSeederKey, ihLeecherKey = ih4SeederKey, ih4LeecherKey
+	}
+	infoHash := ih.RawString()
+	ihSeederKey, ihLeecherKey = ihSeederKey+infoHash, ihLeecherKey+infoHash
 
-	leechers, err := ps.con.HKeys(ps.ctx, encodedLeecherInfoHash).Result()
+	leechers, err := ps.con.HKeys(ps.ctx, ihLeecherKey).Result()
 	err = asNil(err)
 	if err != nil {
 		return nil, err
 	}
 
-	seeders, err := ps.con.HKeys(ps.ctx, encodedSeederInfoHash).Result()
+	seeders, err := ps.con.HKeys(ps.ctx, ihSeederKey).Result()
 	err = asNil(err)
 	if err != nil {
 		return nil, err
@@ -595,7 +619,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 
 		// Append leechers until we reach numWant.
 		if numWant > 0 {
-			announcerPK := announcer.RawString()
+			announcerPK := peer.RawString()
 			for _, peerKey := range leechers {
 				if peerKey != announcerPK {
 					if numWant == 0 {
@@ -615,28 +639,36 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily) (resp bittorrent.Scrape) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp bittorrent.Scrape) {
+	var ihSeederKey, ihLeecherKey string
+	log.Debug("storage: ScrapeSwarm", log.Fields{
+		"InfoHash": ih,
+		"Peer":     peer,
+	})
 	resp.InfoHash = ih
-	addressFamily := af.String()
-	encodedInfoHash := ih.RawString()
-	encodedLeecherInfoHash := leecherInfoHashKey(addressFamily, encodedInfoHash)
-	encodedSeederInfoHash := seederInfoHashKey(addressFamily, encodedInfoHash)
+	if peer.Addr().Is6() {
+		ihSeederKey, ihLeecherKey = ih6SeederKey, cnt6LeecherKey
+	} else {
+		ihSeederKey, ihLeecherKey = ih4SeederKey, ih4LeecherKey
+	}
+	infoHash := ih.RawString()
+	ihSeederKey, ihLeecherKey = ihSeederKey+infoHash, ihLeecherKey+infoHash
 
-	leechersLen, err := ps.con.HLen(ps.ctx, encodedLeecherInfoHash).Result()
+	leechersLen, err := ps.con.HLen(ps.ctx, ihLeecherKey).Result()
 	err = asNil(err)
 	if err != nil {
 		log.Error("storage: Redis HLEN failure", log.Fields{
-			"Hkey":  encodedLeecherInfoHash,
+			"Hkey":  ihLeecherKey,
 			"error": err,
 		})
 		return
 	}
 
-	seedersLen, err := ps.con.HLen(ps.ctx, encodedSeederInfoHash).Result()
+	seedersLen, err := ps.con.HLen(ps.ctx, ihSeederKey).Result()
 	err = asNil(err)
 	if err != nil {
 		log.Error("storage: Redis HLEN failure", log.Fields{
-			"Hkey":  encodedSeederInfoHash,
+			"Hkey":  ihSeederKey,
 			"error": err,
 		})
 		return
@@ -649,11 +681,11 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, af bittorrent.AddressFamily
 }
 
 func (ps *store) Put(ctx string, value storage.Entry) error {
-	return ps.con.HSet(ps.ctx, ctx, value.Key, value.Value).Err()
+	return ps.con.HSet(ps.ctx, prefixKey+ctx, value.Key, value.Value).Err()
 }
 
 func (ps *store) Contains(ctx string, key string) (bool, error) {
-	exist, err := ps.con.HExists(ps.ctx, ctx, key).Result()
+	exist, err := ps.con.HExists(ps.ctx, prefixKey+ctx, key).Result()
 	return exist, asNil(err)
 }
 
@@ -665,12 +697,12 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Entry) (err error) {
 		for _, p := range pairs {
 			args = append(args, p.Key, p.Value)
 		}
-		err = ps.con.HSet(ps.ctx, ctx, args...).Err()
+		err = ps.con.HSet(ps.ctx, prefixKey+ctx, args...).Err()
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
 				for _, p := range pairs {
-					if err = ps.con.HSet(ps.ctx, ctx, p.Key, p.Value).Err(); err != nil {
+					if err = ps.con.HSet(ps.ctx, prefixKey+ctx, p.Key, p.Value).Err(); err != nil {
 						break
 					}
 				}
@@ -681,7 +713,7 @@ func (ps *store) BulkPut(ctx string, pairs ...storage.Entry) (err error) {
 }
 
 func (ps *store) Load(ctx string, key string) (v any, err error) {
-	v, err = ps.con.HGet(ps.ctx, ctx, key).Result()
+	v, err = ps.con.HGet(ps.ctx, prefixKey+ctx, key).Result()
 	if err != nil && errors.Is(err, redis.Nil) {
 		v, err = nil, nil
 	}
@@ -690,12 +722,12 @@ func (ps *store) Load(ctx string, key string) (v any, err error) {
 
 func (ps *store) Delete(ctx string, keys ...string) (err error) {
 	if len(keys) > 0 {
-		err = asNil(ps.con.HDel(ps.ctx, ctx, keys...).Err())
+		err = asNil(ps.con.HDel(ps.ctx, prefixKey+ctx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				log.Warn("This REDIS version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
-					if err = asNil(ps.con.HDel(ps.ctx, ctx, k).Err()); err != nil {
+					if err = asNil(ps.con.HDel(ps.ctx, prefixKey+ctx, k).Err()); err != nil {
 						break
 					}
 				}
@@ -705,7 +737,7 @@ func (ps *store) Delete(ctx string, keys ...string) (err error) {
 	return
 }
 
-// collectGarbage deletes all Peers from the Storage which are older than the
+// gc deletes all Peers from the Storage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface
@@ -717,11 +749,11 @@ func (ps *store) Delete(ctx string, keys ...string) (err error) {
 // - The Put(Seeder|Leecher) and GraduateLeecher methods only ever add infohash
 //	 keys to addressFamily hashes and increment the infohash counter.
 // - The only method that deletes from the addressFamily hashes is
-//	 collectGarbage, which also decrements the counters. That means that,
+//	 gc, which also decrements the counters. That means that,
 //	 even if a Delete(Seeder|Leecher) call removes the last peer from a swarm,
 //	 the infohash counter is not changed and the infohash is left in the
-//	 addressFamily hash until it will be cleaned up by collectGarbage.
-// - collectGarbage must run regularly.
+//	 addressFamily hash until it will be cleaned up by gc.
+// - gc must run regularly.
 // - A WATCH ... MULTI ... EXEC block fails, if between the WATCH and the 'EXEC'
 // 	 any of the watched keys have changed. The location of the 'MULTI' doesn't
 //	 matter.
@@ -740,120 +772,124 @@ func (ps *store) Delete(ctx string, keys ...string) (err error) {
 //	 not empty and start no transaction.
 // - If the change happens after the HLEN, we will attempt a transaction and it
 //   will fail. This is okay, the swarm is not empty, we will try cleaning it up
-//   next time collectGarbage runs.
+//   next time gc runs.
 // 4. (1,0): Again, two ways:
 // - If the change happens before the HLEN, we will see an empty swarm. This
 //   situation happens if a call to Delete(Seeder|Leecher) removed the last
 //	 peer asynchronously. We will attempt a transaction, but the transaction
 //	 will fail. This is okay, the infohash key will remain in the addressFamily
-//   hash, we will attempt to clean it up the next time 'collectGarbage` runs.
+//   hash, we will attempt to clean it up the next time 'gc` runs.
 // - If the change happens after the HLEN, we will not even attempt to make the
 //	 transaction. The infohash key will remain in the addressFamil hash and
-//	 we'll attempt to clean it up the next time collectGarbage runs.
-func (ps *store) collectGarbage(cutoff time.Time) {
-	cutoffUnix := cutoff.UnixNano()
-	start := time.Now()
-	var err error
-	for _, group := range groups {
-		// list all infoHashes in the group
-		var infoHashes []string
-		infoHashes, err = ps.con.HKeys(ps.ctx, group).Result()
-		err = asNil(err)
-		if err == nil {
-			for _, infoHash := range infoHashes {
-				isSeeder := len(infoHash) > 5 && infoHash[5:6] == "S"
-				// list all (peer, timeout) pairs for the ih
-				peerList, err := ps.con.HGetAll(ps.ctx, infoHash).Result()
-				err = asNil(err)
-				if err == nil {
-					var removedPeerCount int64
-					for peerKey, timeStamp := range peerList {
-						var peer bittorrent.Peer
-						if peer, err = bittorrent.NewPeer(peerKey); err == nil {
-							if mtime, err := strconv.ParseInt(timeStamp, 10, 64); err == nil {
-								if mtime <= cutoffUnix {
-									log.Debug("storage: deleting peer", log.Fields{
-										"Peer": peer,
-									})
-									var count int64
-									count, err = ps.con.HDel(ps.ctx, infoHash, peerKey).Result()
-									err = asNil(err)
-									if err == nil {
-										removedPeerCount += count
-									}
+//	 we'll attempt to clean it up the next time gc runs.
+func (ps *store) gc(cutoffUnix int64, v6 bool) {
+	// list all infoHashKeys in the group
+	var ihSummaryKey, ihSeederKey, ihLeecherKey, cntSeederKey, cntLeecherKey, cntInfoHashKey string
+	if v6 {
+		cntSeederKey, cntLeecherKey, cntInfoHashKey = cnt6SeederKey, cnt6LeecherKey, cnt6InfoHashKey
+		ihSummaryKey, ihSeederKey, ihLeecherKey = ih6Key, ih6SeederKey, ih6LeecherKey
+	} else {
+		cntSeederKey, cntLeecherKey, cntInfoHashKey = cnt4SeederKey, cnt4LeecherKey, cnt4InfoHashKey
+		ihSummaryKey, ihSeederKey, ihLeecherKey = ih4Key, ih4SeederKey, ih4LeecherKey
+	}
+	infoHashKeys, err := ps.con.SMembers(ps.ctx, ihSummaryKey).Result()
+	err = asNil(err)
+	if err == nil {
+		for _, infoHashKey := range infoHashKeys {
+			var cntKey string
+			var seeder bool
+			if seeder = strings.HasPrefix(infoHashKey, ihSeederKey); seeder {
+				cntKey = cntSeederKey
+			} else if strings.HasPrefix(infoHashKey, ihLeecherKey) {
+				cntKey = cntLeecherKey
+			} else {
+				log.Warn("storage: Redis: unexpected record found in info hash set", log.Fields{
+					"hashSet":     ihSummaryKey,
+					"infoHashKey": infoHashKey,
+				})
+				continue
+			}
+			// list all (peer, timeout) pairs for the ih
+			peerList, err := ps.con.HGetAll(ps.ctx, infoHashKey).Result()
+			err = asNil(err)
+			if err == nil {
+				var removedPeerCount int64
+				for peerKey, timeStamp := range peerList {
+					var peer bittorrent.Peer
+					if peer, err = bittorrent.NewPeer(peerKey); err == nil {
+						if mtime, err := strconv.ParseInt(timeStamp, 10, 64); err == nil {
+							if mtime <= cutoffUnix {
+								log.Debug("storage: Redis: deleting peer", log.Fields{
+									"Peer": peer,
+								})
+								var count int64
+								count, err = ps.con.HDel(ps.ctx, infoHashKey, peerKey).Result()
+								err = asNil(err)
+								if err == nil {
+									removedPeerCount += count
 								}
 							}
 						}
-						if err != nil {
-							log.Error("storage: Redis: unable to delete info hash peer", log.Fields{
-								"group":    group,
-								"infoHash": infoHash,
-								"peer":     peer,
-								"key":      peerKey,
-								"error":    err,
-							})
-						}
 					}
-					// DECR seeder/leecher counter
-					if removedPeerCount > 0 {
-						var decrCounter string
-						if isSeeder {
-							decrCounter = seederCountKey(group)
-						} else {
-							decrCounter = leecherCountKey(group)
-						}
-						if err := ps.con.DecrBy(ps.ctx, decrCounter, removedPeerCount).Err(); err != nil {
-							log.Error("storage: Redis: unable to decrement seeder/leecher peer count", log.Fields{
-								"group":    group,
-								"infoHash": infoHash,
-								"key":      decrCounter,
-								"error":    err,
-							})
-						}
-					}
-
-					// use WATCH to avoid race condition
-					// https://redis.io/topics/transactions
-					err = asNil(ps.con.Watch(ps.ctx, func(tx *redis.Tx) (err error) {
-						var infoHashCount int64
-						infoHashCount, err = ps.con.HLen(ps.ctx, infoHash).Result()
-						err = asNil(err)
-						if err == nil && infoHashCount == 0 {
-							// Empty hashes are not shown among existing keys,
-							// in other words, it's removed automatically after `HDEL` the last field.
-							// _, err := ps.con.Del(ps.ctx, infoHash)
-							var deletedCount int64
-							deletedCount, err = ps.con.HDel(ps.ctx, group, infoHash).Result()
-							err = asNil(err)
-							if err == nil && isSeeder && deletedCount > 0 {
-								err = ps.con.Decr(ps.ctx, infoHashCountKey(group)).Err()
-							}
-						}
-						return err
-					}, infoHash))
 					if err != nil {
-						log.Error("storage: Redis: unable to clean info hash records", log.Fields{
-							"group":    group,
-							"infoHash": infoHash,
-							"error":    err,
+						log.Error("storage: Redis: unable to delete info hash peer", log.Fields{
+							"hashSet":     ihSummaryKey,
+							"infoHashKey": infoHashKey,
+							"peer":        peer,
+							"key":         peerKey,
+							"error":       err,
 						})
 					}
-				} else {
-					log.Error("storage: Redis: unable to fetch info hash peers", log.Fields{
-						"group":    group,
-						"infoHash": infoHash,
-						"error":    err,
+				}
+				// DECR seeder/leecher counter
+				if removedPeerCount > 0 {
+					if err := ps.con.DecrBy(ps.ctx, cntKey, removedPeerCount).Err(); err != nil {
+						log.Error("storage: Redis: unable to decrement seeder/leecher peer count", log.Fields{
+							"hashSet":     ihSummaryKey,
+							"infoHashKey": infoHashKey,
+							"key":         cntKey,
+							"error":       err,
+						})
+					}
+				}
+
+				// use WATCH to avoid race condition
+				// https://redis.io/topics/transactions
+				err = asNil(ps.con.Watch(ps.ctx, func(tx *redis.Tx) (err error) {
+					var infoHashCount int64
+					infoHashCount, err = ps.con.HLen(ps.ctx, infoHashKey).Result()
+					err = asNil(err)
+					if err == nil && infoHashCount == 0 {
+						// Empty hashes are not shown among existing keys,
+						// in other words, it's removed automatically after `HDEL` the last field.
+						// _, err := ps.con.Del(ps.ctx, infoHashKey)
+						var deletedCount int64
+						deletedCount, err = ps.con.SRem(ps.ctx, ihSummaryKey, infoHashKey).Result()
+						err = asNil(err)
+						if err == nil && seeder && deletedCount > 0 {
+							err = ps.con.Decr(ps.ctx, cntInfoHashKey).Err()
+						}
+					}
+					return err
+				}, infoHashKey))
+				if err != nil {
+					log.Error("storage: Redis: unable to clean info hash records", log.Fields{
+						"hashSet":     ihSummaryKey,
+						"infoHashKey": infoHashKey,
+						"error":       err,
 					})
 				}
+			} else {
+				log.Error("storage: Redis: unable to fetch info hash peers", log.Fields{
+					"hashSet":     ihSummaryKey,
+					"infoHashKey": infoHashKey,
+					"error":       err,
+				})
 			}
-		} else {
-			log.Error("storage: Redis: unable to fetch info hashes", log.Fields{"group": group, "error": err})
 		}
+	} else {
+		log.Error("storage: Redis: unable to fetch info hash set", log.Fields{"hashSet": ihSummaryKey, "error": err})
 	}
-
-	duration := time.Since(start).Milliseconds()
-	log.Debug("storage: recordGCDuration", log.Fields{"timeTaken(ms)": duration})
-	storage.PromGCDurationMilliseconds.Observe(float64(duration))
 }
 
 func (ps *store) Stop() stop.Result {
