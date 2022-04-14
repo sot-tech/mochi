@@ -297,7 +297,7 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 		WriteError(w, err)
 		return
 	}
-	addr = req.AddrPort.Addr()
+	addr = req.Addr()
 
 	ctx := injectRouteParamsToContext(context.Background(), ps)
 	ctx, resp, err := f.logic.HandleAnnounce(ctx, req)

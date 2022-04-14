@@ -207,7 +207,7 @@ func (t *Frontend) serve() error {
 			defer pool.Put(buffer)
 
 			// Handle the request.
-			addr := addrPort.Addr()
+			addr := addrPort.Addr().Unmap()
 			var start time.Time
 			if t.EnableRequestTiming {
 				start = time.Now()

@@ -27,7 +27,7 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 		r.NumWant = maxNumWant
 	}
 
-	r.AddrPort = netip.AddrPortFrom(r.Addr().Unmap(), r.Port())
+	r.AddrPort = netip.AddrPortFrom(r.Addr(), r.Port())
 	if !r.Addr().IsValid() || r.Addr().IsUnspecified() {
 		return ErrInvalidIP
 	}

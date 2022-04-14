@@ -1,6 +1,7 @@
 ![Mochi (source image: https://www.flaticon.com/free-icon/mochi_5392004)](mochi.svg)
 
 # Modified Chihaya (MoChi)
+
 [![Build Status](https://github.com/sot-tech/mochi/workflows/Build%20&%20Test/badge.svg)](https://github.com/sot-tech/mochi/actions)
 [![Docker Repository on Quay](https://quay.io/repository/eramde/mochi/status "Docker Repository on Quay")](https://quay.io/repository/eramde/mochi)
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)

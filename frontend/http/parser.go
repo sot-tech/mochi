@@ -178,5 +178,5 @@ func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (netip
 	}
 
 	addrPort, err := netip.ParseAddrPort(r.RemoteAddr)
-	return addrPort.Addr(), false, err
+	return addrPort.Addr().Unmap(), false, err
 }

@@ -139,16 +139,18 @@ func New(provided Config) (storage.Storage, error) {
 	ps.wg.Add(1)
 	go func() {
 		defer ps.wg.Done()
+		t := time.NewTimer(cfg.GarbageCollectionInterval)
+		defer t.Stop()
 		for {
 			select {
 			case <-ps.closed:
 				return
-			case <-time.After(cfg.GarbageCollectionInterval):
+			case <-t.C:
 				before := time.Now().Add(-cfg.PeerLifetime)
 				log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
-				if err := ps.collectGarbage(before); err != nil {
-					log.Error(err)
-				}
+				start := time.Now()
+				ps.GC(before)
+				recordGCDuration(time.Since(start))
 			}
 		}
 	}()
@@ -546,20 +548,19 @@ func (ps *store) Delete(ctx string, keys ...string) error {
 	return nil
 }
 
-// collectGarbage deletes all Peers from the Storage which are older than the
+// GC deletes all Peers from the Storage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface
 // are being executed in parallel.
-func (ps *store) collectGarbage(cutoff time.Time) error {
+func (ps *store) GC(cutoff time.Time) {
 	select {
 	case <-ps.closed:
-		return nil
+		return
 	default:
 	}
 
 	cutoffUnix := cutoff.UnixNano()
-	start := time.Now()
 
 	for _, shard := range ps.shards {
 		shard.RLock()
@@ -603,10 +604,6 @@ func (ps *store) collectGarbage(cutoff time.Time) error {
 
 		runtime.Gosched()
 	}
-
-	recordGCDuration(time.Since(start))
-
-	return nil
 }
 
 func (ps *store) Stop() stop.Result {

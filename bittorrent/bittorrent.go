@@ -243,7 +243,7 @@ func NewPeer(data string) (Peer, error) {
 			peer = Peer{
 				ID: peerID,
 				AddrPort: netip.AddrPortFrom(
-					addr,
+					addr.Unmap(),
 					binary.BigEndian.Uint16(b[PeerIDLen:PeerIDLen+2]),
 				),
 			}
@@ -276,7 +276,7 @@ func (p Peer) RawString() string {
 func (p Peer) LogFields() log.Fields {
 	return log.Fields{
 		"ID":   p.ID,
-		"IP":   p.Addr().String(),
+		"IP":   p.Addr(),
 		"port": p.Port(),
 	}
 }
@@ -288,6 +288,11 @@ func (p Peer) Equal(x Peer) bool { return p.EqualEndpoint(x) && p.ID == x.ID }
 func (p Peer) EqualEndpoint(x Peer) bool {
 	return p.Port() == x.Port() &&
 		p.Addr().Compare(x.Addr()) == 0
+}
+
+// Addr returns unmapped peer's IP address
+func (p Peer) Addr() netip.Addr {
+	return p.AddrPort.Addr().Unmap()
 }
 
 // ClientError represents an error that should be exposed to the client over

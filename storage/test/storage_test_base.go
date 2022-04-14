@@ -2,6 +2,7 @@ package test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -244,6 +245,19 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 	}
 }
 
+func (th *testHolder) GC(t *testing.T) {
+	for _, c := range testData {
+		require.Nil(t, th.st.PutSeeder(c.ih, c.peer))
+		require.Nil(t, th.st.PutSeeder(c.ih, v4Peer))
+		require.Nil(t, th.st.PutSeeder(c.ih, v6Peer))
+	}
+	th.st.GC(time.Now().Add(time.Hour))
+	for _, c := range testData {
+		_, err := th.st.AnnouncePeers(c.ih, false, 100, v4Peer)
+		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+	}
+}
+
 // RunTests tests a Storage implementation against the interface.
 func RunTests(t *testing.T, p storage.Storage) {
 	th := testHolder{st: p}
@@ -274,6 +288,8 @@ func RunTests(t *testing.T, p storage.Storage) {
 
 	t.Run("CustomPutContainsLoadDelete", th.CustomPutContainsLoadDelete)
 	t.Run("CustomBulkPutContainsLoadDelete", th.CustomBulkPutContainsLoadDelete)
+
+	t.Run("GC", th.GC)
 
 	e := th.st.Stop()
 	require.Nil(t, <-e)

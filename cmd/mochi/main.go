@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -46,7 +47,7 @@ func NewRun(configFilePath string) (*Run, error) {
 func (r *Run) Start(ps storage.Storage) error {
 	configFile, err := ParseConfigFile(r.configFilePath)
 	if err != nil {
-		return errors.New("failed to read config: " + err.Error())
+		return fmt.Errorf("failed to read config: %w", err)
 	}
 	cfg := configFile.Conf
 
@@ -63,7 +64,7 @@ func (r *Run) Start(ps storage.Storage) error {
 		log.Info("starting storage", log.Fields{"name": cfg.Storage.Name})
 		ps, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
 		if err != nil {
-			return errors.New("failed to create storage: " + err.Error())
+			return fmt.Errorf("failed to create storage: %w", err)
 		}
 		log.Info("started storage", ps)
 	}
@@ -71,11 +72,11 @@ func (r *Run) Start(ps storage.Storage) error {
 
 	preHooks, err := middleware.HooksFromHookConfigs(cfg.PreHooks, r.storage)
 	if err != nil {
-		return errors.New("failed to validate hook config: " + err.Error())
+		return fmt.Errorf("failed to validate hook config: %w", err)
 	}
 	postHooks, err := middleware.HooksFromHookConfigs(cfg.PostHooks, r.storage)
 	if err != nil {
-		return errors.New("failed to validate hook config: " + err.Error())
+		return fmt.Errorf("failed to validate hook config: %w", err)
 	}
 
 	log.Info("starting tracker logic", log.Fields{

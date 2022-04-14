@@ -98,17 +98,17 @@ func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse)
 }
 
 func compact4(peer bittorrent.Peer) (buf []byte) {
-	ip := peer.AddrPort.Addr().As4()
+	ip := peer.Addr().As4()
 	buf = append(buf, ip[:]...)
-	port := peer.AddrPort.Port()
+	port := peer.Port()
 	buf = append(buf, byte(port>>8), byte(port&0xff))
 	return
 }
 
 func compact6(peer bittorrent.Peer) (buf []byte) {
-	ip := peer.AddrPort.Addr().As16()
+	ip := peer.Addr().As16()
 	buf = append(buf, ip[:]...)
-	port := peer.AddrPort.Port()
+	port := peer.Port()
 	buf = append(buf, byte(port>>8), byte(port&0xff))
 	return
 }

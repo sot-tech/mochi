@@ -125,7 +125,7 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 	}
 
 	switch addr := req.Peer.Addr(); {
-	case addr.Is4(), addr.Is4In6():
+	case addr.Is4():
 		resp.IPv4Peers = mergePeers(resp.IPv4Peers, peers, max)
 	case addr.Is6():
 		resp.IPv6Peers = mergePeers(resp.IPv6Peers, peers, max)

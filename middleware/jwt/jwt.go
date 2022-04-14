@@ -95,7 +95,7 @@ func NewHook(cfg Config) (middleware.Hook, error) {
 
 	log.Debug("performing initial fetch of JWKs")
 	if err := h.updateKeys(); err != nil {
-		return nil, errors.New("failed to fetch initial JWK Set: " + err.Error())
+		return nil, fmt.Errorf("failed to fetch initial JWK Set: %w", err)
 	}
 
 	go func() {

@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -127,6 +128,9 @@ type Storage interface {
 
 	// Delete used to delete arbitrary data in specified context by its keys
 	Delete(ctx string, keys ...string) error
+
+	// GC used to delete stale data, such as timed out seeders/leechers
+	GC(cutoff time.Time)
 
 	// Stopper is an interface that expects a Stop method to stop the Storage.
 	// For more details see the documentation in the stop package.
