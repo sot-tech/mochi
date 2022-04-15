@@ -1,3 +1,5 @@
+// Package storage contains interfaces and register of storage provider and
+// interface which should satisfy tracker storage
 package storage
 
 import (

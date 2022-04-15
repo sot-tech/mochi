@@ -1,3 +1,4 @@
+// Package varinterval contains interval variation middleware
 package varinterval
 
 import (

@@ -1,3 +1,5 @@
+// Package frontend defines interface which should satisfy
+// every network frontend
 package frontend
 
 import (

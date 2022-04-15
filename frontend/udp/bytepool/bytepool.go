@@ -1,3 +1,4 @@
+// Package bytepool defines pool for storing and reusing raw bytes
 package bytepool
 
 import "sync"

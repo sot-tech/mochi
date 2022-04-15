@@ -1,3 +1,5 @@
+// Package test contains storage benchmarks.
+// Not used in production.
 package test
 
 import (

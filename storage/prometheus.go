@@ -1,3 +1,4 @@
+// Package storage contains prometheus specific globals, used by storages
 package storage
 
 import "github.com/prometheus/client_golang/prometheus"

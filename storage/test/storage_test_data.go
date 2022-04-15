@@ -1,3 +1,5 @@
+// Package test contains generated data for storage tests.
+// Not used in production.
 package test
 
 import (

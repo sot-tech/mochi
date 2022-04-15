@@ -1,3 +1,5 @@
+// Package container contains interface and register
+// used for torrent approval hash source
 package container
 
 import (

@@ -6,6 +6,9 @@ output:
 linters-settings:
     goimports:
         local-prefixes: "sot-te.ch/mochi"
+    staticcheck:
+        checks:
+            - "all"
     gosec:
         excludes:
             - "G404"  # Allow the usage of math/rand
