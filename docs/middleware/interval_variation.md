@@ -28,10 +28,10 @@ An example config might look like this:
 
 ```yaml
 mochi:
-  prehooks:
-    - name: interval variation
-      config:
-        modify_response_probability: 0.2
-        max_increase_delta: 60
-        modify_min_interval: true
+    prehooks:
+        -   name: interval variation
+            config:
+                modify_response_probability: 0.2
+                max_increase_delta: 60
+                modify_min_interval: true
 ```

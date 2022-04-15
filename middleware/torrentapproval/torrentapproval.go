@@ -6,11 +6,10 @@ import (
 	"context"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
+	"github.com/sot-tech/mochi/pkg/conf"
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
@@ -25,40 +24,33 @@ import (
 const Name = "torrent approval"
 
 func init() {
-	middleware.RegisterDriver(Name, driver{})
+	middleware.RegisterBuilder(Name, build)
 }
 
 type baseConfig struct {
 	// Source - name of container for initial values
-	Source string `yaml:"initial_source"`
+	Source string `cfg:"initial_source"`
 	// Configuration depends on used container
-	Configuration map[string]any `yaml:"configuration"`
+	Configuration conf.MapConfig
 }
 
-type driver struct{}
-
-func (d driver) NewHook(optionBytes []byte, storage storage.Storage) (middleware.Hook, error) {
+func build(options conf.MapConfig, storage storage.Storage) (h middleware.Hook, err error) {
 	var cfg baseConfig
-	err := yaml.Unmarshal(optionBytes, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
+	if err = options.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("middleware %s: %w", Name, err)
 	}
 
 	if len(cfg.Source) == 0 {
-		return nil, fmt.Errorf("invalid options for middleware %s: name not provided", Name)
+		return nil, fmt.Errorf("invalid options for middleware %s: source not provided", Name)
 	}
 
 	if cfg.Configuration == nil {
 		return nil, fmt.Errorf("invalid options for middleware %s: options not provided", Name)
 	}
 
-	var confBytes []byte
-	var h *hook
-	if confBytes, err = yaml.Marshal(cfg.Configuration); err == nil {
-		var c container.Container
-		if c, err = container.GetContainer(cfg.Source, confBytes, storage); err == nil {
-			h = &hook{c}
-		}
+	var c container.Container
+	if c, err = container.GetContainer(cfg.Source, cfg.Configuration, storage); err == nil {
+		h = &hook{c}
 	}
 	return h, err
 }

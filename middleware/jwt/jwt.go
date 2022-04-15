@@ -21,10 +21,10 @@ import (
 	"github.com/SermoDigital/jose/jws"
 	"github.com/SermoDigital/jose/jwt"
 	"github.com/mendsley/gojwk"
-	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
@@ -34,21 +34,7 @@ import (
 const Name = "jwt"
 
 func init() {
-	middleware.RegisterDriver(Name, driver{})
-}
-
-var _ middleware.Driver = driver{}
-
-type driver struct{}
-
-func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook, error) {
-	var cfg Config
-	err := yaml.Unmarshal(optionBytes, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
-	}
-
-	return NewHook(cfg)
+	middleware.RegisterBuilder(Name, build)
 }
 
 var (
@@ -62,10 +48,10 @@ var (
 // Config represents all the values required by this middleware to fetch JWKs
 // and verify JWTs.
 type Config struct {
-	Issuer            string        `yaml:"issuer"`
-	Audience          string        `yaml:"audience"`
-	JWKSetURL         string        `yaml:"jwk_set_url"`
-	JWKUpdateInterval time.Duration `yaml:"jwk_set_update_interval"`
+	Issuer            string
+	Audience          string
+	JWKSetURL         string        `cfg:"jwk_set_url"`
+	JWKUpdateInterval time.Duration `cfg:"jwk_set_update_interval"`
 }
 
 // LogFields implements log.Fielder for a Config.
@@ -84,9 +70,14 @@ type hook struct {
 	closing    chan struct{}
 }
 
-// NewHook returns an instance of the JWT middleware.
-func NewHook(cfg Config) (middleware.Hook, error) {
-	log.Debug("creating new JWT middleware", cfg)
+func build(options conf.MapConfig, _ storage.Storage) (middleware.Hook, error) {
+	var cfg Config
+
+	if err := options.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("middleware %s: %w", Name, err)
+	}
+
+	log.Debug("creating new JWT middleware", options)
 	h := &hook{
 		cfg:        cfg,
 		publicKeys: map[string]crypto.PublicKey{},

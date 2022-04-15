@@ -11,7 +11,7 @@ import (
 	"github.com/sot-tech/mochi/storage/test"
 )
 
-var conf = Config{
+var cfg = Config{
 	GarbageCollectionInterval:   10 * time.Minute,
 	PrometheusReportingInterval: 10 * time.Minute,
 	PeerLifetime:                30 * time.Minute,
@@ -23,7 +23,7 @@ var conf = Config{
 func createNew() s.Storage {
 	var ps s.Storage
 	var err error
-	ps, err = New(conf)
+	ps, err = New(cfg)
 	if err != nil {
 		fmt.Println("unable to create real Redis connection: ", err, " using simulator")
 		var rs *miniredis.Miniredis
@@ -31,8 +31,8 @@ func createNew() s.Storage {
 		if err != nil {
 			panic(err)
 		}
-		conf.Addresses = []string{rs.Addr()}
-		ps, err = New(conf)
+		cfg.Addresses = []string{rs.Addr()}
+		ps, err = New(cfg)
 	}
 	if err != nil {
 		panic(err)

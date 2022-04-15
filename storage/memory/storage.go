@@ -12,9 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
@@ -39,29 +38,20 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewStorage(icfg any) (storage.Storage, error) {
-	// Marshal the config back into bytes.
-	bytes, err := yaml.Marshal(icfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmarshal the bytes into the proper config type.
+func (d driver) NewStorage(icfg conf.MapConfig) (storage.Storage, error) {
 	var cfg Config
-	err = yaml.Unmarshal(bytes, &cfg)
-	if err != nil {
+	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-
 	return New(cfg)
 }
 
 // Config holds the configuration of a memory Storage.
 type Config struct {
-	GarbageCollectionInterval   time.Duration `yaml:"gc_interval"`
-	PrometheusReportingInterval time.Duration `yaml:"prometheus_reporting_interval"`
-	PeerLifetime                time.Duration `yaml:"peer_lifetime"`
-	ShardCount                  int           `yaml:"shard_count"`
+	GarbageCollectionInterval   time.Duration `cfg:"gc_interval"`
+	PrometheusReportingInterval time.Duration `cfg:"prometheus_reporting_interval"`
+	PeerLifetime                time.Duration `cfg:"peer_lifetime"`
+	ShardCount                  int           `cfg:"shard_count"`
 }
 
 // LogFields renders the current config as a set of Logrus fields.

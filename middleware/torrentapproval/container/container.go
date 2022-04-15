@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -12,7 +13,7 @@ import (
 const DefaultStorageCtxName = "MW_APPROVAL"
 
 // Builder function that creates and configures specific container
-type Builder func([]byte, storage.Storage) (Container, error)
+type Builder func(conf.MapConfig, storage.Storage) (Container, error)
 
 var (
 	buildersMU sync.Mutex
@@ -42,7 +43,7 @@ type Container interface {
 }
 
 // GetContainer creates Container by its name and provided confBytes
-func GetContainer(name string, confBytes []byte, storage storage.Storage) (Container, error) {
+func GetContainer(name string, config conf.MapConfig, storage storage.Storage) (Container, error) {
 	buildersMU.Lock()
 	defer buildersMU.Unlock()
 	var err error
@@ -50,7 +51,7 @@ func GetContainer(name string, confBytes []byte, storage storage.Storage) (Conta
 	if builder, exist := builders[name]; !exist {
 		err = ErrContainerDoesNotExist
 	} else {
-		cn, err = builder(confBytes, storage)
+		cn, err = builder(config, storage)
 	}
 	return cn, err
 }

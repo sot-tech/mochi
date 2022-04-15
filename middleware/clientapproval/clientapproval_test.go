@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 )
 
 var cases = []struct {
@@ -52,7 +53,8 @@ var cases = []struct {
 func TestHandleAnnounce(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing peerid %s", tt.peerID), func(t *testing.T) {
-			h, err := NewHook(tt.cfg)
+			c := conf.MapConfig{"whitelist": tt.cfg.Whitelist, "blacklist": tt.cfg.Blacklist}
+			h, err := build(c, nil)
 			require.Nil(t, err)
 
 			ctx := context.Background()

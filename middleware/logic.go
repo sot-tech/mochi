@@ -11,25 +11,14 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-// ResponseConfig holds the configuration used for the actual response.
-//
-// TODO(jzelinskie): Evaluate whether we would like to make this optional.
-// We can make Conf extensible enough that you can program a new response
-// generator at the cost of making it possible for users to create config that
-// won't compose a functional tracker.
-type ResponseConfig struct {
-	AnnounceInterval    time.Duration `yaml:"announce_interval"`
-	MinAnnounceInterval time.Duration `yaml:"min_announce_interval"`
-}
-
 var _ frontend.TrackerLogic = &Logic{}
 
 // NewLogic creates a new instance of a TrackerLogic that executes the provided
 // middleware hooks.
-func NewLogic(cfg ResponseConfig, peerStore storage.Storage, preHooks, postHooks []Hook) *Logic {
+func NewLogic(annInterval, minAnnInterval time.Duration, peerStore storage.Storage, preHooks, postHooks []Hook) *Logic {
 	return &Logic{
-		announceInterval:    cfg.AnnounceInterval,
-		minAnnounceInterval: cfg.MinAnnounceInterval,
+		announceInterval:    annInterval,
+		minAnnounceInterval: minAnnInterval,
 		preHooks:            append(preHooks, &responseHook{store: peerStore}),
 		postHooks:           append(postHooks, &swarmInteractionHook{store: peerStore}),
 	}

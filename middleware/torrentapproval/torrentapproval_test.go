@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/storage/memory"
 )
 
@@ -71,10 +71,8 @@ func TestHandleAnnounce(t *testing.T) {
 	require.Nil(t, err)
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {
-			d := driver{}
-			cfg, err := yaml.Marshal(tt.cfg)
-			require.Nil(t, err)
-			h, err := d.NewHook(cfg, storage)
+			cfg := conf.MapConfig{"initial_source": tt.cfg.Source, "configuration": tt.cfg.Configuration}
+			h, err := build(cfg, storage)
 			require.Nil(t, err)
 
 			ctx := context.Background()

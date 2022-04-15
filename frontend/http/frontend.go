@@ -15,6 +15,7 @@ import (
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
@@ -22,19 +23,19 @@ import (
 // Config represents all of the configurable options for an HTTP BitTorrent
 // Frontend.
 type Config struct {
-	Addr                string        `yaml:"addr"`
-	HTTPSAddr           string        `yaml:"https_addr"`
-	ReadTimeout         time.Duration `yaml:"read_timeout"`
-	WriteTimeout        time.Duration `yaml:"write_timeout"`
-	IdleTimeout         time.Duration `yaml:"idle_timeout"`
-	EnableKeepAlive     bool          `yaml:"enable_keepalive"`
-	TLSCertPath         string        `yaml:"tls_cert_path"`
-	TLSKeyPath          string        `yaml:"tls_key_path"`
-	AnnounceRoutes      []string      `yaml:"announce_routes"`
-	ScrapeRoutes        []string      `yaml:"scrape_routes"`
-	PingRoutes          []string      `yaml:"ping_routes"`
-	EnableRequestTiming bool          `yaml:"enable_request_timing"`
-	ParseOptions        `yaml:",inline"`
+	Addr                string
+	HTTPSAddr           string        `cfg:"https_addr"`
+	ReadTimeout         time.Duration `cfg:"read_timeout"`
+	WriteTimeout        time.Duration `cfg:"write_timeout"`
+	IdleTimeout         time.Duration `cfg:"idle_timeout"`
+	EnableKeepAlive     bool          `cfg:"enable_keepalive"`
+	TLSCertPath         string        `cfg:"tls_cert_path"`
+	TLSKeyPath          string        `cfg:"tls_key_path"`
+	AnnounceRoutes      []string      `cfg:"announce_routes"`
+	ScrapeRoutes        []string      `cfg:"scrape_routes"`
+	PingRoutes          []string      `cfg:"ping_routes"`
+	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	ParseOptions
 }
 
 // LogFields renders the current config as a set of Logrus fields.
@@ -147,7 +148,11 @@ type Frontend struct {
 
 // NewFrontend creates a new instance of an HTTP Frontend that asynchronously
 // serves requests.
-func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error) {
+func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
+	var provided Config
+	if err := c.Unmarshal(&provided); err != nil {
+		return nil, err
+	}
 	cfg := provided.Validate()
 
 	f := &Frontend{

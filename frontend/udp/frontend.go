@@ -16,6 +16,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/frontend/udp/bytepool"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
@@ -26,11 +27,11 @@ var allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGH
 // Config represents all of the configurable options for a UDP BitTorrent
 // Tracker.
 type Config struct {
-	Addr                string        `yaml:"addr"`
-	PrivateKey          string        `yaml:"private_key"`
-	MaxClockSkew        time.Duration `yaml:"max_clock_skew"`
-	EnableRequestTiming bool          `yaml:"enable_request_timing"`
-	ParseOptions        `yaml:",inline"`
+	Addr                string
+	PrivateKey          string        `cfg:"private_key"`
+	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
+	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	ParseOptions
 }
 
 // LogFields renders the current config as a set of Logrus fields.
@@ -109,7 +110,11 @@ type Frontend struct {
 
 // NewFrontend creates a new instance of an UDP Frontend that asynchronously
 // serves requests.
-func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error) {
+func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
+	var provided Config
+	if err := c.Unmarshal(&provided); err != nil {
+		return nil, err
+	}
 	cfg := provided.Validate()
 
 	f := &Frontend{
@@ -136,7 +141,7 @@ func NewFrontend(logic frontend.TrackerLogic, provided Config) (*Frontend, error
 	return f, nil
 }
 
-// Stop provides a thread-safe way to shutdown a currently running Frontend.
+// Stop provides a thread-safe way to shut down a currently running Frontend.
 func (t *Frontend) Stop() stop.Result {
 	select {
 	case <-t.closing:

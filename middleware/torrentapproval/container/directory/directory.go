@@ -10,11 +10,11 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/util/dirwatch"
 	"github.com/minio/sha256-simd"
-	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
@@ -30,14 +30,14 @@ func init() {
 // Config - implementation of directory container configuration.
 // Extends list.Config because uses the same storage and Approved function.
 type Config struct {
-	list.Config `yaml:",inline"`
+	list.Config
 	// Path in filesystem where torrent files stored and should be watched
-	Path string `yaml:"path"`
+	Path string
 }
 
-func build(confBytes []byte, st storage.Storage) (container.Container, error) {
+func build(conf conf.MapConfig, st storage.Storage) (container.Container, error) {
 	c := new(Config)
-	if err := yaml.Unmarshal(confBytes, c); err != nil {
+	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
 	var err error

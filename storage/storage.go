@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
@@ -23,7 +24,7 @@ type Entry struct {
 
 // Driver is the interface used to initialize a new type of Storage.
 type Driver interface {
-	NewStorage(cfg any) (Storage, error)
+	NewStorage(cfg conf.MapConfig) (Storage, error)
 }
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
@@ -167,7 +168,7 @@ func RegisterDriver(name string, d Driver) {
 // the list of registered Drivers.
 //
 // If a driver does not exist, returns ErrDriverDoesNotExist.
-func NewStorage(name string, cfg any) (ps Storage, err error) {
+func NewStorage(name string, cfg conf.MapConfig) (ps Storage, err error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 

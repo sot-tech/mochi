@@ -140,66 +140,91 @@ mochi:
             prometheus_reporting_interval: 1s
 
     # This block defines configuration used for redis storage.
-    # storage:
-    #   name: redis
-    #   config:
-    #     # The frequency which stale peers are removed.
-    #     # This balances between
-    #     # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
-    #     # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
-    #     gc_interval: 3m
+    #storage:
+        #name: redis
+        #config:
+            # The frequency which stale peers are removed.
+            # This balances between
+            # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+            # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+            #gc_interval: 3m
 
-    #     # The interval at which metrics about the number of infohashes and peers
-    #     # are collected and posted to Prometheus.
-    #     prometheus_reporting_interval: 1s
+            # The interval at which metrics about the number of infohashes and peers
+            # are collected and posted to Prometheus.
+            #prometheus_reporting_interval: 1s
 
-    #     # The amount of time until a peer is considered stale.
-    #     # To avoid churn, keep this slightly larger than `announce_interval`
-    #     peer_lifetime: 31m
+            # The amount of time until a peer is considered stale.
+            # To avoid churn, keep this slightly larger than `announce_interval`
+            #peer_lifetime: 31m
 
-    #     # The address of redis storage.
-    #     redis_broker: "redis://pwd@127.0.0.1:6379/0"
+            # The addresses of redis storage.
+            # If neither sentinel not cluster switched,
+            # only first address used
+            #addresses: ["127.0.0.1:6379"]
 
-    #     # The timeout for reading a command reply from redis.
-    #     read_timeout: 15s
+            # Database to be selected after connecting to the server.
+            #db: 0
 
-    #     # The timeout for writing a command to redis.
-    #     write_timeout: 15s
+            # Maximum number of socket connections, default is 10 per CPU
+            #pool_size: 10
 
-    #     # The timeout for connecting to redis server.
-    #     connect_timeout: 15s
+            # Use the specified login/username to authenticate the current connection
+            #login: ""
+
+            # Optional password
+            #password: ""
+
+            # Connect to sentinel nodes
+            #sentinel: false
+
+            # The master name
+            #sentinel_master: ""
+
+            # Connect to the redis cluster
+            #cluster: false
+
+            # The timeout for reading a command reply from redis.
+            #read_timeout: 15s
+
+            # The timeout for writing a command to redis.
+            #write_timeout: 15s
+
+            # Dial timeout for establishing new connections.
+            #connect_timeout: 15s
 
     # This block defines configuration used for middleware executed before a
     # response has been returned to a BitTorrent client.
     prehooks:
-    #- name: jwt
-    #  options:
-    #    issuer: "https://issuer.com"
-    #    audience: "https://some.issuer.com"
-    #    jwk_set_url: "https://issuer.com/keys"
-    #    jwk_set_update_interval: 5m
-
-    #- name: client approval
-    #  options:
-    #    whitelist:
-    #    - "OP1011"
-    #    blacklist:
-    #    - "OP1012"
-
-    #- name: interval variation
-    #  options:
-    #    modify_response_probability: 0.2
-    #    max_increase_delta: 60
-    #    modify_min_interval: true
-
-    # This block defines configuration used for torrent approval, it requires to be given
-    # hashes for whitelist or for blacklist. Hashes are hexadecimal-encoaded.
-    #-   name: torrent approval
-    #    options:
-    #        initial_source: list
-    #        configuration:
-    #            hash_list:
-    #                - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"
-    #            invert: false
-    #            storage_ctx: APPROVED_HASH
-
+#        -   name: jwt
+#            options:
+#                issuer: "https://issuer.com"
+#                audience: "https://some.issuer.com"
+#                jwk_set_url: "https://issuer.com/keys"
+#                jwk_set_update_interval: 5m
+#
+#        -   name: client approval
+#            options:
+#                whitelist:
+#                    - "OP1011"
+#                blacklist:
+#                    - "OP1012"
+#
+#        -   name: interval variation
+#            options:
+#                modify_response_probability: 0.2
+#                max_increase_delta: 60
+#                modify_min_interval: true
+#
+         # This block defines configuration used for torrent approval, it requires to be given
+         # hashes for whitelist or for blacklist. Hashes are hexadecimal-encoaded.
+#        -   name: torrent approval
+#            options:
+#                initial_source: list
+#                configuration:
+#                    hash_list:
+#                        - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"
+                     # true - whitelist mode, false - blacklist
+#                    invert: false
+                     # Name of storage context where store hash list
+#                    storage_ctx: APPROVED_HASH
+    posthooks:

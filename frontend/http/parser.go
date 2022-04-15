@@ -14,11 +14,11 @@ import (
 // If RealIPHeader is not empty string, the value of the first HTTP Header with
 // that name will be used.
 type ParseOptions struct {
-	AllowIPSpoofing     bool   `yaml:"allow_ip_spoofing"`
-	RealIPHeader        string `yaml:"real_ip_header"`
-	MaxNumWant          uint32 `yaml:"max_numwant"`
-	DefaultNumWant      uint32 `yaml:"default_numwant"`
-	MaxScrapeInfoHashes uint32 `yaml:"max_scrape_infohashes"`
+	AllowIPSpoofing     bool   `cfg:"allow_ip_spoofing"`
+	RealIPHeader        string `cfg:"real_ip_header"`
+	MaxNumWant          uint32 `cfg:"max_numwant"`
+	DefaultNumWant      uint32 `cfg:"default_numwant"`
+	MaxScrapeInfoHashes uint32 `cfg:"max_scrape_infohashes"`
 }
 
 // Default parser config constants.

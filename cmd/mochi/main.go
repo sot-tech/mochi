@@ -15,6 +15,7 @@ import (
 	"github.com/sot-tech/mochi/frontend/http"
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
 	_ "github.com/sot-tech/mochi/pkg/randseed"
@@ -79,28 +80,26 @@ func (r *Run) Start(ps storage.Storage) error {
 		return fmt.Errorf("failed to validate hook config: %w", err)
 	}
 
-	log.Info("starting tracker logic", log.Fields{
-		"prehooks":  cfg.PreHookNames(),
-		"posthooks": cfg.PostHookNames(),
-	})
-	r.logic = middleware.NewLogic(cfg.ResponseConfig, r.storage, preHooks, postHooks)
+	r.logic = middleware.NewLogic(cfg.AnnounceInterval, cfg.MinAnnounceInterval, r.storage, preHooks, postHooks)
 
-	if cfg.HTTPConfig.Addr != "" {
+	if len(cfg.HTTPConfig) > 0 {
 		log.Info("starting HTTP frontend", cfg.HTTPConfig)
-		httpfe, err := http.NewFrontend(r.logic, cfg.HTTPConfig)
-		if err != nil {
+		httpFE, err := http.NewFrontend(r.logic, cfg.HTTPConfig)
+		if err == nil {
+			r.sg.Add(httpFE)
+		} else if !errors.Is(err, conf.ErrNilConfigMap) {
 			return err
 		}
-		r.sg.Add(httpfe)
 	}
 
-	if cfg.UDPConfig.Addr != "" {
+	if len(cfg.UDPConfig) > 0 {
 		log.Info("starting UDP frontend", cfg.UDPConfig)
-		udpfe, err := udp.NewFrontend(r.logic, cfg.UDPConfig)
-		if err != nil {
+		udpFE, err := udp.NewFrontend(r.logic, cfg.UDPConfig)
+		if err == nil {
+			r.sg.Add(udpFE)
+		} else if !errors.Is(err, conf.ErrNilConfigMap) {
 			return err
 		}
-		r.sg.Add(udpfe)
 	}
 
 	return nil

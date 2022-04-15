@@ -5,19 +5,19 @@ import (
 
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
 	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 	_ "github.com/sot-tech/mochi/storage/memory"
 )
 
 func TestStartStopRaceIssue437(t *testing.T) {
-	ps, err := storage.NewStorage("memory", nil)
+	ps, err := storage.NewStorage("memory", conf.MapConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var responseConfig middleware.ResponseConfig
-	lgc := middleware.NewLogic(responseConfig, ps, nil, nil)
-	fe, err := udp.NewFrontend(lgc, udp.Config{Addr: "127.0.0.1:0"})
+	lgc := middleware.NewLogic(0, 0, ps, nil, nil)
+	fe, err := udp.NewFrontend(lgc, conf.MapConfig{"addr": "127.0.0.1:0"})
 	if err != nil {
 		t.Fatal(err)
 	}

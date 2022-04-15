@@ -6,87 +6,84 @@ import (
 	"errors"
 	"sync"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/storage"
 )
 
 var (
 	driversM sync.RWMutex
-	drivers  = make(map[string]Driver)
+	drivers  = make(map[string]Builder)
 
-	// ErrDriverDoesNotExist is the error returned by NewMiddleware when a
+	// ErrBuilderDoesNotExist is the error returned by NewMiddleware when a
 	// middleware driver with that name does not exist.
-	ErrDriverDoesNotExist = errors.New("middleware driver with that name does not exist")
+	ErrBuilderDoesNotExist = errors.New("middleware builder with that name does not exist")
 )
 
-// Driver is the interface used to initialize a new type of middleware.
+// Builder is the interface used to initialize a new type of middleware.
 //
-// The options parameter is YAML encoded bytes that should be unmarshalled into
+// The `options` parameter is map of parameters that should be unmarshalled into
 // the hook's custom configuration.
-type Driver interface {
-	NewHook(options []byte, storage storage.Storage) (Hook, error)
-}
+type Builder func(options conf.MapConfig, storage storage.Storage) (Hook, error)
 
-// RegisterDriver makes a Driver available by the provided name.
+// RegisterBuilder makes a Builder available by the provided name.
 //
 // If called twice with the same name, the name is blank, or if the provided
-// Driver is nil, this function panics.
-func RegisterDriver(name string, d Driver) {
+// Builder is nil, this function panics.
+func RegisterBuilder(name string, d Builder) {
 	if name == "" {
-		panic("middleware: could not register a Driver with an empty name")
+		panic("middleware: could not register a Builder with an empty name")
 	}
 	if d == nil {
-		panic("middleware: could not register a nil Driver")
+		panic("middleware: could not register a nil Builder")
 	}
 
 	driversM.Lock()
 	defer driversM.Unlock()
 
 	if _, dup := drivers[name]; dup {
-		panic("middleware: RegisterDriver called twice for " + name)
+		panic("middleware: RegisterBuilder called twice for " + name)
 	}
 
 	drivers[name] = d
 }
 
 // New attempts to initialize a new middleware instance from the
-// list of registered Drivers.
+// list of registered Builders.
 //
-// If a driver does not exist, returns ErrDriverDoesNotExist.
-func New(name string, optionBytes []byte, storage storage.Storage) (Hook, error) {
+// If a driver does not exist, returns ErrBuilderDoesNotExist.
+func New(name string, options conf.MapConfig, storage storage.Storage) (Hook, error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 
-	var d Driver
-	d, ok := drivers[name]
+	var newHook Builder
+	newHook, ok := drivers[name]
 	if !ok {
-		return nil, ErrDriverDoesNotExist
+		return nil, ErrBuilderDoesNotExist
 	}
 
-	return d.NewHook(optionBytes, storage)
+	return newHook(options, storage)
 }
 
 // Config is the generic configuration format used for all registered Hooks.
 type Config struct {
-	Name    string         `yaml:"name"`
-	Options map[string]any `yaml:"options"`
+	Name    string
+	Options conf.MapConfig
 }
 
 // HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
-func HooksFromHookConfigs(cfgs []Config, storage storage.Storage) (hooks []Hook, err error) {
-	for _, cfg := range cfgs {
-		// Marshal the options back into bytes.
-		var optionBytes []byte
-		optionBytes, err = yaml.Marshal(cfg.Options)
-		if err != nil {
-			return
+// each element of configs must contain pairs `name` - string and `options` - map[string]any
+func HooksFromHookConfigs(configs []conf.MapConfig, storage storage.Storage) (hooks []Hook, err error) {
+	for _, cfg := range configs {
+		var c Config
+
+		if err = cfg.Unmarshal(&c); err != nil {
+			break
 		}
 
 		var h Hook
-		h, err = New(cfg.Name, optionBytes, storage)
+		h, err = New(c.Name, c.Options, storage)
 		if err != nil {
-			return
+			break
 		}
 
 		hooks = append(hooks, h)

@@ -5,10 +5,9 @@ package list
 import (
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -23,20 +22,20 @@ func init() {
 // Config - implementation of list container configuration.
 type Config struct {
 	// HashList static list of HEX-encoded InfoHashes.
-	HashList []string `yaml:"hash_list"`
+	HashList []string `cfg:"hash_list"`
 	// If Invert set to true, all InfoHashes stored in HashList should be blacklisted.
-	Invert bool `yaml:"invert"`
+	Invert bool
 	// StorageCtx is the name of storage context where to store hash list.
 	// It might be table name, REDIS record key or something else, depending on storage.
-	StorageCtx string `yaml:"storage_ctx"`
+	StorageCtx string `cfg:"storage_ctx"`
 }
 
 // DUMMY used as value placeholder if storage needs some value with
 const DUMMY = "_"
 
-func build(confBytes []byte, st storage.Storage) (container.Container, error) {
+func build(conf conf.MapConfig, st storage.Storage) (container.Container, error) {
 	c := new(Config)
-	if err := yaml.Unmarshal(confBytes, c); err != nil {
+	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
 	l := &List{

@@ -29,9 +29,9 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"gopkg.in/yaml.v3"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
@@ -73,17 +73,11 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewStorage(icfg any) (storage.Storage, error) {
-	// Marshal the config back into bytes.
-	bytes, err := yaml.Marshal(icfg)
-	if err != nil {
-		return nil, err
-	}
-
+func (d driver) NewStorage(icfg conf.MapConfig) (storage.Storage, error) {
 	// Unmarshal the bytes into the proper config type.
 	var cfg Config
-	err = yaml.Unmarshal(bytes, &cfg)
-	if err != nil {
+
+	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 
@@ -92,20 +86,20 @@ func (d driver) NewStorage(icfg any) (storage.Storage, error) {
 
 // Config holds the configuration of a redis Storage.
 type Config struct {
-	GarbageCollectionInterval   time.Duration `yaml:"gc_interval"`
-	PrometheusReportingInterval time.Duration `yaml:"prometheus_reporting_interval"`
-	PeerLifetime                time.Duration `yaml:"peer_lifetime"`
-	Addresses                   []string      `yaml:"addresses"`
-	Login                       string        `yaml:"login"`
-	Password                    string        `yaml:"password"`
-	Sentinel                    bool          `yaml:"sentinel"`
-	SentinelMaster              string        `yaml:"sentinel_master"`
-	Cluster                     bool          `yaml:"cluster"`
-	DB                          int           `yaml:"db"`
-	PoolSize                    int           `yaml:"pool_size"`
-	ReadTimeout                 time.Duration `yaml:"read_timeout"`
-	WriteTimeout                time.Duration `yaml:"write_timeout"`
-	ConnectTimeout              time.Duration `yaml:"connect_timeout"`
+	GarbageCollectionInterval   time.Duration `cfg:"gc_interval"`
+	PrometheusReportingInterval time.Duration `cfg:"prometheus_reporting_interval"`
+	PeerLifetime                time.Duration `cfg:"peer_lifetime"`
+	Addresses                   []string
+	DB                          int
+	PoolSize                    int `cfg:"pool_size"`
+	Login                       string
+	Password                    string
+	Sentinel                    bool
+	SentinelMaster              string `cfg:"sentinel_master"`
+	Cluster                     bool
+	ReadTimeout                 time.Duration `cfg:"read_timeout"`
+	WriteTimeout                time.Duration `cfg:"write_timeout"`
+	ConnectTimeout              time.Duration `cfg:"connect_timeout"`
 }
 
 // LogFields renders the current config as a set of Logrus fields.
@@ -230,6 +224,7 @@ func connect(cfg Config) (*store, error) {
 			SentinelAddrs:    cfg.Addresses,
 			SentinelUsername: cfg.Login,
 			SentinelPassword: cfg.Password,
+			MasterName:       cfg.SentinelMaster,
 			DialTimeout:      cfg.ConnectTimeout,
 			ReadTimeout:      cfg.ReadTimeout,
 			WriteTimeout:     cfg.WriteTimeout,
@@ -411,10 +406,9 @@ func (ps *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 		ihSummaryKey, ihPeerKey, cntPeerKey = ih4Key, ih4SeederKey, cnt4SeederKey
 	}
 	ihPeerKey += ih.RawString()
-	now := ps.getClock()
 
 	return ps.tx(func(tx redis.Pipeliner) (err error) {
-		if err = tx.HSet(ps.ctx, ihPeerKey, peer.RawString(), now).Err(); err != nil {
+		if err = tx.HSet(ps.ctx, ihPeerKey, peer.RawString(), ps.getClock()).Err(); err != nil {
 			return
 		}
 		if err = ps.con.Incr(ps.ctx, cntPeerKey).Err(); err != nil {

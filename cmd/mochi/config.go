@@ -3,12 +3,11 @@ package main
 import (
 	"errors"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/sot-tech/mochi/frontend/http"
-	"github.com/sot-tech/mochi/frontend/udp"
-	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
 
 	// Imports to register middleware drivers.
 	_ "github.com/sot-tech/mochi/middleware/clientapproval"
@@ -21,38 +20,24 @@ import (
 	_ "github.com/sot-tech/mochi/storage/redis"
 )
 
-type storageConfig struct {
-	Name   string `yaml:"name"`
-	Config any    `yaml:"config"`
-}
-
 // Config represents the configuration used for executing Conf.
 type Config struct {
-	middleware.ResponseConfig `yaml:",inline"`
-	MetricsAddr               string              `yaml:"metrics_addr"`
-	HTTPConfig                http.Config         `yaml:"http"`
-	UDPConfig                 udp.Config          `yaml:"udp"`
-	Storage                   storageConfig       `yaml:"storage"`
-	PreHooks                  []middleware.Config `yaml:"prehooks"`
-	PostHooks                 []middleware.Config `yaml:"posthooks"`
-}
-
-// PreHookNames returns only the names of the configured middleware.
-func (cfg Config) PreHookNames() (names []string) {
-	for _, hook := range cfg.PreHooks {
-		names = append(names, hook.Name)
-	}
-
-	return
-}
-
-// PostHookNames returns only the names of the configured middleware.
-func (cfg Config) PostHookNames() (names []string) {
-	for _, hook := range cfg.PostHooks {
-		names = append(names, hook.Name)
-	}
-
-	return
+	// TODO(jzelinskie): Evaluate whether we would like to make
+	//  AnnounceInterval and MinAnnounceInterval optional.
+	// We can make Conf extensible enough that you can program a new response
+	// generator at the cost of making it possible for users to create config that
+	// won't compose a functional tracker.
+	AnnounceInterval    time.Duration  `yaml:"announce_interval"`
+	MinAnnounceInterval time.Duration  `yaml:"min_announce_interval"`
+	MetricsAddr         string         `yaml:"metrics_addr"`
+	HTTPConfig          conf.MapConfig `yaml:"http"`
+	UDPConfig           conf.MapConfig `yaml:"udp"`
+	Storage             struct {
+		Name   string         `yaml:"name"`
+		Config conf.MapConfig `yaml:"config"`
+	} `yaml:"storage"`
+	PreHooks  []conf.MapConfig `yaml:"prehooks"`
+	PostHooks []conf.MapConfig `yaml:"posthooks"`
 }
 
 // ConfigFile represents a namespaced YAML configation file.

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/conf"
 )
 
 var configTests = []struct {
@@ -45,7 +46,8 @@ func TestCheckConfig(t *testing.T) {
 }
 
 func TestHandleAnnounce(t *testing.T) {
-	h, err := NewHook(Config{1.0, 10, true})
+	c := conf.MapConfig{"modify_response_probability": 1.0, "max_increase_delta": 10, "modify_min_interval": true}
+	h, err := build(c, nil)
 	require.Nil(t, err)
 	require.NotNil(t, h)
 

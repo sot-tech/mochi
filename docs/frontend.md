@@ -1,10 +1,10 @@
 # Frontends
 
-A _Frontend_ is a component of Chihaya that serves a BitTorrent tracker on one protocol. The frontend accepts, parses
+A _Frontend_ is a component of MoChi that serves a BitTorrent tracker on one protocol. The frontend accepts, parses
 and sanitizes requests, passes them to the _Logic_ and writes responses to _Clients_.
 
 This documentation first gives a high-level overview of Frontends and later goes into implementation specifics. Users of
-Chihaya are expected to just read the first part - developers should read both.
+MoChi are expected to just read the first part - developers should read both.
 
 ## Functionality
 
@@ -19,7 +19,7 @@ answers each of them with one response, a basic overview of the control flow is:
 
 ## Available Frontends
 
-Chihaya ships with frontends for HTTP(S) and UDP. The HTTP frontend uses Go's `http` package. The UDP frontend
+MoChi ships with frontends for HTTP(S) and UDP. The HTTP frontend uses Go's `http` package. The UDP frontend
 implements both [old-opentracker-style] IPv6 and the IPv6 support specified in [BEP 15]. The advantage of the old
 opentracker style is that it contains a usable IPv6 `ip` field, to enable IP overrides in announces.
 

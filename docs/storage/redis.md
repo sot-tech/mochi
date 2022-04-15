@@ -1,17 +1,17 @@
 # Redis Storage
 
-This storage implementation separates Chihaya from its storage service. Chihaya achieves HA by storing all peer data in
-Redis. Multiple instances of Chihaya can use the same redis instance concurrently. The storage service can get HA by
-clustering. If one instance of Chihaya goes down, peer data will still be available in Redis.
+This storage implementation separates MoChi from its storage service. MoChi achieves HA by storing all peer data in
+Redis. Multiple instances of MoChi can use the same redis instance concurrently. The storage service can get HA by
+clustering. If one instance of MoChi goes down, peer data will still be available in Redis.
 
 The HA of storage service is not considered here. In case Redis runs as a single node, peer data will be unavailable if
-the node is down. You should consider setting up a Redis cluster for Chihaya in production.
+the node is down. You should consider setting up a Redis sentinel (or KeyDB active-active replication) for MoChi in production.
 
 This storage implementation is currently orders of magnitude slower than the in-memory implementation.
 
 ## Use Case
 
-When one instance of Chihaya is down, other instances can continue serving peers from Redis.
+When one instance of MoChi is down, other instances can continue serving peers from Redis.
 
 ## Configuration
 
@@ -57,27 +57,24 @@ time as value.
 Here is an example:
 
 ```
-- IPv4
-  - IPv4_S_<infohash 1>: <modification time>
-  - IPv4_L_<infohash 1>: <modification time>
-  - IPv4_S_<infohash 2>: <modification time>
-- IPv4_S_<infohash 1>
-  - <peer 1 key>: <modification time>
-  - <peer 2 key>: <modification time>
-- IPv4_L_<infohash 1>
-  - <peer 3 key>: <modification time>
-- IPv4_S_<infohash 2>
-  - <peer 3 key>: <modification time>
+- CHI_4_I
+  - CHI_4_S_<HASH1>
+  - CHI_4_L_<HASH1>
+- CHI_4_S_<HASH1>
+  - <peer 1 key>: <modification time in unix nanos>
+  - <peer 2 key>: <modification time in unix nanos>
+- CHI_4_L_<HASH2>
+  - <peer 3 key>: <modification time in unix nanos>
+...
 ```
 
 In this case, prometheus would record two swarms, three seeders, and one leecher. These three keys per address family
 are used to record the count of swarms, seeders, and leechers.
 
 ```
-- IPv4_infohash_count: 2
-- IPv4_S_count: 3
-- IPv4_L_count: 1
+- CHI_4_S_C: "3"
+- CHI_6_L_C: "1"
 ```
 
-Note: IPv4_infohash_count has a different meaning compared to the `memory` storage:
-It represents the number of infohashes reported by seeder, meaning that infohashes without seeders are not counted.
+Note: `CHI_4_I` set has a different meaning compared to the `memory` storage:
+It represents info hashes reported by seeder, meaning that info hashes without seeders are not counted.

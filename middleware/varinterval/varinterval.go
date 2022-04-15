@@ -7,11 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/pkg/random"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -19,43 +18,46 @@ import (
 const Name = "interval variation"
 
 func init() {
-	middleware.RegisterDriver(Name, driver{})
+	middleware.RegisterBuilder(Name, build)
 }
 
-var _ middleware.Driver = driver{}
-
-type driver struct{}
-
-func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook, error) {
+func build(options conf.MapConfig, _ storage.Storage) (h middleware.Hook, err error) {
 	var cfg Config
-	err := yaml.Unmarshal(optionBytes, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
-	}
 
-	return NewHook(cfg)
+	if err = options.Unmarshal(&cfg); err != nil {
+		err = fmt.Errorf("middleware %s: %w", Name, err)
+	} else {
+		if err := checkConfig(cfg); err == nil {
+			h = &hook{
+				cfg: cfg,
+			}
+		}
+	}
+	return
 }
 
-// ErrInvalidModifyResponseProbability is returned for a config with an invalid
-// ModifyResponseProbability.
-var ErrInvalidModifyResponseProbability = errors.New("invalid modify_response_probability")
+var (
+	// ErrInvalidModifyResponseProbability is returned for a config with an invalid
+	// ModifyResponseProbability.
+	ErrInvalidModifyResponseProbability = errors.New("invalid modify_response_probability")
 
-// ErrInvalidMaxIncreaseDelta is returned for a config with an invalid
-// MaxIncreaseDelta.
-var ErrInvalidMaxIncreaseDelta = errors.New("invalid max_increase_delta")
+	// ErrInvalidMaxIncreaseDelta is returned for a config with an invalid
+	// MaxIncreaseDelta.
+	ErrInvalidMaxIncreaseDelta = errors.New("invalid max_increase_delta")
+)
 
 // Config represents the configuration for the varinterval middleware.
 type Config struct {
 	// ModifyResponseProbability is the probability by which a response will
 	// be modified.
-	ModifyResponseProbability float32 `yaml:"modify_response_probability"`
+	ModifyResponseProbability float32 `cfg:"modify_response_probability"`
 
 	// MaxIncreaseDelta is the amount of seconds that will be added at most.
-	MaxIncreaseDelta int `yaml:"max_increase_delta"`
+	MaxIncreaseDelta int `cfg:"max_increase_delta"`
 
 	// ModifyMinInterval specifies whether min_interval should be increased
 	// as well.
-	ModifyMinInterval bool `yaml:"modify_min_interval"`
+	ModifyMinInterval bool `cfg:"modify_min_interval"`
 }
 
 func checkConfig(cfg Config) error {
@@ -73,17 +75,6 @@ func checkConfig(cfg Config) error {
 type hook struct {
 	cfg Config
 	sync.Mutex
-}
-
-// NewHook creates a middleware to randomly modify the announce interval from
-// the given config.
-func NewHook(cfg Config) (h middleware.Hook, err error) {
-	if err = checkConfig(cfg); err == nil {
-		h = &hook{
-			cfg: cfg,
-		}
-	}
-	return
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (context.Context, error) {

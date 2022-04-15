@@ -51,10 +51,10 @@ var (
 //
 // If AllowIPSpoofing is true, IPs provided via params will be used.
 type ParseOptions struct {
-	AllowIPSpoofing     bool   `yaml:"allow_ip_spoofing"`
-	MaxNumWant          uint32 `yaml:"max_numwant"`
-	DefaultNumWant      uint32 `yaml:"default_numwant"`
-	MaxScrapeInfoHashes uint32 `yaml:"max_scrape_infohashes"`
+	AllowIPSpoofing     bool   `cfg:"allow_ip_spoofing"`
+	MaxNumWant          uint32 `cfg:"max_numwant"`
+	DefaultNumWant      uint32 `cfg:"default_numwant"`
+	MaxScrapeInfoHashes uint32 `cfg:"max_scrape_infohashes"`
 }
 
 // Default parser config constants.

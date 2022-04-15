@@ -7,10 +7,9 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -18,31 +17,21 @@ import (
 const Name = "client approval"
 
 func init() {
-	middleware.RegisterDriver(Name, driver{})
+	middleware.RegisterBuilder(Name, build)
 }
 
-var _ middleware.Driver = driver{}
+var (
+	// ErrClientUnapproved is the error returned when a client's PeerID is invalid.
+	ErrClientUnapproved = bittorrent.ClientError("unapproved client")
 
-type driver struct{}
-
-func (d driver) NewHook(optionBytes []byte, _ storage.Storage) (middleware.Hook, error) {
-	var cfg Config
-	err := yaml.Unmarshal(optionBytes, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: %w", Name, err)
-	}
-
-	return NewHook(cfg)
-}
-
-// ErrClientUnapproved is the error returned when a client's PeerID is invalid.
-var ErrClientUnapproved = bittorrent.ClientError("unapproved client")
+	errBothListsProvided = errors.New("using both whitelist and blacklist is invalid")
+)
 
 // Config represents all the values required by this middleware to validate
 // peers based on their BitTorrent client ID.
 type Config struct {
-	Whitelist []string `yaml:"whitelist"`
-	Blacklist []string `yaml:"blacklist"`
+	Whitelist []string
+	Blacklist []string
 }
 
 type hook struct {
@@ -50,15 +39,20 @@ type hook struct {
 	unapproved map[ClientID]struct{}
 }
 
-// NewHook returns an instance of the client approval middleware.
-func NewHook(cfg Config) (middleware.Hook, error) {
+func build(options conf.MapConfig, _ storage.Storage) (middleware.Hook, error) {
+	var cfg Config
+
+	if err := options.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("middleware %s: %w", Name, err)
+	}
+
 	h := &hook{
 		approved:   make(map[ClientID]struct{}),
 		unapproved: make(map[ClientID]struct{}),
 	}
 
 	if len(cfg.Whitelist) > 0 && len(cfg.Blacklist) > 0 {
-		return nil, fmt.Errorf("using both whitelist and blacklist is invalid")
+		return nil, errBothListsProvided
 	}
 
 	for _, cidString := range cfg.Whitelist {
