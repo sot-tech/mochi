@@ -17,6 +17,7 @@ import (
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
@@ -285,17 +286,15 @@ func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) conte
 func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
-	if f.EnableRequestTiming {
-		start = time.Now()
-	}
 	var addr netip.Addr
-	defer func() {
-		if f.EnableRequestTiming {
-			recordResponseDuration("announce", addr, err, time.Since(start))
-		} else {
-			recordResponseDuration("announce", addr, err, time.Duration(0))
-		}
-	}()
+	if f.EnableRequestTiming && metrics.Enabled() {
+		start = time.Now()
+		defer func() {
+			if f.EnableRequestTiming && metrics.Enabled() {
+				recordResponseDuration("announce", addr, err, time.Since(start))
+			}
+		}()
+	}
 
 	req, err := ParseAnnounce(r, f.ParseOptions)
 	if err != nil {
@@ -325,17 +324,15 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
-	if f.EnableRequestTiming {
-		start = time.Now()
-	}
 	var addr netip.Addr
-	defer func() {
-		if f.EnableRequestTiming {
-			recordResponseDuration("scrape", addr, err, time.Since(start))
-		} else {
-			recordResponseDuration("scrape", addr, err, time.Duration(0))
-		}
-	}()
+	if f.EnableRequestTiming && metrics.Enabled() {
+		start = time.Now()
+		defer func() {
+			if f.EnableRequestTiming && metrics.Enabled() {
+				recordResponseDuration("scrape", addr, err, time.Since(start))
+			}
+		}()
+	}
 
 	req, err := ParseScrape(r, f.ParseOptions)
 	if err != nil {

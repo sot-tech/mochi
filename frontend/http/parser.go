@@ -79,7 +79,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	}
 	request.Peer.ID, err = bittorrent.NewPeerID([]byte(peerID))
 	if err != nil {
-		return nil, err
+		return nil, errInvalidPeerID
 	}
 	// Determine the number of remaining bytes for the client.
 	request.Left, err = qp.Uint("left", 64)

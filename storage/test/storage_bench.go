@@ -18,7 +18,7 @@ import (
 
 type benchData struct {
 	infoHashes [1000]bittorrent.InfoHash
-	peers      [10000]bittorrent.Peer
+	peers      [1000]bittorrent.Peer
 }
 
 func generateInfoHashes() (a [1000]bittorrent.InfoHash) {
@@ -28,7 +28,7 @@ func generateInfoHashes() (a [1000]bittorrent.InfoHash) {
 	return
 }
 
-func generatePeers() (a [10000]bittorrent.Peer) {
+func generatePeers() (a [1000]bittorrent.Peer) {
 	for i := range a {
 		var ip []byte
 		if rand.Int63()%2 == 0 {

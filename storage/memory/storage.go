@@ -15,6 +15,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
@@ -157,9 +158,11 @@ func NewPeerStorage(provided Config) (storage.PeerStorage, error) {
 					t.Stop()
 					return
 				case <-t.C:
-					before := time.Now()
-					ps.populateProm()
-					log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+					if metrics.Enabled() {
+						before := time.Now()
+						ps.populateProm()
+						log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+					}
 				}
 			}
 		}()

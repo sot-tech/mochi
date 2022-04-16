@@ -5,7 +5,8 @@ Redis. Multiple instances of MoChi can use the same redis instance concurrently.
 clustering. If one instance of MoChi goes down, peer data will still be available in Redis.
 
 The HA of storage service is not considered here. In case Redis runs as a single node, peer data will be unavailable if
-the node is down. You should consider setting up a Redis sentinel (or KeyDB active-active replication) for MoChi in production.
+the node is down. You should consider setting up a Redis sentinel (or KeyDB active-active replication) for MoChi in
+production.
 
 This storage implementation is currently orders of magnitude slower than the in-memory implementation.
 

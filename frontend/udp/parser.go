@@ -45,6 +45,8 @@ var (
 	errUnknownAction     = bittorrent.ClientError("unknown action ID")
 	errBadConnectionID   = bittorrent.ClientError("bad connection ID")
 	errUnknownOptionType = bittorrent.ClientError("unknown option type")
+	errInvalidInfoHash   = bittorrent.ClientError("invalid info hash")
+	errInvalidPeerID     = bittorrent.ClientError("invalid info hash")
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.
@@ -117,12 +119,12 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 
 	ih, err := bittorrent.NewInfoHash(infohash)
 	if err != nil {
-		return nil, err
+		return nil, errInvalidInfoHash
 	}
 
 	peerID, err := bittorrent.NewPeerID(peerIDBytes)
 	if err != nil {
-		return nil, err
+		return nil, errInvalidPeerID
 	}
 
 	request := &bittorrent.AnnounceRequest{

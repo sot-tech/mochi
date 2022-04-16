@@ -8,12 +8,20 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
+
+var serverCounter = new(int32)
+
+// Enabled indicates that configured at least one metrics server
+func Enabled() bool {
+	return atomic.LoadInt32(serverCounter) > 0
+}
 
 // Server represents a standalone HTTP server for serving a Prometheus metrics
 // endpoint.
@@ -63,6 +71,8 @@ func NewServer(addr string) *Server {
 	}
 
 	go func() {
+		atomic.AddInt32(serverCounter, 1)
+		defer atomic.AddInt32(serverCounter, -1)
 		if err := s.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal("failed while serving prometheus", log.Err(err))
 		}

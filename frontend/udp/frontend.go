@@ -18,6 +18,7 @@ import (
 	"github.com/sot-tech/mochi/frontend/udp/bytepool"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
@@ -214,17 +215,15 @@ func (t *Frontend) serve() error {
 			// Handle the request.
 			addr := addrPort.Addr().Unmap()
 			var start time.Time
-			if t.EnableRequestTiming {
+			if t.EnableRequestTiming && metrics.Enabled() {
 				start = time.Now()
 			}
 			action, err := t.handleRequest(
 				Request{(*buffer)[:n], addr},
 				ResponseWriter{t.socket, addrPort},
 			)
-			if t.EnableRequestTiming {
+			if t.EnableRequestTiming && metrics.Enabled() {
 				recordResponseDuration(action, addr, err, time.Since(start))
-			} else {
-				recordResponseDuration(action, addr, err, time.Duration(0))
 			}
 		}()
 	}

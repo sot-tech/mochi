@@ -33,17 +33,14 @@ type Params interface {
 	RawQuery() string
 }
 
-// ErrKeyNotFound is returned when a provided key has no value associated with
-// it.
-var ErrKeyNotFound = errors.New("query: value for the provided key does not exist")
-
-// ErrInvalidInfohash is returned when parsing a query encounters an infohash
-// with invalid length.
-// var ErrInvalidInfohash = ClientError("provided invalid infohash")
-
-// ErrInvalidQueryEscape is returned when a query string contains invalid
-// escapes.
-var ErrInvalidQueryEscape = ClientError("invalid query escape")
+var (
+	// ErrKeyNotFound is returned when a provided key has no value associated with
+	// it.
+	ErrKeyNotFound = errors.New("query: value for the provided key does not exist")
+	// ErrInvalidQueryEscape is returned when a query string contains invalid
+	// escapes.
+	ErrInvalidQueryEscape = ClientError("invalid query escape")
+)
 
 // QueryParams parses a URL Query and implements the Params interface with some
 // additional helpers.

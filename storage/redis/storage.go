@@ -33,6 +33,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
@@ -293,7 +294,7 @@ func (ps *store) scheduleGC(gcInterval, peerLifeTime time.Duration) {
 			start := time.Now()
 			ps.GC(time.Now().Add(-peerLifeTime))
 			duration := time.Since(start).Milliseconds()
-			log.Debug("storage: recordGCDuration", log.Fields{"timeTaken(ms)": duration})
+			log.Debug("storage: Redis: recordGCDuration", log.Fields{"timeTaken(ms)": duration})
 			storage.PromGCDurationMilliseconds.Observe(float64(duration))
 			t.Reset(gcInterval)
 		}
@@ -309,9 +310,11 @@ func (ps *store) schedulerProm(reportInterval time.Duration) {
 			t.Stop()
 			return
 		case <-t.C:
-			before := time.Now()
-			ps.populateProm()
-			log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+			if metrics.Enabled() {
+				before := time.Now()
+				ps.populateProm()
+				log.Debug("storage: Redis: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+			}
 		}
 	}
 }
@@ -334,7 +337,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	}
 	err = asNil(err)
 	if err != nil {
-		log.Error("storage: len/counter failure", log.Fields{
+		log.Error("storage: Redis: GET/SCARD failure", log.Fields{
 			"key":   key,
 			"error": err,
 		})
@@ -396,7 +399,7 @@ func asNil(err error) error {
 
 func (ps *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	var ihSummaryKey, ihPeerKey, cntPeerKey string
-	log.Debug("storage: PutSeeder", log.Fields{
+	log.Debug("storage: Redis: PutSeeder", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -411,17 +414,17 @@ func (ps *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 		if err = tx.HSet(ps.ctx, ihPeerKey, peer.RawString(), ps.getClock()).Err(); err != nil {
 			return
 		}
-		if err = ps.con.Incr(ps.ctx, cntPeerKey).Err(); err != nil {
+		if err = tx.Incr(ps.ctx, cntPeerKey).Err(); err != nil {
 			return
 		}
-		err = ps.con.SAdd(ps.ctx, ihSummaryKey, ihPeerKey).Err()
+		err = tx.SAdd(ps.ctx, ihSummaryKey, ihPeerKey).Err()
 		return
 	})
 }
 
 func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	var ihPeerKey, cntPeerKey string
-	log.Debug("storage: DeleteSeeder", log.Fields{
+	log.Debug("storage: Redis: DeleteSeeder", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -447,7 +450,7 @@ func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) erro
 
 func (ps *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	var ihSummaryKey, ihPeerKey, cntPeerKey string
-	log.Debug("storage: PutLeecher", log.Fields{
+	log.Debug("storage: Redis: PutLeecher", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -472,7 +475,7 @@ func (ps *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error 
 
 func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	var ihPeerKey, cntPeerKey string
-	log.Debug("storage: DeleteLeecher", log.Fields{
+	log.Debug("storage: Redis: DeleteLeecher", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -499,7 +502,7 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) err
 
 func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	var ihSummaryKey, ihSeederKey, ihLeecherKey, cntSeederKey, cntLeecherKey string
-	log.Debug("storage: GraduateLeecher", log.Fields{
+	log.Debug("storage: Redis: GraduateLeecher", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -537,7 +540,7 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 
 func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
 	var ihSeederKey, ihLeecherKey string
-	log.Debug("storage: AnnouncePeers", log.Fields{
+	log.Debug("storage: Redis: AnnouncePeers", log.Fields{
 		"InfoHash": ih,
 		"seeder":   seeder,
 		"numWant":  numWant,
@@ -578,7 +581,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 				peers = append(peers, p)
 				numWant--
 			} else {
-				log.Error("storage: unable to decode leecher", log.Fields{"peer": peerKey})
+				log.Error("storage: Redis: unable to decode leecher", log.Fields{"peer": peerKey})
 			}
 		}
 	} else {
@@ -591,7 +594,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 				peers = append(peers, p)
 				numWant--
 			} else {
-				log.Error("storage: unable to decode seeder", log.Fields{"peer": peerKey})
+				log.Error("storage: Redis: to decode seeder", log.Fields{"peer": peerKey})
 			}
 		}
 
@@ -607,7 +610,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 						peers = append(peers, p)
 						numWant--
 					} else {
-						log.Error("storage: unable to decode leecher", log.Fields{"peer": peerKey})
+						log.Error("storage: Redis: unable to decode leecher", log.Fields{"peer": peerKey})
 					}
 				}
 			}
@@ -619,7 +622,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 
 func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp bittorrent.Scrape) {
 	var ihSeederKey, ihLeecherKey string
-	log.Debug("storage: ScrapeSwarm", log.Fields{
+	log.Debug("storage: Redis ScrapeSwarm", log.Fields{
 		"InfoHash": ih,
 		"Peer":     peer,
 	})
@@ -635,7 +638,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp
 	leechersLen, err := ps.con.HLen(ps.ctx, ihLeecherKey).Result()
 	err = asNil(err)
 	if err != nil {
-		log.Error("storage: Redis HLEN failure", log.Fields{
+		log.Error("storage: Redis: HLEN failure", log.Fields{
 			"Hkey":  ihLeecherKey,
 			"error": err,
 		})
@@ -645,7 +648,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp
 	seedersLen, err := ps.con.HLen(ps.ctx, ihSeederKey).Result()
 	err = asNil(err)
 	if err != nil {
-		log.Error("storage: Redis HLEN failure", log.Fields{
+		log.Error("storage: Redis: HLEN failure", log.Fields{
 			"Hkey":  ihSeederKey,
 			"error": err,
 		})
@@ -672,7 +675,7 @@ func (ps *store) Put(ctx string, values ...storage.Entry) (err error) {
 			err = ps.con.HSet(ps.ctx, prefixKey+ctx, args...).Err()
 			if err != nil {
 				if strings.Contains(err.Error(), argNumErrorMsg) {
-					log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
+					log.Warn("This Redis version/implementation does not support variadic arguments for HSET")
 					for _, p := range values {
 						if err = ps.con.HSet(ps.ctx, prefixKey+ctx, p.Key, p.Value).Err(); err != nil {
 							break
@@ -703,7 +706,7 @@ func (ps *store) Delete(ctx string, keys ...string) (err error) {
 		err = asNil(ps.con.HDel(ps.ctx, prefixKey+ctx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
-				log.Warn("This REDIS version/implementation does not support variadic arguments for HDEL")
+				log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
 					if err = asNil(ps.con.HDel(ps.ctx, prefixKey+ctx, k).Err()); err != nil {
 						break
@@ -720,7 +723,7 @@ func (*store) Preservable() bool {
 }
 
 func (ps *store) GC(cutoff time.Time) {
-	log.Debug("storage: purging peers with no announces since", log.Fields{"before": cutoff})
+	log.Debug("storage: Redis: purging peers with no announces since", log.Fields{"before": cutoff})
 	cutoffUnix := cutoff.UnixNano()
 	ps.gc(cutoffUnix, false)
 	ps.gc(cutoffUnix, true)
@@ -802,43 +805,63 @@ func (ps *store) gc(cutoffNanos int64, v6 bool) {
 			peerList, err := ps.con.HGetAll(ps.ctx, infoHashKey).Result()
 			err = asNil(err)
 			if err == nil {
-				var removedPeerCount int64
+				peersToRemove := make([]string, 0)
 				for peerKey, timeStamp := range peerList {
-					var peer bittorrent.Peer
-					if peer, err = bittorrent.NewPeer(peerKey); err == nil {
-						if mtime, err := strconv.ParseInt(timeStamp, 10, 64); err == nil {
-							if mtime <= cutoffNanos {
-								log.Debug("storage: Redis: deleting peer", log.Fields{
-									"Peer": peer,
-								})
-								var count int64
-								count, err = ps.con.HDel(ps.ctx, infoHashKey, peerKey).Result()
-								err = asNil(err)
-								if err == nil {
-									removedPeerCount += count
-								}
-							}
+					if mtime, err := strconv.ParseInt(timeStamp, 10, 64); err == nil {
+						if mtime <= cutoffNanos {
+							log.Debug("storage: Redis: adding peer to remove list", log.Fields{
+								"key": peerKey,
+							})
+							peersToRemove = append(peersToRemove, peerKey)
 						}
-					}
-					if err != nil {
-						log.Error("storage: Redis: unable to delete info hash peer", log.Fields{
+					} else {
+						log.Error("storage: Redis: unable to decode peer timestamp", log.Fields{
 							"hashSet":     ihSummaryKey,
 							"infoHashKey": infoHashKey,
-							"peer":        peer,
 							"key":         peerKey,
+							"timestamp":   timeStamp,
 							"error":       err,
 						})
 					}
 				}
-				// DECR seeder/leecher counter
-				if removedPeerCount > 0 {
-					if err := ps.con.DecrBy(ps.ctx, cntKey, removedPeerCount).Err(); err != nil {
-						log.Error("storage: Redis: unable to decrement seeder/leecher peer count", log.Fields{
-							"hashSet":     ihSummaryKey,
-							"infoHashKey": infoHashKey,
-							"key":         cntKey,
-							"error":       err,
-						})
+				if len(peersToRemove) > 0 {
+					removedPeerCount, err := ps.con.HDel(ps.ctx, infoHashKey, peersToRemove...).Result()
+					err = asNil(err)
+					if err != nil {
+						if strings.Contains(err.Error(), argNumErrorMsg) {
+							log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
+							for _, k := range peersToRemove {
+								count, err := ps.con.HDel(ps.ctx, infoHashKey, k).Result()
+								err = asNil(err)
+								if err != nil {
+									log.Error("storage: Redis: unable to delete peer", log.Fields{
+										"hashSet":     ihSummaryKey,
+										"infoHashKey": infoHashKey,
+										"key":         k,
+										"error":       err,
+									})
+								} else {
+									removedPeerCount += count
+								}
+							}
+						} else {
+							log.Error("storage: Redis: unable to delete peers", log.Fields{
+								"hashSet":     ihSummaryKey,
+								"infoHashKey": infoHashKey,
+								"keys":        peersToRemove,
+								"error":       err,
+							})
+						}
+					}
+					if removedPeerCount > 0 { // DECR seeder/leecher counter
+						if err = ps.con.DecrBy(ps.ctx, cntKey, removedPeerCount).Err(); err != nil {
+							log.Error("storage: Redis: unable to decrement seeder/leecher peer count", log.Fields{
+								"hashSet":     ihSummaryKey,
+								"infoHashKey": infoHashKey,
+								"key":         cntKey,
+								"error":       err,
+							})
+						}
 					}
 				}
 
@@ -883,7 +906,7 @@ func (ps *store) Stop() stop.Result {
 		ps.wg.Wait()
 		var err error
 		if ps.con != nil {
-			log.Info("storage: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix 'IPv{4,6}_'.")
+			log.Info("storage: Redis: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + prefixKey)
 			err = ps.con.Close()
 		}
 		c.Done(err)
