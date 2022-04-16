@@ -39,7 +39,7 @@ type hook struct {
 	unapproved map[ClientID]struct{}
 }
 
-func build(options conf.MapConfig, _ storage.Storage) (middleware.Hook, error) {
+func build(options conf.MapConfig, _ storage.PeerStorage) (middleware.Hook, error) {
 	var cfg Config
 
 	if err := options.Unmarshal(&cfg); err != nil {

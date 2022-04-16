@@ -35,7 +35,7 @@ type Config struct {
 	Path string
 }
 
-func build(conf conf.MapConfig, st storage.Storage) (container.Container, error) {
+func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, error) {
 	c := new(Config)
 	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
@@ -84,7 +84,7 @@ func build(conf conf.MapConfig, st storage.Storage) (container.Container, error)
 					if len(name) == 0 {
 						name = list.DUMMY
 					}
-					if err := d.Storage.BulkPut(d.StorageCtx,
+					if err := d.Storage.Put(d.StorageCtx,
 						storage.Entry{
 							Key:   event.InfoHash.AsString(),
 							Value: name,

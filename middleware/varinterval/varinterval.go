@@ -22,7 +22,7 @@ func init() {
 	middleware.RegisterBuilder(Name, build)
 }
 
-func build(options conf.MapConfig, _ storage.Storage) (h middleware.Hook, err error) {
+func build(options conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg Config
 
 	if err = options.Unmarshal(&cfg); err != nil {

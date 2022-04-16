@@ -73,7 +73,7 @@ func init() {
 
 type driver struct{}
 
-func (d driver) NewStorage(icfg conf.MapConfig) (storage.Storage, error) {
+func (d driver) NewStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	// Unmarshal the bytes into the proper config type.
 	var cfg Config
 
@@ -84,7 +84,7 @@ func (d driver) NewStorage(icfg conf.MapConfig) (storage.Storage, error) {
 	return New(cfg)
 }
 
-// Config holds the configuration of a redis Storage.
+// Config holds the configuration of a redis PeerStorage.
 type Config struct {
 	GarbageCollectionInterval   time.Duration `cfg:"gc_interval"`
 	PrometheusReportingInterval time.Duration `cfg:"prometheus_reporting_interval"`
@@ -252,8 +252,8 @@ func connect(cfg Config) (*store, error) {
 	return db, err
 }
 
-// New creates a new Storage backed by redis.
-func New(conf Config) (storage.Storage, error) {
+// New creates a new PeerStorage backed by redis.
+func New(conf Config) (storage.PeerStorage, error) {
 	cfg, err := conf.Validate()
 	if err != nil {
 		return nil, err
@@ -658,36 +658,36 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp
 	return
 }
 
-func (ps *store) Put(ctx string, value storage.Entry) error {
-	return ps.con.HSet(ps.ctx, prefixKey+ctx, value.Key, value.Value).Err()
-}
-
-func (ps *store) Contains(ctx string, key string) (bool, error) {
-	exist, err := ps.con.HExists(ps.ctx, prefixKey+ctx, key).Result()
-	return exist, asNil(err)
-}
-
 const argNumErrorMsg = "ERR wrong number of arguments"
 
-func (ps *store) BulkPut(ctx string, pairs ...storage.Entry) (err error) {
-	if l := len(pairs); l > 0 {
-		args := make([]any, 0, l*2)
-		for _, p := range pairs {
-			args = append(args, p.Key, p.Value)
-		}
-		err = ps.con.HSet(ps.ctx, prefixKey+ctx, args...).Err()
-		if err != nil {
-			if strings.Contains(err.Error(), argNumErrorMsg) {
-				log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
-				for _, p := range pairs {
-					if err = ps.con.HSet(ps.ctx, prefixKey+ctx, p.Key, p.Value).Err(); err != nil {
-						break
+func (ps *store) Put(ctx string, values ...storage.Entry) (err error) {
+	if l := len(values); l > 0 {
+		if l == 1 {
+			err = ps.con.HSet(ps.ctx, prefixKey+ctx, values[0].Key, values[0].Value).Err()
+		} else {
+			args := make([]any, 0, l*2)
+			for _, p := range values {
+				args = append(args, p.Key, p.Value)
+			}
+			err = ps.con.HSet(ps.ctx, prefixKey+ctx, args...).Err()
+			if err != nil {
+				if strings.Contains(err.Error(), argNumErrorMsg) {
+					log.Warn("This REDIS version/implementation does not support variadic arguments for HSET")
+					for _, p := range values {
+						if err = ps.con.HSet(ps.ctx, prefixKey+ctx, p.Key, p.Value).Err(); err != nil {
+							break
+						}
 					}
 				}
 			}
 		}
 	}
 	return
+}
+
+func (ps *store) Contains(ctx string, key string) (bool, error) {
+	exist, err := ps.con.HExists(ps.ctx, prefixKey+ctx, key).Result()
+	return exist, asNil(err)
 }
 
 func (ps *store) Load(ctx string, key string) (v any, err error) {
@@ -715,6 +715,10 @@ func (ps *store) Delete(ctx string, keys ...string) (err error) {
 	return
 }
 
+func (*store) Preservable() bool {
+	return true
+}
+
 func (ps *store) GC(cutoff time.Time) {
 	log.Debug("storage: purging peers with no announces since", log.Fields{"before": cutoff})
 	cutoffUnix := cutoff.UnixNano()
@@ -722,7 +726,7 @@ func (ps *store) GC(cutoff time.Time) {
 	ps.gc(cutoffUnix, true)
 }
 
-// gc deletes all Peers from the Storage which are older than the
+// gc deletes all Peers from the PeerStorage which are older than the
 // cutoff time.
 //
 // This function must be able to execute while other methods on this interface

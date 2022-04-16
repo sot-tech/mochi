@@ -28,7 +28,7 @@ var e2eCmd *cobra.Command
 // Run represents the state of a running instance of Conf.
 type Run struct {
 	configFilePath string
-	storage        storage.Storage
+	storage        storage.PeerStorage
 	logic          *middleware.Logic
 	sg             *stop.Group
 }
@@ -45,7 +45,7 @@ func NewRun(configFilePath string) (*Run, error) {
 // Start begins an instance of Conf.
 // It is optional to provide an instance of the peer store to avoid the
 // creation of a new one.
-func (r *Run) Start(ps storage.Storage) error {
+func (r *Run) Start(ps storage.PeerStorage) error {
 	configFile, err := ParseConfigFile(r.configFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
@@ -115,7 +115,7 @@ func combineErrors(prefix string, errs []error) error {
 }
 
 // Stop shuts down an instance of Conf.
-func (r *Run) Stop(keepPeerStore bool) (storage.Storage, error) {
+func (r *Run) Stop(keepPeerStore bool) (storage.PeerStorage, error) {
 	log.Debug("stopping frontends and metrics server")
 	if errs := r.sg.Stop().Wait(); len(errs) != 0 {
 		return nil, combineErrors("failed while shutting down frontends", errs)

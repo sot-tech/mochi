@@ -33,7 +33,7 @@ type Config struct {
 // DUMMY used as value placeholder if storage needs some value with
 const DUMMY = "_"
 
-func build(conf conf.MapConfig, st storage.Storage) (container.Container, error) {
+func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, error) {
 	c := new(Config)
 	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
@@ -61,7 +61,7 @@ func build(conf conf.MapConfig, st storage.Storage) (container.Container, error)
 				init = append(init, storage.Entry{Key: ih.TruncateV1().RawString(), Value: DUMMY})
 			}
 		}
-		if err := l.Storage.BulkPut(l.StorageCtx, init...); err != nil {
+		if err := l.Storage.Put(l.StorageCtx, init...); err != nil {
 			return nil, fmt.Errorf("unable to put initial data: %w", err)
 		}
 	}
@@ -73,7 +73,7 @@ type List struct {
 	// Invert see Config.Invert description.
 	Invert bool
 	// Storage implementation where hashes are stored for approval checks.
-	Storage storage.Storage
+	Storage storage.DataStorage
 	// StorageCtx see Config.StorageCtx description.
 	StorageCtx string
 }

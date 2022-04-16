@@ -14,12 +14,12 @@ import (
 
 // PeerEqualityFunc is the boolean function to use to check two Peers for
 // equality.
-// Depending on the implementation of the Storage, this can be changed to
+// Depending on the implementation of the PeerStorage, this can be changed to
 // use (Peer).EqualEndpoint instead.
 var PeerEqualityFunc = func(p1, p2 bittorrent.Peer) bool { return p1.Equal(p2) }
 
 type testHolder struct {
-	st storage.Storage
+	st storage.PeerStorage
 }
 
 type hashPeer struct {
@@ -219,7 +219,7 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 			Value: c.ih.RawString(),
 		})
 	}
-	err := th.st.BulkPut("test", pairs...)
+	err := th.st.Put("test", pairs...)
 	require.Nil(t, err)
 
 	// check if exist in ctx we put
@@ -260,8 +260,8 @@ func (th *testHolder) GC(t *testing.T) {
 	}
 }
 
-// RunTests tests a Storage implementation against the interface.
-func RunTests(t *testing.T, p storage.Storage) {
+// RunTests tests a PeerStorage implementation against the interface.
+func RunTests(t *testing.T, p storage.PeerStorage) {
 	th := testHolder{st: p}
 
 	// Test ErrDNE for non-existent swarms.

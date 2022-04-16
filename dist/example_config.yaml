@@ -220,6 +220,8 @@ mochi:
 #        -   name: torrent approval
 #            options:
 #                initial_source: list
+                 # Save data provided by source in storage above
+#                preserve: false
 #                configuration:
 #                    hash_list:
 #                        - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"

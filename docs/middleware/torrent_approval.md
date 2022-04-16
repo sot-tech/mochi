@@ -21,10 +21,6 @@ If mode is **black list** (`invert` set to `true`), tracker will allow all hashe
 
 There are two sources of hashes: `list` and `directory`.
 
-Both of them used as **INITIAL** source for storing in storage.
-If storage is not `memory`, records are persisted until _somebody_
-or _something_ (different tool with access to storage) won't delete it.
-
 `list` is the static set of hashes, specified in configuration file.
 
 `directory` will watch for `*.torrent` files in specified path and
@@ -32,11 +28,16 @@ append/delete records from storage. This source will parse all existing
 files at start and then watch for new files to add, or for delete events
 to remove hash from storage.
 
+Note: if storage is not `memory`, and `preserve` option set to `true`, records
+will be persisted in storage until _somebody_ or _something_ (different tool with access
+to storage) won't delete it.
+
 ## Configuration
 
 This middleware provides the following parameters for configuration:
 
 - `initial_source` - source type: `list` or `directory`
+- `preserve`: - save source provided data into storage
 - `configuration` - options for specified source
 	- `list`:
 		- `hash_list` - list of HEX encoded hashes
@@ -57,8 +58,9 @@ mochi:
         -   name: torrent approval
                 options:
                     initial_source: list
+                    preserve: true
                     configuration:
-                        hash_list: ["AAA", "BBB"]
+                        hash_list: [ "AAA", "BBB" ]
                         invert: false
                         storage_ctx: APPROVED_HASH
 ```

@@ -23,7 +23,7 @@ var (
 //
 // The `options` parameter is map of parameters that should be unmarshalled into
 // the hook's custom configuration.
-type Builder func(options conf.MapConfig, storage storage.Storage) (Hook, error)
+type Builder func(options conf.MapConfig, storage storage.PeerStorage) (Hook, error)
 
 // RegisterBuilder makes a Builder available by the provided name.
 //
@@ -51,7 +51,7 @@ func RegisterBuilder(name string, d Builder) {
 // list of registered Builders.
 //
 // If a driver does not exist, returns ErrBuilderDoesNotExist.
-func New(name string, options conf.MapConfig, storage storage.Storage) (Hook, error) {
+func New(name string, options conf.MapConfig, storage storage.PeerStorage) (Hook, error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 
@@ -72,7 +72,7 @@ type Config struct {
 
 // HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
 // each element of configs must contain pairs `name` - string and `options` - map[string]any
-func HooksFromHookConfigs(configs []conf.MapConfig, storage storage.Storage) (hooks []Hook, err error) {
+func HooksFromHookConfigs(configs []conf.MapConfig, storage storage.PeerStorage) (hooks []Hook, err error) {
 	for _, cfg := range configs {
 		var c Config
 

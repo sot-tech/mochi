@@ -15,7 +15,7 @@ var _ frontend.TrackerLogic = &Logic{}
 
 // NewLogic creates a new instance of a TrackerLogic that executes the provided
 // middleware hooks.
-func NewLogic(annInterval, minAnnInterval time.Duration, peerStore storage.Storage, preHooks, postHooks []Hook) *Logic {
+func NewLogic(annInterval, minAnnInterval time.Duration, peerStore storage.PeerStorage, preHooks, postHooks []Hook) *Logic {
 	return &Logic{
 		announceInterval:    annInterval,
 		minAnnounceInterval: minAnnInterval,

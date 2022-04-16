@@ -20,8 +20,8 @@ var cfg = Config{
 	ConnectTimeout:              10 * time.Second,
 }
 
-func createNew() s.Storage {
-	var ps s.Storage
+func createNew() s.PeerStorage {
+	var ps s.PeerStorage
 	var err error
 	ps, err = New(cfg)
 	if err != nil {

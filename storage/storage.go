@@ -24,13 +24,13 @@ type Entry struct {
 	Value any
 }
 
-// Driver is the interface used to initialize a new type of Storage.
+// Driver is the interface used to initialize a new type of PeerStorage.
 type Driver interface {
-	NewStorage(cfg conf.MapConfig) (Storage, error)
+	NewStorage(cfg conf.MapConfig) (PeerStorage, error)
 }
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
-// AnnouncePeers method of the Storage interface if the requested resource
+// AnnouncePeers method of the PeerStorage interface if the requested resource
 // does not exist.
 var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 
@@ -38,10 +38,31 @@ var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 // store driver with that name does not exist.
 var ErrDriverDoesNotExist = errors.New("peer store driver with that name does not exist")
 
-// Storage is an interface that abstracts the interactions of storing and
+// DataStorage is the interface, used for implementing store for arbitrary data
+type DataStorage interface {
+	// Put used to place arbitrary k-v data with specified context
+	// into storage. ctx parameter used to group data
+	// (i.e. data only for specific middleware module: hash key, table name etc...)
+	Put(ctx string, values ...Entry) error
+
+	// Contains checks if any data in specified context exist
+	Contains(ctx string, key string) (bool, error)
+
+	// Load used to get arbitrary data in specified context by its key
+	Load(ctx string, key string) (any, error)
+
+	// Delete used to delete arbitrary data in specified context by its keys
+	Delete(ctx string, keys ...string) error
+
+	// Preservable indicates, that this storage can store data permanently,
+	// in other words, is NOT in-memory storage, which data will be lost after restart
+	Preservable() bool
+}
+
+// PeerStorage is an interface that abstracts the interactions of storing and
 // manipulating Peers such that it can be implemented for various data stores.
 //
-// Implementations of the Storage interface must do the following in addition
+// Implementations of the PeerStorage interface must do the following in addition
 // to implementing the methods of the interface in the way documented:
 //
 // - Implement a garbage-collection strategy that ensures stale data is removed.
@@ -50,13 +71,14 @@ var ErrDriverDoesNotExist = errors.New("peer store driver with that name does no
 //     be scanned periodically and too old Peers removed. The intervals and
 //     durations involved should be configurable.
 // - IPv4 and IPv6 swarms must be isolated from each other.
-//     A Storage must be able to transparently handle IPv4 and IPv6 Peers, but
+//     A PeerStorage must be able to transparently handle IPv4 and IPv6 Peers, but
 //     must separate them. AnnouncePeers and ScrapeSwarm must return information
 //     about the Swarm matching the given AddressFamily only.
 //
 // Implementations can be tested against this interface using the tests in
 // storage_test.go and the benchmarks in storage_bench.go.
-type Storage interface {
+type PeerStorage interface {
+	DataStorage
 	// PutSeeder adds a Seeder to the Swarm identified by the provided
 	// InfoHash.
 	PutSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
@@ -114,33 +136,15 @@ type Storage interface {
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
 	ScrapeSwarm(infoHash bittorrent.InfoHash, peer bittorrent.Peer) bittorrent.Scrape
 
-	// Put used to place arbitrary k-v data with specified context
-	// into storage. ctx parameter used to group data
-	// (i.e. data only for specific middleware module)
-	Put(ctx string, value Entry) error
-
-	// BulkPut used to place array of k-v data in specified context.
-	// Useful when several data entries should be added in single transaction/connection
-	BulkPut(ctx string, values ...Entry) error
-
-	// Contains checks if any data in specified context exist
-	Contains(ctx string, key string) (bool, error)
-
-	// Load used to get arbitrary data in specified context by its key
-	Load(ctx string, key string) (any, error)
-
-	// Delete used to delete arbitrary data in specified context by its keys
-	Delete(ctx string, keys ...string) error
-
 	// GC used to delete stale data, such as timed out seeders/leechers
 	GC(cutoff time.Time)
 
-	// Stopper is an interface that expects a Stop method to stop the Storage.
+	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper
 
 	// Fielder returns a loggable version of the data used to configure and
-	// operate a particular Storage.
+	// operate a particular PeerStorage.
 	log.Fielder
 }
 
@@ -166,11 +170,11 @@ func RegisterDriver(name string, d Driver) {
 	drivers[name] = d
 }
 
-// NewStorage attempts to initialize a new Storage instance from
+// NewStorage attempts to initialize a new PeerStorage instance from
 // the list of registered Drivers.
 //
 // If a driver does not exist, returns ErrDriverDoesNotExist.
-func NewStorage(name string, cfg conf.MapConfig) (ps Storage, err error) {
+func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 

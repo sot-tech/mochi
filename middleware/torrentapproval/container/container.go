@@ -15,7 +15,7 @@ import (
 const DefaultStorageCtxName = "MW_APPROVAL"
 
 // Builder function that creates and configures specific container
-type Builder func(conf.MapConfig, storage.Storage) (Container, error)
+type Builder func(conf.MapConfig, storage.DataStorage) (Container, error)
 
 var (
 	buildersMU sync.Mutex
@@ -45,7 +45,7 @@ type Container interface {
 }
 
 // GetContainer creates Container by its name and provided confBytes
-func GetContainer(name string, config conf.MapConfig, storage storage.Storage) (Container, error) {
+func GetContainer(name string, config conf.MapConfig, storage storage.DataStorage) (Container, error) {
 	buildersMU.Lock()
 	defer buildersMU.Unlock()
 	var err error

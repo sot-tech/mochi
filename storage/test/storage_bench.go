@@ -52,9 +52,9 @@ func generatePeers() (a [10000]bittorrent.Peer) {
 }
 
 type (
-	benchExecFunc           func(int, storage.Storage, *benchData) error
-	benchSetupFunc          func(storage.Storage, *benchData) error
-	benchStorageConstructor func() storage.Storage
+	benchExecFunc           func(int, storage.PeerStorage, *benchData) error
+	benchSetupFunc          func(storage.PeerStorage, *benchData) error
+	benchStorageConstructor func() storage.PeerStorage
 )
 
 type benchHolder struct {
@@ -102,65 +102,65 @@ func (bh *benchHolder) runBenchmark(b *testing.B, parallel bool, sf benchSetupFu
 }
 
 // Nop executes a no-op for each iteration.
-// It should produce the same results for each storage.Storage.
+// It should produce the same results for each storage.PeerStorage.
 // This can be used to get an estimate of the impact of the benchmark harness
 // on benchmark results and an estimate of the general performance of the system
 // benchmarked on.
 //
 // Nop can run in parallel.
 func (bh *benchHolder) Nop(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		return nil
 	})
 }
 
-// Put benchmarks the PutSeeder method of a storage.Storage by repeatedly Putting the
+// Put benchmarks the PutSeeder method of a storage.PeerStorage by repeatedly Putting the
 // same Peer for the same InfoHash.
 //
 // Put can run in parallel.
 func (bh *benchHolder) Put(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		return ps.PutSeeder(bd.infoHashes[0], bd.peers[0])
 	})
 }
 
-// Put1k benchmarks the PutSeeder method of a storage.Storage by cycling through 1000
+// Put1k benchmarks the PutSeeder method of a storage.PeerStorage by cycling through 1000
 // Peers and Putting them into the swarm of one infohash.
 //
 // Put1k can run in parallel.
 func (bh *benchHolder) Put1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		return ps.PutSeeder(bd.infoHashes[0], bd.peers[i%1000])
 	})
 }
 
-// Put1kInfoHash benchmarks the PutSeeder method of a storage.Storage by cycling
+// Put1kInfoHash benchmarks the PutSeeder method of a storage.PeerStorage by cycling
 // through 1000 infoHashes and putting the same peer into their swarms.
 //
 // Put1kInfoHash can run in parallel.
 func (bh *benchHolder) Put1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		return ps.PutSeeder(bd.infoHashes[i%1000], bd.peers[0])
 	})
 }
 
-// Put1kInfoHash1k benchmarks the PutSeeder method of a storage.Storage by cycling
+// Put1kInfoHash1k benchmarks the PutSeeder method of a storage.PeerStorage by cycling
 // through 1000 infoHashes and 1000 Peers and calling Put with them.
 //
 // Put1kInfoHash1k can run in parallel.
 func (bh *benchHolder) Put1kInfoHash1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infoHashes[i%1000], bd.peers[(i*3)%1000])
 		return err
 	})
 }
 
-// PutDelete benchmarks the PutSeeder and DeleteSeeder methods of a storage.Storage by
+// PutDelete benchmarks the PutSeeder and DeleteSeeder methods of a storage.PeerStorage by
 // calling PutSeeder followed by DeleteSeeder for one Peer and one infohash.
 //
 // PutDelete can not run in parallel.
 func (bh *benchHolder) PutDelete(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infoHashes[0], bd.peers[0])
 		if err != nil {
 			return err
@@ -174,7 +174,7 @@ func (bh *benchHolder) PutDelete(b *testing.B) {
 //
 // PutDelete1k can not run in parallel.
 func (bh *benchHolder) PutDelete1k(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infoHashes[0], bd.peers[i%1000])
 		if err != nil {
 			return err
@@ -188,7 +188,7 @@ func (bh *benchHolder) PutDelete1k(b *testing.B) {
 //
 // PutDelete1kInfoHash can not run in parallel.
 func (bh *benchHolder) PutDelete1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infoHashes[i%1000], bd.peers[0])
 		if err != nil {
 			return err
@@ -202,7 +202,7 @@ func (bh *benchHolder) PutDelete1kInfoHash(b *testing.B) {
 //
 // PutDelete1kInfoHash1k can not run in parallel.
 func (bh *benchHolder) PutDelete1kInfoHash1k(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutSeeder(bd.infoHashes[i%1000], bd.peers[(i*3)%1000])
 		if err != nil {
 			return err
@@ -212,102 +212,102 @@ func (bh *benchHolder) PutDelete1kInfoHash1k(b *testing.B) {
 	})
 }
 
-// DeleteNonexist benchmarks the DeleteSeeder method of a storage.Storage by
+// DeleteNonexist benchmarks the DeleteSeeder method of a storage.PeerStorage by
 // attempting to delete a Peer that is nonexistent.
 //
 // DeleteNonexist can run in parallel.
 func (bh *benchHolder) DeleteNonexist(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.DeleteSeeder(bd.infoHashes[0], bd.peers[0])
 		return nil
 	})
 }
 
-// DeleteNonexist1k benchmarks the DeleteSeeder method of a storage.Storage by
+// DeleteNonexist1k benchmarks the DeleteSeeder method of a storage.PeerStorage by
 // attempting to delete one of 1000 nonexistent Peers.
 //
 // DeleteNonexist can run in parallel.
 func (bh *benchHolder) DeleteNonexist1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.DeleteSeeder(bd.infoHashes[0], bd.peers[i%1000])
 		return nil
 	})
 }
 
-// DeleteNonexist1kInfoHash benchmarks the DeleteSeeder method of a storage.Storage by
+// DeleteNonexist1kInfoHash benchmarks the DeleteSeeder method of a storage.PeerStorage by
 // attempting to delete one Peer from one of 1000 infoHashes.
 //
 // DeleteNonexist1kInfoHash can run in parallel.
 func (bh *benchHolder) DeleteNonexist1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.DeleteSeeder(bd.infoHashes[i%1000], bd.peers[0])
 		return nil
 	})
 }
 
-// DeleteNonexist1kInfoHash1k benchmarks the Delete method of a storage.Storage by
+// DeleteNonexist1kInfoHash1k benchmarks the Delete method of a storage.PeerStorage by
 // attempting to delete one of 1000 Peers from one of 1000 InfoHashes.
 //
 // DeleteNonexist1kInfoHash1k can run in parallel.
 func (bh *benchHolder) DeleteNonexist1kInfoHash1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.DeleteSeeder(bd.infoHashes[i%1000], bd.peers[(i*3)%1000])
 		return nil
 	})
 }
 
-// GradNonexist benchmarks the GraduateLeecher method of a storage.Storage by
+// GradNonexist benchmarks the GraduateLeecher method of a storage.PeerStorage by
 // attempting to graduate a nonexistent Peer.
 //
 // GradNonexist can run in parallel.
 func (bh *benchHolder) GradNonexist(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.GraduateLeecher(bd.infoHashes[0], bd.peers[0])
 		return nil
 	})
 }
 
-// GradNonexist1k benchmarks the GraduateLeecher method of a storage.Storage by
+// GradNonexist1k benchmarks the GraduateLeecher method of a storage.PeerStorage by
 // attempting to graduate one of 1000 nonexistent Peers.
 //
 // GradNonexist1k can run in parallel.
 func (bh *benchHolder) GradNonexist1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.GraduateLeecher(bd.infoHashes[0], bd.peers[i%1000])
 		return nil
 	})
 }
 
-// GradNonexist1kInfoHash benchmarks the GraduateLeecher method of a storage.Storage
+// GradNonexist1kInfoHash benchmarks the GraduateLeecher method of a storage.PeerStorage
 // by attempting to graduate a nonexistent Peer for one of 100 InfoHashes.
 //
 // GradNonexist1kInfoHash can run in parallel.
 func (bh *benchHolder) GradNonexist1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.GraduateLeecher(bd.infoHashes[i%1000], bd.peers[0])
 		return nil
 	})
 }
 
-// GradNonexist1kInfoHash1k benchmarks the GraduateLeecher method of a storage.Storage
+// GradNonexist1kInfoHash1k benchmarks the GraduateLeecher method of a storage.PeerStorage
 // by attempting to graduate one of 1000 nonexistent Peers for one of 1000
 // infoHashes.
 //
 // GradNonexist1kInfoHash1k can run in parallel.
 func (bh *benchHolder) GradNonexist1kInfoHash1k(b *testing.B) {
-	bh.runBenchmark(b, true, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_ = ps.GraduateLeecher(bd.infoHashes[i%1000], bd.peers[(i*3)%1000])
 		return nil
 	})
 }
 
 // PutGradDelete benchmarks the PutLeecher, GraduateLeecher and DeleteSeeder
-// methods of a storage.Storage by adding one leecher to a swarm, promoting it to a
+// methods of a storage.PeerStorage by adding one leecher to a swarm, promoting it to a
 // seeder and deleting the seeder.
 //
 // PutGradDelete can not run in parallel.
 func (bh *benchHolder) PutGradDelete(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutLeecher(bd.infoHashes[0], bd.peers[0])
 		if err != nil {
 			return err
@@ -324,7 +324,7 @@ func (bh *benchHolder) PutGradDelete(b *testing.B) {
 //
 // PutGradDelete1k can not run in parallel.
 func (bh *benchHolder) PutGradDelete1k(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutLeecher(bd.infoHashes[0], bd.peers[i%1000])
 		if err != nil {
 			return err
@@ -342,7 +342,7 @@ func (bh *benchHolder) PutGradDelete1k(b *testing.B) {
 //
 // PutGradDelete1kInfoHash can not run in parallel.
 func (bh *benchHolder) PutGradDelete1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutLeecher(bd.infoHashes[i%1000], bd.peers[0])
 		if err != nil {
 			return err
@@ -360,7 +360,7 @@ func (bh *benchHolder) PutGradDelete1kInfoHash(b *testing.B) {
 //
 // PutGradDelete1kInfoHash can not run in parallel.
 func (bh *benchHolder) PutGradDelete1kInfoHash1k(b *testing.B) {
-	bh.runBenchmark(b, false, nil, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, false, nil, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		err := ps.PutLeecher(bd.infoHashes[i%1000], bd.peers[(i*3)%1000])
 		if err != nil {
 			return err
@@ -374,7 +374,7 @@ func (bh *benchHolder) PutGradDelete1kInfoHash1k(b *testing.B) {
 	})
 }
 
-func putPeers(ps storage.Storage, bd *benchData) error {
+func putPeers(ps storage.PeerStorage, bd *benchData) error {
 	for i := 0; i < 1000; i++ {
 		for j := 0; j < 1000; j++ {
 			var err error
@@ -391,13 +391,13 @@ func putPeers(ps storage.Storage, bd *benchData) error {
 	return nil
 }
 
-// AnnounceLeecher benchmarks the AnnouncePeers method of a storage.Storage for
+// AnnounceLeecher benchmarks the AnnouncePeers method of a storage.PeerStorage for
 // announcing a leecher.
 // The swarm announced to has 500 seeders and 500 leechers.
 //
 // AnnounceLeecher can run in parallel.
 func (bh *benchHolder) AnnounceLeecher(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_, err := ps.AnnouncePeers(bd.infoHashes[0], false, 50, bd.peers[0])
 		return err
 	})
@@ -408,7 +408,7 @@ func (bh *benchHolder) AnnounceLeecher(b *testing.B) {
 //
 // AnnounceLeecher1kInfoHash can run in parallel.
 func (bh *benchHolder) AnnounceLeecher1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_, err := ps.AnnouncePeers(bd.infoHashes[i%1000], false, 50, bd.peers[0])
 		return err
 	})
@@ -419,7 +419,7 @@ func (bh *benchHolder) AnnounceLeecher1kInfoHash(b *testing.B) {
 //
 // AnnounceSeeder can run in parallel.
 func (bh *benchHolder) AnnounceSeeder(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_, err := ps.AnnouncePeers(bd.infoHashes[0], true, 50, bd.peers[0])
 		return err
 	})
@@ -430,18 +430,18 @@ func (bh *benchHolder) AnnounceSeeder(b *testing.B) {
 //
 // AnnounceSeeder1kInfoHash can run in parallel.
 func (bh *benchHolder) AnnounceSeeder1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		_, err := ps.AnnouncePeers(bd.infoHashes[i%1000], true, 50, bd.peers[0])
 		return err
 	})
 }
 
-// ScrapeSwarm benchmarks the ScrapeSwarm method of a storage.Storage.
+// ScrapeSwarm benchmarks the ScrapeSwarm method of a storage.PeerStorage.
 // The swarm scraped has 500 seeders and 500 leechers.
 //
 // ScrapeSwarm can run in parallel.
 func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		ps.ScrapeSwarm(bd.infoHashes[0], bd.peers[0])
 		return nil
 	})
@@ -451,7 +451,7 @@ func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
 //
 // ScrapeSwarm1kInfoHash can run in parallel.
 func (bh *benchHolder) ScrapeSwarm1kInfoHash(b *testing.B) {
-	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.Storage, bd *benchData) error {
+	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
 		ps.ScrapeSwarm(bd.infoHashes[i%1000], bd.peers[0])
 		return nil
 	})

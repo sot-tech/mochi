@@ -8,8 +8,8 @@ import (
 	"github.com/sot-tech/mochi/storage/test"
 )
 
-func createNew() storage.Storage {
-	ps, err := New(Config{
+func createNew() storage.PeerStorage {
+	ps, err := NewPeerStorage(Config{
 		ShardCount:                  1024,
 		GarbageCollectionInterval:   10 * time.Minute,
 		PrometheusReportingInterval: 10 * time.Minute,

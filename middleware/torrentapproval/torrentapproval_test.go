@@ -67,7 +67,7 @@ var cases = []struct {
 
 func TestHandleAnnounce(t *testing.T) {
 	config := memory.Config{}.Validate()
-	storage, err := memory.New(config)
+	storage, err := memory.NewPeerStorage(config)
 	require.Nil(t, err)
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {

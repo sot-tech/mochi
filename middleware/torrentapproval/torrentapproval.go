@@ -10,6 +10,7 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/conf"
+	"github.com/sot-tech/mochi/storage/memory"
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
@@ -30,11 +31,14 @@ func init() {
 type baseConfig struct {
 	// Source - name of container for initial values
 	Source string `cfg:"initial_source"`
+	// Preserve - if true, container will receive real registered storage if it is NOT `memory`
+	// if false - temporary in-memory storage will be used or created
+	Preserve bool
 	// Configuration depends on used container
 	Configuration conf.MapConfig
 }
 
-func build(options conf.MapConfig, storage storage.Storage) (h middleware.Hook, err error) {
+func build(options conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg baseConfig
 	if err = options.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("middleware %s: %w", Name, err)
@@ -48,8 +52,13 @@ func build(options conf.MapConfig, storage storage.Storage) (h middleware.Hook, 
 		return nil, fmt.Errorf("invalid options for middleware %s: options not provided", Name)
 	}
 
+	var ds storage.DataStorage = st
+	if !cfg.Preserve && ds.Preservable() {
+		ds = memory.NewDataStore()
+	}
+
 	var c container.Container
-	if c, err = container.GetContainer(cfg.Source, cfg.Configuration, storage); err == nil {
+	if c, err = container.GetContainer(cfg.Source, cfg.Configuration, ds); err == nil {
 		h = &hook{c}
 	}
 	return h, err
