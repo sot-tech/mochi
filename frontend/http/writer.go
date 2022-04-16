@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"time"
 
@@ -49,26 +50,26 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 
 	// Add the peers to the dictionary in the compact format.
 	if resp.Compact {
-		var IPv4CompactDict, IPv6CompactDict []byte
-
 		// Add the IPv4 peers to the dictionary.
+		ipv4CompactDict := make([]byte, 0, (net.IPv4len+2)*len(resp.IPv4Peers))
 		for _, peer := range resp.IPv4Peers {
-			IPv4CompactDict = append(IPv4CompactDict, compact4(peer)...)
+			ipv4CompactDict = append(ipv4CompactDict, compact4(peer)...)
 		}
-		if len(IPv4CompactDict) > 0 {
-			bdict["peers"] = IPv4CompactDict
+		if len(ipv4CompactDict) > 0 {
+			bdict["peers"] = ipv4CompactDict
 		}
 
 		// Add the IPv6 peers to the dictionary.
+		ipv6CompactDict := make([]byte, 0, (net.IPv6len+2)*len(resp.IPv6Peers)) // IP + port
 		for _, peer := range resp.IPv6Peers {
-			IPv6CompactDict = append(IPv6CompactDict, compact6(peer)...)
+			ipv6CompactDict = append(ipv6CompactDict, compact6(peer)...)
 		}
-		if len(IPv6CompactDict) > 0 {
-			bdict["peers6"] = IPv6CompactDict
+		if len(ipv6CompactDict) > 0 {
+			bdict["peers6"] = ipv6CompactDict
 		}
 	} else {
 		// Add the peers to the dictionary.
-		peers := make([]map[string]any, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers))
+		peers := make([]map[string]any, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers)) // IP + port
 		for _, peer := range resp.IPv4Peers {
 			peers = append(peers, dict(peer))
 		}

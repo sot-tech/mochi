@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/tracker"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -97,7 +96,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 		UserAgent:  "mochi-e2e",
 	}.Do()
 	if err != nil {
-		return errors.Wrap(err, "announce failed")
+		return fmt.Errorf("announce failed: %w", err)
 	}
 
 	if len(resp.Peers) != 1 {
@@ -125,7 +124,7 @@ func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 		UserAgent:  "mochi-e2e",
 	}.Do()
 	if err != nil {
-		return errors.Wrap(err, "announce failed")
+		return fmt.Errorf("announce failed: %w", err)
 	}
 
 	if len(resp.Peers) != 1 {
