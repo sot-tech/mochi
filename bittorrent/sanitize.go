@@ -46,6 +46,11 @@ func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
 		r.InfoHashes = r.InfoHashes[:maxScrapeInfoHashes]
 	}
 
+	r.AddrPort = netip.AddrPortFrom(r.Addr(), r.Port())
+	if !r.Addr().IsValid() || r.Addr().IsUnspecified() {
+		return ErrInvalidIP
+	}
+
 	log.Debug("sanitized scrape", r, log.Fields{
 		"maxScrapeInfoHashes": maxScrapeInfoHashes,
 	})

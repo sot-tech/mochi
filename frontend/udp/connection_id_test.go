@@ -27,6 +27,21 @@ var golden = []struct {
 	{0, 0, "::1", "", true},
 }
 
+// NewConnectionID creates an 8-byte connection identifier for UDP packets as
+// described by BEP 15.
+// This is a wrapper around creating a new ConnectionIDGenerator and generating
+// an ID. It is recommended to use the generator for performance.
+func NewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
+	return NewConnectionIDGenerator(key).Generate(ip, now)
+}
+
+// ValidConnectionID determines whether a connection identifier is legitimate.
+// This is a wrapper around creating a new ConnectionIDGenerator and validating
+// the ID. It is recommended to use the generator for performance.
+func ValidConnectionID(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration, key string) bool {
+	return NewConnectionIDGenerator(key).Validate(connectionID, ip, now, maxClockSkew)
+}
+
 // simpleNewConnectionID generates a new connection ID the explicit way.
 // This is used to verify correct behaviour of the generator.
 func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {

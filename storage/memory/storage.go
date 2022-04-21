@@ -229,7 +229,7 @@ func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, addr netip.Addr) u
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
 	// IPv6 swarms.
 	idx := binary.BigEndian.Uint32([]byte(infoHash[:4])) % (uint32(len(ps.shards)) / 2)
-	if addr.Is6() && !addr.Is4In6() {
+	if addr.Is6() {
 		idx += uint32(len(ps.shards) / 2)
 	}
 	return idx
