@@ -12,6 +12,7 @@ import (
 )
 
 var cfg = Config{
+	Addresses:                   []string{"localhost:6379"},
 	GarbageCollectionInterval:   10 * time.Minute,
 	PrometheusReportingInterval: 10 * time.Minute,
 	PeerLifetime:                30 * time.Minute,

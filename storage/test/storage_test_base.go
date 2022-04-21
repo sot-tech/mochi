@@ -3,6 +3,7 @@
 package test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -59,7 +60,10 @@ func (th *testHolder) AnnouncePeers(t *testing.T) {
 			peer = v6Peer
 		}
 		_, err := th.st.AnnouncePeers(c.ih, false, 50, peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 	}
 }
 
@@ -98,6 +102,9 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 
 		peers, err = th.st.AnnouncePeers(c.ih, true, 50, peer)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
 		require.Nil(t, err)
 		require.False(t, containsPeer(peers, c.peer))
 	}
@@ -125,6 +132,9 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 
 		peers, err = th.st.AnnouncePeers(c.ih, false, 50, peer)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
 		require.Nil(t, err)
 		require.False(t, containsPeer(peers, c.peer))
 	}
@@ -255,8 +265,12 @@ func (th *testHolder) GC(t *testing.T) {
 	}
 	th.st.GC(time.Now().Add(time.Hour))
 	for _, c := range testData {
-		_, err := th.st.AnnouncePeers(c.ih, false, 100, v4Peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		peers, err := th.st.AnnouncePeers(c.ih, false, 100, v4Peer)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
+		require.Empty(t, peers)
 	}
 }
 
