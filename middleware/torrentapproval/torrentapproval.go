@@ -54,7 +54,7 @@ func build(options conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, e
 
 	var ds storage.DataStorage = st
 	if !cfg.Preserve && ds.Preservable() {
-		ds = memory.NewDataStore()
+		ds = memory.NewDataStorage()
 	}
 
 	var c container.Container

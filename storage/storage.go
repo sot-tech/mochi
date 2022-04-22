@@ -13,10 +13,63 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
+const (
+	defaultPrometheusReportingInterval = time.Second * 1
+	defaultGarbageCollectionInterval   = time.Minute * 3
+	defaultPeerLifetime                = time.Minute * 30
+)
+
 var (
 	driversM sync.RWMutex
-	drivers  = make(map[string]Driver)
+	drivers  = make(map[string]Builder)
 )
+
+// Config holds configuration for periodic execution tasks, which may or may not implement
+// specific storage (such as GCAware or StatisticsAware)
+type Config struct {
+	// GarbageCollectionInterval period of GC
+	GarbageCollectionInterval time.Duration `cfg:"gc_interval"`
+	// PeerLifetime maximum TTL of peer
+	PeerLifetime time.Duration `cfg:"peer_lifetime"`
+	// PrometheusReportingInterval period of statistics data polling
+	PrometheusReportingInterval time.Duration `cfg:"prometheus_reporting_interval"`
+}
+
+func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
+	if c.GarbageCollectionInterval <= 0 {
+		gcInterval = defaultGarbageCollectionInterval
+		log.Warn("falling back to default configuration", log.Fields{
+			"Name":     "GarbageCollectionInterval",
+			"Provided": c.GarbageCollectionInterval,
+			"Default":  defaultGarbageCollectionInterval,
+		})
+	} else {
+		gcInterval = c.GarbageCollectionInterval
+	}
+	if c.PeerLifetime <= 0 {
+		peerTTL = defaultPeerLifetime
+		log.Warn("falling back to default configuration", log.Fields{
+			"Name":     "PeerLifetime",
+			"Provided": c.PeerLifetime,
+			"Default":  defaultPeerLifetime,
+		})
+	} else {
+		peerTTL = c.PeerLifetime
+	}
+	return
+}
+
+func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
+	if c.PrometheusReportingInterval < 0 {
+		statInterval = defaultPrometheusReportingInterval
+		log.Warn("falling back to default configuration", log.Fields{
+			"Name":     "PrometheusReportingInterval",
+			"Provided": c.PrometheusReportingInterval,
+			"Default":  defaultPrometheusReportingInterval,
+		})
+	}
+	return
+}
 
 // Entry - some key-value pair, used for BulkPut
 type Entry struct {
@@ -24,19 +77,19 @@ type Entry struct {
 	Value any
 }
 
-// Driver is the interface used to initialize a new type of PeerStorage.
-type Driver interface {
-	NewStorage(cfg conf.MapConfig) (PeerStorage, error)
-}
+// Builder is the function used to initialize a new type of PeerStorage.
+type Builder func(cfg conf.MapConfig) (PeerStorage, error)
 
-// ErrResourceDoesNotExist is the error returned by all delete methods and the
-// AnnouncePeers method of the PeerStorage interface if the requested resource
-// does not exist.
-var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
+var (
+	// ErrResourceDoesNotExist is the error returned by all delete methods and the
+	// AnnouncePeers method of the PeerStorage interface if the requested resource
+	// does not exist.
+	ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 
-// ErrDriverDoesNotExist is the error returned by NewStorage when a peer
-// store driver with that name does not exist.
-var ErrDriverDoesNotExist = errors.New("peer store driver with that name does not exist")
+	// ErrDriverDoesNotExist is the error returned by NewStorage when a peer
+	// store driver with that name does not exist.
+	ErrDriverDoesNotExist = errors.New("peer store driver with that name does not exist")
+)
 
 // DataStorage is the interface, used for implementing store for arbitrary data
 type DataStorage interface {
@@ -59,6 +112,23 @@ type DataStorage interface {
 	Preservable() bool
 }
 
+// GCAware is the interface for storage that supports periodic
+// stale peers collection
+type GCAware interface {
+	// ScheduleGC used to delete stale data, such as timed out seeders/leechers.
+	// Note: implementation must create subroutine by itself
+	ScheduleGC(gcInterval, peerLifeTime time.Duration)
+}
+
+// StatisticsAware is the interface for storage that supports periodic
+// statistics collection
+type StatisticsAware interface {
+	// ScheduleStatisticsCollection used to receive statistics information about hashes,
+	// seeders and leechers count.
+	// Note: implementation must create subroutine by itself
+	ScheduleStatisticsCollection(reportInterval time.Duration)
+}
+
 // PeerStorage is an interface that abstracts the interactions of storing and
 // manipulating Peers such that it can be implemented for various data stores.
 //
@@ -70,10 +140,7 @@ type DataStorage interface {
 //     to track the last activity for that Peer. The entire database can then
 //     be scanned periodically and too old Peers removed. The intervals and
 //     durations involved should be configurable.
-// - IPv4 and IPv6 swarms must be isolated from each other.
-//     A PeerStorage must be able to transparently handle IPv4 and IPv6 Peers, but
-//     must separate them. AnnouncePeers and ScrapeSwarm must return information
-//     about the Swarm matching the given AddressFamily only.
+// - IPv4 and IPv6 swarms may be isolated from each other.
 //
 // Implementations can be tested against this interface using the tests in
 // storage_test.go and the benchmarks in storage_bench.go.
@@ -136,9 +203,6 @@ type PeerStorage interface {
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
 	ScrapeSwarm(infoHash bittorrent.InfoHash, peer bittorrent.Peer) bittorrent.Scrape
 
-	// GC used to delete stale data, such as timed out seeders/leechers
-	GC(cutoff time.Time)
-
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper
@@ -148,41 +212,62 @@ type PeerStorage interface {
 	log.Fielder
 }
 
-// RegisterDriver makes a Driver available by the provided name.
+// RegisterBuilder makes a Builder available by the provided name.
 //
 // If called twice with the same name, the name is blank, or if the provided
 // Driver is nil, this function panics.
-func RegisterDriver(name string, d Driver) {
+func RegisterBuilder(name string, b Builder) {
 	if name == "" {
-		panic("storage: could not register a Driver with an empty name")
+		panic("storage: could not register a Builder with an empty name")
 	}
-	if d == nil {
-		panic("storage: could not register a nil Driver")
+	if b == nil {
+		panic("storage: could not register a nil Builder")
 	}
 
 	driversM.Lock()
 	defer driversM.Unlock()
 
 	if _, dup := drivers[name]; dup {
-		panic("storage: RegisterDriver called twice for " + name)
+		panic("storage: RegisterBuilder called twice for " + name)
 	}
 
-	drivers[name] = d
+	drivers[name] = b
 }
 
 // NewStorage attempts to initialize a new PeerStorage instance from
 // the list of registered Drivers.
 //
-// If a driver does not exist, returns ErrDriverDoesNotExist.
+// If a builder does not exist, returns ErrDriverDoesNotExist.
 func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 
-	var d Driver
-	d, ok := drivers[name]
+	var b Builder
+	b, ok := drivers[name]
 	if !ok {
 		return nil, ErrDriverDoesNotExist
 	}
 
-	return d.NewStorage(cfg)
+	c := new(Config)
+	if err = cfg.Unmarshal(c); err != nil {
+		return
+	}
+
+	if ps, err = b(cfg); err != nil {
+		return
+	}
+
+	if gc, isOk := ps.(GCAware); isOk {
+		gc.ScheduleGC(c.sanitizeGCConfig())
+	}
+
+	if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
+		if st, isOk := ps.(StatisticsAware); isOk {
+			st.ScheduleStatisticsCollection(statInterval)
+		}
+	} else {
+		log.Info("prometheus disabled because of zero reporting interval")
+	}
+
+	return
 }

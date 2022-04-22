@@ -21,25 +21,19 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-// Name is the name by which this peer store is registered with Conf.
-const Name = "memory"
-
 // Default config constants.
 const (
-	defaultShardCount                  = 1024
-	defaultPrometheusReportingInterval = time.Second * 1
-	defaultGarbageCollectionInterval   = time.Minute * 3
-	defaultPeerLifetime                = time.Minute * 30
+	// Name is the name by which this peer store is registered with Conf.
+	Name              = "memory"
+	defaultShardCount = 1024
 )
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver(Name, driver{})
+	storage.RegisterBuilder(Name, Builder)
 }
 
-type driver struct{}
-
-func (d driver) NewStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+func Builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg Config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
@@ -49,20 +43,14 @@ func (d driver) NewStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 
 // Config holds the configuration of a memory PeerStorage.
 type Config struct {
-	GarbageCollectionInterval   time.Duration `cfg:"gc_interval"`
-	PrometheusReportingInterval time.Duration `cfg:"prometheus_reporting_interval"`
-	PeerLifetime                time.Duration `cfg:"peer_lifetime"`
-	ShardCount                  int           `cfg:"shard_count"`
+	ShardCount int `cfg:"shard_count"`
 }
 
 // LogFields renders the current config as a set of Logrus fields.
 func (cfg Config) LogFields() log.Fields {
 	return log.Fields{
-		"name":               Name,
-		"gcInterval":         cfg.GarbageCollectionInterval,
-		"promReportInterval": cfg.PrometheusReportingInterval,
-		"peerLifetime":       cfg.PeerLifetime,
-		"shardCount":         cfg.ShardCount,
+		"Name":       Name,
+		"ShardCount": cfg.ShardCount,
 	}
 }
 
@@ -76,36 +64,9 @@ func (cfg Config) Validate() Config {
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
 		validcfg.ShardCount = defaultShardCount
 		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".ShardCount",
-			"provided": cfg.ShardCount,
-			"default":  validcfg.ShardCount,
-		})
-	}
-
-	if cfg.GarbageCollectionInterval <= 0 {
-		validcfg.GarbageCollectionInterval = defaultGarbageCollectionInterval
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".GarbageCollectionInterval",
-			"provided": cfg.GarbageCollectionInterval,
-			"default":  validcfg.GarbageCollectionInterval,
-		})
-	}
-
-	if cfg.PrometheusReportingInterval < 0 {
-		validcfg.PrometheusReportingInterval = defaultPrometheusReportingInterval
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".PrometheusReportingInterval",
-			"provided": cfg.PrometheusReportingInterval,
-			"default":  validcfg.PrometheusReportingInterval,
-		})
-	}
-
-	if cfg.PeerLifetime <= 0 {
-		validcfg.PeerLifetime = defaultPeerLifetime
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".PeerLifetime",
-			"provided": cfg.PeerLifetime,
-			"default":  validcfg.PeerLifetime,
+			"Name":     Name + ".ShardCount",
+			"Provided": cfg.ShardCount,
+			"Default":  validcfg.ShardCount,
 		})
 	}
 
@@ -118,56 +79,12 @@ func NewPeerStorage(provided Config) (storage.PeerStorage, error) {
 	ps := &peerStore{
 		cfg:         cfg,
 		shards:      make([]*peerShard, cfg.ShardCount*2),
-		DataStorage: NewDataStore(),
+		DataStorage: NewDataStorage(),
 		closed:      make(chan struct{}),
 	}
 
 	for i := 0; i < cfg.ShardCount*2; i++ {
 		ps.shards[i] = &peerShard{swarms: make(map[bittorrent.InfoHash]swarm)}
-	}
-
-	// Start a goroutine for garbage collection.
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
-		t := time.NewTimer(cfg.GarbageCollectionInterval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ps.closed:
-				return
-			case <-t.C:
-				before := time.Now().Add(-cfg.PeerLifetime)
-				log.Debug("storage: purging peers with no announces since", log.Fields{"before": before})
-				start := time.Now()
-				ps.GC(before)
-				recordGCDuration(time.Since(start))
-			}
-		}
-	}()
-
-	if cfg.PrometheusReportingInterval > 0 {
-		// Start a goroutine for reporting statistics to Prometheus.
-		ps.wg.Add(1)
-		go func() {
-			defer ps.wg.Done()
-			t := time.NewTicker(cfg.PrometheusReportingInterval)
-			for {
-				select {
-				case <-ps.closed:
-					t.Stop()
-					return
-				case <-t.C:
-					if metrics.Enabled() {
-						before := time.Now()
-						ps.populateProm()
-						log.Debug("storage: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
-					}
-				}
-			}
-		}()
-	} else {
-		log.Info("prometheus disabled because of zero reporting interval")
 	}
 
 	return ps, nil
@@ -197,22 +114,60 @@ type peerStore struct {
 
 var _ storage.PeerStorage = &peerStore{}
 
-// populateProm aggregates metrics over all shards and then posts them to
-// prometheus.
-func (ps *peerStore) populateProm() {
-	var numInfohashes, numSeeders, numLeechers uint64
+func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
+	ps.wg.Add(1)
+	go func() {
+		defer ps.wg.Done()
+		t := time.NewTimer(gcInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ps.closed:
+				return
+			case <-t.C:
+				before := time.Now().Add(-peerLifeTime)
+				log.Debug("storage: Memory purging peers with no announces since", log.Fields{"before": before})
+				start := time.Now()
+				ps.gc(before)
+				recordGCDuration(time.Since(start))
+			}
+		}
+	}()
+}
 
-	for _, s := range ps.shards {
-		s.RLock()
-		numInfohashes += uint64(len(s.swarms))
-		numSeeders += s.numSeeders
-		numLeechers += s.numLeechers
-		s.RUnlock()
-	}
+func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) {
+	ps.wg.Add(1)
+	go func() {
+		defer ps.wg.Done()
+		t := time.NewTicker(reportInterval)
+		for {
+			select {
+			case <-ps.closed:
+				t.Stop()
+				return
+			case <-t.C:
+				if metrics.Enabled() {
+					before := time.Now()
+					// aggregates metrics over all shards and then posts them to
+					// prometheus.
+					var numInfohashes, numSeeders, numLeechers uint64
 
-	storage.PromInfoHashesCount.Set(float64(numInfohashes))
-	storage.PromSeedersCount.Set(float64(numSeeders))
-	storage.PromLeechersCount.Set(float64(numLeechers))
+					for _, s := range ps.shards {
+						s.RLock()
+						numInfohashes += uint64(len(s.swarms))
+						numSeeders += s.numSeeders
+						numLeechers += s.numLeechers
+						s.RUnlock()
+					}
+
+					storage.PromInfoHashesCount.Set(float64(numInfohashes))
+					storage.PromSeedersCount.Set(float64(numSeeders))
+					storage.PromLeechersCount.Set(float64(numLeechers))
+					log.Debug("storage: Memory: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+				}
+			}
+		}
+	}()
 }
 
 // recordGCDuration records the duration of a GC sweep.
@@ -485,8 +440,8 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (
 	return
 }
 
-// NewDataStore creates new in-memory data store
-func NewDataStore() storage.DataStorage {
+// NewDataStorage creates new in-memory data store
+func NewDataStorage() storage.DataStorage {
 	return new(dataStore)
 }
 
@@ -553,7 +508,7 @@ func (*dataStore) Preservable() bool {
 //
 // This function must be able to execute while other methods on this interface
 // are being executed in parallel.
-func (ps *peerStore) GC(cutoff time.Time) {
+func (ps *peerStore) gc(cutoff time.Time) {
 	select {
 	case <-ps.closed:
 		return

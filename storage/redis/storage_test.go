@@ -12,13 +12,11 @@ import (
 )
 
 var cfg = Config{
-	Addresses:                   []string{"localhost:6379"},
-	GarbageCollectionInterval:   10 * time.Minute,
-	PrometheusReportingInterval: 10 * time.Minute,
-	PeerLifetime:                30 * time.Minute,
-	ReadTimeout:                 10 * time.Second,
-	WriteTimeout:                10 * time.Second,
-	ConnectTimeout:              10 * time.Second,
+	Addresses:      []string{"localhost:6379"},
+	PeerLifetime:   30 * time.Minute,
+	ReadTimeout:    10 * time.Second,
+	WriteTimeout:   10 * time.Second,
+	ConnectTimeout: 10 * time.Second,
 }
 
 func createNew() s.PeerStorage {
@@ -26,7 +24,7 @@ func createNew() s.PeerStorage {
 	var err error
 	ps, err = New(cfg)
 	if err != nil {
-		fmt.Println("unable to create real Redis connection: ", err, " using simulator")
+		fmt.Println("unable to create real RedisDriver connection: ", err, " using simulator")
 		var rs *miniredis.Miniredis
 		rs, err = miniredis.Run()
 		if err != nil {
