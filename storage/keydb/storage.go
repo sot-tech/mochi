@@ -1,8 +1,12 @@
 // Package keydb implements the storage interface.
-// This storage mostly is the same as redis, but it collects peers
-// not in hashes, but in sets and uses KeyDB-specific command
-// `EXPIREMEMBER` and, so it does not need garbage collection.
-// Note: this storage also does not support statistics collection
+// This storage mostly is the same as redis, but
+// uses KeyDB-specific command `EXPIREMEMBER`, so it
+// does not need garbage collection.
+//
+// Storage uses redis.IHSeederKey and redis.IHLeecherKey,
+// BUT they are NOT compatible with each other because of
+// another structure (hash in redis and set in keydb).
+// Note: this storage also does not support statistics collection.
 package keydb
 
 import (
@@ -66,7 +70,7 @@ func New(cfg r.Config) (*store, error) {
 
 	var st *store
 	if err == nil {
-		st = &store{rs, cfg.LogFields()}
+		st = &store{rs, cfg.LogFields(), uint(cfg.PeerLifetime.Seconds())}
 	}
 
 	return st, err
@@ -75,41 +79,94 @@ func New(cfg r.Config) (*store, error) {
 type store struct {
 	r.Connection
 	logFields log.Fields
+	peerTTL   uint
 }
 
-func (s store) PutSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error {
-	// TODO implement me
-	panic("implement me")
+func (s store) setPeerTTL(infoHashKey, peerId string) error {
+	return s.Process(context.TODO(), redis.NewCmd(context.TODO(), expireMemberCmd, infoHashKey, peerId, s.peerTTL))
 }
 
-func (s store) DeleteSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error {
-	// TODO implement me
-	panic("implement me")
+func (s store) addPeer(infoHashKey, peerId string) (err error) {
+	log.Debug("storage: KeyDB: PutPeer", log.Fields{
+		"InfoHashKey": infoHashKey,
+		"PeerId":      peerId,
+	})
+	if err = s.SAdd(context.TODO(), infoHashKey, peerId).Err(); err == nil {
+		err = s.setPeerTTL(infoHashKey, peerId)
+	}
+	return
 }
 
-func (s store) PutLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error {
-	// TODO implement me
-	panic("implement me")
+func (s store) delPeer(infoHashKey, peerId string) error {
+	log.Debug("storage: KeyDB: DeletePeer", log.Fields{
+		"InfoHashKey": infoHashKey,
+		"PeerId":      peerId,
+	})
+	deleted, err := s.SRem(context.TODO(), infoHashKey, peerId).Uint64()
+	err = r.AsNil(err)
+	if err == nil && deleted == 0 {
+		err = storage.ErrResourceDoesNotExist
+	}
+
+	return err
 }
 
-func (s store) DeleteLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error {
-	// TODO implement me
-	panic("implement me")
+func (s store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.addPeer(r.IHSeederKey+ih.RawString(), peer.RawString())
 }
 
-func (s store) GraduateLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error {
-	// TODO implement me
-	panic("implement me")
+func (s store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(r.IHSeederKey+ih.RawString(), peer.RawString())
 }
 
-func (s store) AnnouncePeers(infoHash bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
-	// TODO implement me
-	panic("implement me")
+func (s store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.addPeer(r.IHLeecherKey+ih.RawString(), peer.RawString())
 }
 
-func (s store) ScrapeSwarm(infoHash bittorrent.InfoHash, peer bittorrent.Peer) bittorrent.Scrape {
-	// TODO implement me
-	panic("implement me")
+func (s store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(r.IHLeecherKey+ih.RawString(), peer.RawString())
+}
+
+func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
+	log.Debug("storage: KeyDB: GraduateLeecher", log.Fields{
+		"InfoHash": ih,
+		"Peer":     peer,
+	})
+	infoHash, peerId := ih.RawString(), peer.RawString()
+	ihSeederKey, ihLeecherKey := r.IHSeederKey+infoHash, r.IHLeecherKey+infoHash
+	var moved bool
+	if moved, err = s.SMove(context.TODO(), ihLeecherKey, ihSeederKey, peerId).Result(); err == nil {
+		if moved {
+			err = s.setPeerTTL(ihSeederKey, peerId)
+		} else {
+			err = s.addPeer(ihSeederKey, peerId)
+		}
+	}
+	return err
+}
+
+// AnnouncePeers is the same function as redis.AnnouncePeers
+func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) ([]bittorrent.Peer, error) {
+	log.Debug("storage: KeyDB: AnnouncePeers", log.Fields{
+		"InfoHash": ih,
+		"Seeder":   seeder,
+		"NumWant":  numWant,
+		"Peer":     peer,
+	})
+
+	return s.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string) *redis.StringSliceCmd {
+		return s.SRandMemberN(context.TODO(), infoHashKey, int64(numWant))
+	})
+}
+
+// ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
+func (s store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32) {
+	log.Debug("storage: KeyDB ScrapeSwarm", log.Fields{
+		"InfoHash": ih,
+		"Peer":     peer,
+	})
+	leechers, seeders = s.CountPeers(ih, s.SCard)
+	return
 }
 
 func (s *store) Stop() stop.Result {

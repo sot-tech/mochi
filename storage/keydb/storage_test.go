@@ -1,17 +1,16 @@
-package redis
+package keydb
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis"
-
 	s "github.com/sot-tech/mochi/storage"
+	r "github.com/sot-tech/mochi/storage/redis"
 	"github.com/sot-tech/mochi/storage/test"
 )
 
-var cfg = Config{
+var cfg = r.Config{
 	Addresses:      []string{"localhost:6379"},
 	PeerLifetime:   30 * time.Minute,
 	ReadTimeout:    10 * time.Second,
@@ -24,17 +23,7 @@ func createNew() s.PeerStorage {
 	var err error
 	ps, err = New(cfg)
 	if err != nil {
-		fmt.Println("unable to create real redis connection: ", err, " using simulator")
-		var rs *miniredis.Miniredis
-		rs, err = miniredis.Run()
-		if err != nil {
-			panic(err)
-		}
-		cfg.Addresses = []string{rs.Addr()}
-		ps, err = New(cfg)
-	}
-	if err != nil {
-		panic(err)
+		panic(fmt.Sprint("Unable to create KeyDB connection: ", err, "\nThis driver needs real KeyDB instance"))
 	}
 	return ps
 }

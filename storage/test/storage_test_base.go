@@ -68,10 +68,10 @@ func (th *testHolder) AnnouncePeers(t *testing.T) {
 
 func (th *testHolder) ScrapeSwarm(t *testing.T) {
 	for _, c := range testData {
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
-		require.Equal(t, uint32(0), scrape.Complete)
-		require.Equal(t, uint32(0), scrape.Incomplete)
-		require.Equal(t, uint32(0), scrape.Snatches)
+		l, s, n := th.st.ScrapeSwarm(c.ih, c.peer)
+		require.Equal(t, uint32(0), s)
+		require.Equal(t, uint32(0), l)
+		require.Equal(t, uint32(0), n)
 	}
 }
 
@@ -93,9 +93,9 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
-		require.Equal(t, uint32(2), scrape.Incomplete)
-		require.Equal(t, uint32(0), scrape.Complete)
+		l, s, _ := th.st.ScrapeSwarm(c.ih, c.peer)
+		require.Equal(t, uint32(2), l)
+		require.Equal(t, uint32(0), s)
 
 		err = th.st.DeleteLeecher(c.ih, c.peer)
 		require.Nil(t, err)
@@ -123,9 +123,9 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		scrape := th.st.ScrapeSwarm(c.ih, c.peer)
-		require.Equal(t, uint32(1), scrape.Incomplete)
-		require.Equal(t, uint32(1), scrape.Complete)
+		l, s, _ := th.st.ScrapeSwarm(c.ih, c.peer)
+		require.Equal(t, uint32(1), l)
+		require.Equal(t, uint32(1), s)
 
 		err = th.st.DeleteSeeder(c.ih, c.peer)
 		require.Nil(t, err)

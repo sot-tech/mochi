@@ -96,9 +96,7 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	s := h.store.ScrapeSwarm(req.InfoHash, req.Peer)
-	resp.Incomplete = s.Incomplete
-	resp.Complete = s.Complete
+	resp.Incomplete, resp.Complete, _ = h.store.ScrapeSwarm(req.InfoHash, req.Peer)
 
 	err = h.appendPeers(req, resp)
 	return ctx, err
@@ -161,7 +159,14 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 	}
 
 	for _, infoHash := range req.InfoHashes {
-		resp.Files = append(resp.Files, h.store.ScrapeSwarm(infoHash, req.Peer))
+		leechers, seeders, snatched := h.store.ScrapeSwarm(infoHash, req.Peer)
+
+		resp.Files = append(resp.Files, bittorrent.Scrape{
+			InfoHash:   infoHash,
+			Snatches:   snatched,
+			Complete:   seeders,
+			Incomplete: leechers,
+		})
 	}
 
 	return ctx, nil

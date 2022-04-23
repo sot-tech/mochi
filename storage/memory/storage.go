@@ -129,7 +129,7 @@ func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				log.Debug("storage: Memory purging peers with no announces since", log.Fields{"before": before})
 				start := time.Now()
 				ps.gc(before)
-				recordGCDuration(time.Since(start))
+				storage.PromGCDurationMilliseconds.Observe(float64(time.Since(start).Nanoseconds()) / float64(time.Millisecond))
 			}
 		}
 	}()
@@ -168,11 +168,6 @@ func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) 
 			}
 		}
 	}()
-}
-
-// recordGCDuration records the duration of a GC sweep.
-func recordGCDuration(duration time.Duration) {
-	storage.PromGCDurationMilliseconds.Observe(float64(duration.Nanoseconds()) / float64(time.Millisecond))
 }
 
 func (ps *peerStore) getClock() int64 {
@@ -416,14 +411,13 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 	return
 }
 
-func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp bittorrent.Scrape) {
+func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	resp.InfoHash = ih
 	shard := ps.shards[ps.shardIndex(ih, peer.Addr())]
 	shard.RLock()
 
@@ -433,8 +427,7 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (
 		return
 	}
 
-	resp.Incomplete = uint32(len(swarm.leechers))
-	resp.Complete = uint32(len(swarm.seeders))
+	leechers, seeders = uint32(len(swarm.leechers)), uint32(len(swarm.seeders))
 	shard.RUnlock()
 
 	return

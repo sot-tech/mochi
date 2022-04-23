@@ -64,7 +64,7 @@ const (
 var ErrSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
 
 func init() {
-	// Register the storage RedisDriver.
+	// Register the storage builder.
 	storage.RegisterBuilder(Name, Builder)
 }
 
@@ -426,51 +426,42 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 	})
 }
 
-func (ps *store) getPeers(infoHashKey, except string, max int, v4Only bool) (peers []bittorrent.Peer, err error) {
+func (ps Connection) parsePeersList(peersResult *redis.StringSliceCmd, skipPeerId string, v4Only bool) (peers []bittorrent.Peer, err error) {
 	var peerIds []string
-	peerIds, err = ps.HKeys(context.TODO(), infoHashKey).Result()
+	peerIds, err = peersResult.Result()
 	if err = AsNil(err); err == nil {
 		for _, peerId := range peerIds {
-			if peerId != except {
+			if peerId != skipPeerId {
 				if p, err := bittorrent.NewPeer(peerId); err == nil {
 					// If peer from request is V4 only, it won't receive V6 peers from DB
 					if !(v4Only && p.Addr().Is6()) {
 						peers = append(peers, p)
-						max--
 					}
 				} else {
 					log.Error("storage: Redis: unable to decode leecher", log.Fields{"PeerId": peerId})
 				}
-			}
-			if max == 0 {
-				break
 			}
 		}
 	}
 	return
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
-	log.Debug("storage: Redis: AnnouncePeers", log.Fields{
-		"InfoHash": ih,
-		"Seeder":   seeder,
-		"NumWant":  numWant,
-		"Peer":     peer,
-	})
+func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, peer bittorrent.Peer,
+	membersFn func(context.Context, string) *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
 
 	infoHash, peerId, isV4 := ih.RawString(), peer.RawString(), peer.Addr().Is4()
 
-	if seeder {
-		peers, err = ps.getPeers(IHLeecherKey+infoHash, peerId, numWant, isV4)
+	if forSeeder {
+		peers, err = ps.parsePeersList(membersFn(context.TODO(), IHLeecherKey+infoHash), peerId, isV4)
 	} else {
 		// Append as many seeders as possible.
-		peers, err = ps.getPeers(IHSeederKey+infoHash, peerId, numWant, isV4)
+		peers, err = ps.parsePeersList(membersFn(context.TODO(), IHSeederKey+infoHash), peerId, isV4)
 		if err != nil {
 			return
 		}
 
-		if numWant -= len(peers); numWant > 0 {
-			if leechers, err := ps.getPeers(IHLeecherKey+infoHash, peerId, numWant, isV4); err == nil {
+		if maxCount -= len(peers); maxCount > 0 {
+			if leechers, err := ps.parsePeersList(membersFn(context.TODO(), IHLeecherKey+infoHash), peerId, isV4); err == nil {
 				peers = append(peers, leechers...)
 			} else {
 				log.Warn("storage: Redis: error occurred while receiving leechers", log.Fields{"InfoHash": ih, "Error": err})
@@ -485,37 +476,55 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (resp bittorrent.Scrape) {
-	log.Debug("storage: RedisDriver ScrapeSwarm", log.Fields{
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) ([]bittorrent.Peer, error) {
+	log.Debug("storage: Redis: AnnouncePeers", log.Fields{
 		"InfoHash": ih,
+		"Seeder":   seeder,
+		"NumWant":  numWant,
 		"Peer":     peer,
 	})
-	resp.InfoHash = ih
+
+	return ps.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string) *redis.StringSliceCmd {
+		return ps.HRandField(ctx, infoHashKey, numWant, false)
+	})
+}
+
+func (ps Connection) CountPeers(ih bittorrent.InfoHash, countFn func(context.Context, string) *redis.IntCmd) (leechersCount, seedersCount uint32) {
 	infoHash := ih.RawString()
 	ihSeederKey, ihLeecherKey := IHSeederKey+infoHash, IHLeecherKey+infoHash
 
-	leechersLen, err := ps.HLen(context.TODO(), ihLeecherKey).Result()
+	count, err := countFn(context.TODO(), ihLeecherKey).Result()
 	err = AsNil(err)
 	if err != nil {
-		log.Error("storage: Redis: HLEN failure", log.Fields{
+		log.Error("storage: Redis: key size calculation failure", log.Fields{
 			"InfoHashKey": ihLeecherKey,
 			"Error":       err,
 		})
 		return
 	}
+	leechersCount = uint32(count)
 
-	seedersLen, err := ps.HLen(context.TODO(), ihSeederKey).Result()
+	count, err = countFn(context.TODO(), ihSeederKey).Result()
 	err = AsNil(err)
 	if err != nil {
-		log.Error("storage: Redis: HLEN failure", log.Fields{
+		log.Error("storage: Redis: key size calculation failure", log.Fields{
 			"InfoHashKey": ihSeederKey,
 			"Error":       err,
 		})
 		return
 	}
+	seedersCount = uint32(count)
 
-	resp.Incomplete = uint32(leechersLen)
-	resp.Complete = uint32(seedersLen)
+	return
+}
+
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32) {
+	log.Debug("storage: Redis ScrapeSwarm", log.Fields{
+		"InfoHash": ih,
+		"Peer":     peer,
+	})
+
+	leechers, seeders = ps.CountPeers(ih, ps.HLen)
 
 	return
 }
@@ -534,7 +543,7 @@ func (ps Connection) Put(ctx string, values ...storage.Entry) (err error) {
 			err = ps.HSet(context.TODO(), PrefixKey+ctx, args...).Err()
 			if err != nil {
 				if strings.Contains(err.Error(), argNumErrorMsg) {
-					log.Warn("This RedisDriver version/implementation does not support variadic arguments for HSET")
+					log.Warn("This Redis version/implementation does not support variadic arguments for HSET")
 					for _, p := range values {
 						if err = ps.HSet(context.TODO(), PrefixKey+ctx, p.Key, p.Value).Err(); err != nil {
 							break
@@ -565,7 +574,7 @@ func (ps Connection) Delete(ctx string, keys ...string) (err error) {
 		err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
-				log.Warn("This RedisDriver version/implementation does not support variadic arguments for HDEL")
+				log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
 					if err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, k).Err()); err != nil {
 						break
@@ -669,7 +678,7 @@ func (ps *store) gc(cutoff time.Time) {
 					err = AsNil(err)
 					if err != nil {
 						if strings.Contains(err.Error(), argNumErrorMsg) {
-							log.Warn("This RedisDriver version/implementation does not support variadic arguments for HDEL")
+							log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
 							for _, k := range peersToRemove {
 								count, err := ps.HDel(context.Background(), infoHashKey, k).Result()
 								err = AsNil(err)
