@@ -133,6 +133,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 		return nil, err
 	}
 
+	f.wg.Add(1)
 	go func() {
 		if err := f.serve(); err != nil {
 			log.Fatal("failed while serving udp", log.Err(err))
@@ -175,8 +176,6 @@ func (t *Frontend) listen() error {
 // until Stop() is called or an error is returned.
 func (t *Frontend) serve() error {
 	pool := bytepool.New(2048)
-
-	t.wg.Add(1)
 	defer t.wg.Done()
 
 	for {
