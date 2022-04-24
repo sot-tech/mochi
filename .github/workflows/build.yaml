@@ -26,7 +26,7 @@ jobs:
             redis:
                 image: "eqalpha/keydb"
                 ports: [ "6379:6379" ]
-                options: "--entrypoint keydb-server"
+                options: "--entrypoint keydb-server --protected-mode no"
         steps:
             -   uses: "actions/checkout@v3"
             -   uses: "actions/setup-go@v3"
@@ -61,7 +61,7 @@ jobs:
             redis:
                 image: "eqalpha/keydb"
                 ports: [ "6379:6379" ]
-                options: "--entrypoint keydb-server"
+                options: "--entrypoint keydb-server --protected-mode no"
         steps:
             -   uses: "actions/checkout@v3"
             -   uses: "actions/setup-go@v3"
