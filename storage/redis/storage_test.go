@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis"
-
 	s "github.com/sot-tech/mochi/storage"
 	"github.com/sot-tech/mochi/storage/test"
 )
@@ -22,19 +20,9 @@ var cfg = Config{
 func createNew() s.PeerStorage {
 	var ps s.PeerStorage
 	var err error
-	ps, err = New(cfg)
+	ps, err = newStore(cfg)
 	if err != nil {
-		fmt.Println("unable to create real redis connection: ", err, " using simulator")
-		var rs *miniredis.Miniredis
-		rs, err = miniredis.Run()
-		if err != nil {
-			panic(err)
-		}
-		cfg.Addresses = []string{rs.Addr()}
-		ps, err = New(cfg)
-	}
-	if err != nil {
-		panic(err)
+		panic(fmt.Sprint("Unable to create KeyDB connection: ", err, "\nThis driver needs real Redis instance"))
 	}
 	return ps
 }

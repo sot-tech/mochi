@@ -349,7 +349,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 
 	addr, err = netip.ParseAddr(host)
 	if err != nil || addr.IsUnspecified() {
-		log.Error("http: invalid IP: neither v4 nor v6", log.Fields{"RemoteAddr": r.RemoteAddr})
+		log.Error("http: invalid IP: neither v4 nor v6", log.Fields{"remoteAddr": r.RemoteAddr})
 		WriteError(w, bittorrent.ErrInvalidIP)
 		return
 	}

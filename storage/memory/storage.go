@@ -30,10 +30,10 @@ const (
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterBuilder(Name, Builder)
+	storage.RegisterBuilder(Name, builder)
 }
 
-func Builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
+func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg Config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
@@ -49,8 +49,8 @@ type Config struct {
 // LogFields renders the current config as a set of Logrus fields.
 func (cfg Config) LogFields() log.Fields {
 	return log.Fields{
-		"Name":       Name,
-		"ShardCount": cfg.ShardCount,
+		"name":       Name,
+		"shardCount": cfg.ShardCount,
 	}
 }
 
@@ -64,9 +64,9 @@ func (cfg Config) Validate() Config {
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
 		validcfg.ShardCount = defaultShardCount
 		log.Warn("falling back to default configuration", log.Fields{
-			"Name":     Name + ".ShardCount",
-			"Provided": cfg.ShardCount,
-			"Default":  validcfg.ShardCount,
+			"name":     Name + ".ShardCount",
+			"provided": cfg.ShardCount,
+			"default":  validcfg.ShardCount,
 		})
 	}
 

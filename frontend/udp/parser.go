@@ -81,8 +81,9 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, errMalformedPacket
 	}
 
-	// XXX: pure V2 hashes will cause invalid parsing
-	infohash := r.Packet[16:36]
+	// XXX: pure V2 hashes will cause invalid parsing,
+	// but BEP-52 says, that V2 hashes SHOULD be truncated
+	infoHash := r.Packet[16:36]
 	peerIDBytes := r.Packet[36:56]
 	downloaded := binary.BigEndian.Uint64(r.Packet[56:64])
 	left := binary.BigEndian.Uint64(r.Packet[64:72])
@@ -117,7 +118,7 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, err
 	}
 
-	ih, err := bittorrent.NewInfoHash(infohash)
+	ih, err := bittorrent.NewInfoHash(infoHash)
 	if err != nil {
 		return nil, errInvalidInfoHash
 	}
@@ -222,33 +223,27 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 	// Skip past the initial headers and check that the bytes left equal the
 	// length of a valid list of infohashes.
 	r.Packet = r.Packet[16:]
-	l := len(r.Packet)
-	isV1, isV2 := l%bittorrent.InfoHashV1Len == 0, l%bittorrent.InfoHashV2Len == 0
-
-	if !(isV1 || isV2) {
+	// Only V1 and V2to1 (truncated) allowed
+	if len(r.Packet)%bittorrent.InfoHashV1Len != 0 {
 		return nil, errMalformedPacket
 	}
 
 	// Allocate a list of infohashes and append it to the list until we're out.
-	var infohashes []bittorrent.InfoHash
+	var infoHashes []bittorrent.InfoHash
 	var err error
 	var request *bittorrent.ScrapeRequest
-	pageSize := bittorrent.InfoHashV1Len
-	if isV2 {
-		pageSize = bittorrent.InfoHashV2Len
-	}
-	for len(r.Packet) >= pageSize {
+	for len(r.Packet) >= bittorrent.InfoHashV1Len {
 		var ih bittorrent.InfoHash
-		if ih, err = bittorrent.NewInfoHash(r.Packet[:pageSize]); err == nil {
-			infohashes = append(infohashes, ih)
-			r.Packet = r.Packet[pageSize:]
+		if ih, err = bittorrent.NewInfoHash(r.Packet[:bittorrent.InfoHashV1Len]); err == nil {
+			infoHashes = append(infoHashes, ih)
+			r.Packet = r.Packet[bittorrent.InfoHashV1Len:]
 		} else {
 			break
 		}
 	}
 	if err == nil {
 		// Sanitize the request.
-		request = &bittorrent.ScrapeRequest{InfoHashes: infohashes}
+		request = &bittorrent.ScrapeRequest{InfoHashes: infoHashes}
 		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
 	}
 

@@ -39,9 +39,9 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.GarbageCollectionInterval <= 0 {
 		gcInterval = defaultGarbageCollectionInterval
 		log.Warn("falling back to default configuration", log.Fields{
-			"Name":     "GarbageCollectionInterval",
-			"Provided": c.GarbageCollectionInterval,
-			"Default":  defaultGarbageCollectionInterval,
+			"name":     "GarbageCollectionInterval",
+			"provided": c.GarbageCollectionInterval,
+			"default":  defaultGarbageCollectionInterval,
 		})
 	} else {
 		gcInterval = c.GarbageCollectionInterval
@@ -49,9 +49,9 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.PeerLifetime <= 0 {
 		peerTTL = defaultPeerLifetime
 		log.Warn("falling back to default configuration", log.Fields{
-			"Name":     "PeerLifetime",
-			"Provided": c.PeerLifetime,
-			"Default":  defaultPeerLifetime,
+			"name":     "PeerLifetime",
+			"provided": c.PeerLifetime,
+			"default":  defaultPeerLifetime,
 		})
 	} else {
 		peerTTL = c.PeerLifetime
@@ -63,9 +63,9 @@ func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 	if c.PrometheusReportingInterval < 0 {
 		statInterval = defaultPrometheusReportingInterval
 		log.Warn("falling back to default configuration", log.Fields{
-			"Name":     "PrometheusReportingInterval",
-			"Provided": c.PrometheusReportingInterval,
-			"Default":  defaultPrometheusReportingInterval,
+			"name":     "PrometheusReportingInterval",
+			"provided": c.PrometheusReportingInterval,
+			"default":  defaultPrometheusReportingInterval,
 		})
 	}
 	return

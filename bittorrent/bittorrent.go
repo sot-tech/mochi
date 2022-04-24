@@ -275,8 +275,8 @@ func (p Peer) RawString() string {
 // LogFields renders the current peer as a set of Logrus fields.
 func (p Peer) LogFields() log.Fields {
 	return log.Fields{
-		"ID":   p.ID,
-		"IP":   p.Addr(),
+		"id":   p.ID,
+		"ip":   p.Addr(),
 		"port": p.Port(),
 	}
 }

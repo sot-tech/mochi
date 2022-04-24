@@ -58,24 +58,24 @@ time as value.
 Here is an example:
 
 ```
-- CHI_4_I
-  - CHI_4_S_<HASH1>
-  - CHI_4_L_<HASH1>
-- CHI_4_S_<HASH1>
+- CHI_I
+  - CHI_S4_<HASH1>
+  - CHI_L4_<HASH1>
+- CHI_S4_<HASH1>
   - <peer 1 key>: <modification time in unix nanos>
   - <peer 2 key>: <modification time in unix nanos>
-- CHI_4_L_<HASH2>
+- CHI_L4_<HASH2>
   - <peer 3 key>: <modification time in unix nanos>
 ...
 ```
 
-In this case, prometheus would record two swarms, three seeders, and one leecher. These three keys per address family
-are used to record the count of swarms, seeders, and leechers.
+In this case, prometheus would record two swarms, three seeders, and one leecher. These two keys
+are used to record the count of seeders and leechers.
 
 ```
-- CHI_4_S_C: "3"
-- CHI_6_L_C: "1"
+- CHI_S_C: "3"
+- CHI_L_C: "1"
 ```
 
-Note: `CHI_4_I` set has a different meaning compared to the `memory` storage:
+Note: `CHI_I` set has a different meaning compared to the `memory` storage:
 It represents info hashes reported by seeder, meaning that info hashes without seeders are not counted.

@@ -21,7 +21,7 @@ var cfg = r.Config{
 func createNew() s.PeerStorage {
 	var ps s.PeerStorage
 	var err error
-	ps, err = New(cfg)
+	ps, err = newStore(cfg)
 	if err != nil {
 		panic(fmt.Sprint("Unable to create KeyDB connection: ", err, "\nThis driver needs real KeyDB instance"))
 	}

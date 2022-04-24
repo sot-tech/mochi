@@ -35,10 +35,10 @@ var ErrNotKeyDB = errors.New("provided instance seems not KeyDB")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterBuilder(Name, Builder)
+	storage.RegisterBuilder(Name, builder)
 }
 
-func Builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
+func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg r.Config
 	var err error
 
@@ -46,10 +46,10 @@ func Builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 		return nil, err
 	}
 
-	return New(cfg)
+	return newStore(cfg)
 }
 
-func New(cfg r.Config) (*store, error) {
+func newStore(cfg r.Config) (*store, error) {
 	var err error
 	if cfg, err = cfg.Validate(); err != nil {
 		return nil, err
@@ -70,7 +70,11 @@ func New(cfg r.Config) (*store, error) {
 
 	var st *store
 	if err == nil {
-		st = &store{rs, cfg.LogFields(), uint(cfg.PeerLifetime.Seconds())}
+		st = &store{
+			Connection: rs,
+			logFields:  cfg.LogFields(),
+			peerTTL:    uint(cfg.PeerLifetime.Seconds()),
+		}
 	}
 
 	return st, err
@@ -82,27 +86,27 @@ type store struct {
 	peerTTL   uint
 }
 
-func (s store) setPeerTTL(infoHashKey, peerId string) error {
-	return s.Process(context.TODO(), redis.NewCmd(context.TODO(), expireMemberCmd, infoHashKey, peerId, s.peerTTL))
+func (s store) setPeerTTL(infoHashKey, peerID string) error {
+	return s.Process(context.TODO(), redis.NewCmd(context.TODO(), expireMemberCmd, infoHashKey, peerID, s.peerTTL))
 }
 
-func (s store) addPeer(infoHashKey, peerId string) (err error) {
+func (s store) addPeer(infoHashKey, peerID string) (err error) {
 	log.Debug("storage: KeyDB: PutPeer", log.Fields{
-		"InfoHashKey": infoHashKey,
-		"PeerId":      peerId,
+		"infoHashKey": infoHashKey,
+		"peerID":      peerID,
 	})
-	if err = s.SAdd(context.TODO(), infoHashKey, peerId).Err(); err == nil {
-		err = s.setPeerTTL(infoHashKey, peerId)
+	if err = s.SAdd(context.TODO(), infoHashKey, peerID).Err(); err == nil {
+		err = s.setPeerTTL(infoHashKey, peerID)
 	}
 	return
 }
 
-func (s store) delPeer(infoHashKey, peerId string) error {
+func (s store) delPeer(infoHashKey, peerID string) error {
 	log.Debug("storage: KeyDB: DeletePeer", log.Fields{
-		"InfoHashKey": infoHashKey,
-		"PeerId":      peerId,
+		"infoHashKey": infoHashKey,
+		"peerID":      peerID,
 	})
-	deleted, err := s.SRem(context.TODO(), infoHashKey, peerId).Uint64()
+	deleted, err := s.SRem(context.TODO(), infoHashKey, peerID).Uint64()
 	err = r.AsNil(err)
 	if err == nil && deleted == 0 {
 		err = storage.ErrResourceDoesNotExist
@@ -112,34 +116,35 @@ func (s store) delPeer(infoHashKey, peerId string) error {
 }
 
 func (s store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(r.IHSeederKey+ih.RawString(), peer.RawString())
+	return s.addPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
 func (s store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(r.IHSeederKey+ih.RawString(), peer.RawString())
+	return s.delPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
 func (s store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(r.IHLeecherKey+ih.RawString(), peer.RawString())
+	return s.addPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
 func (s store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(r.IHLeecherKey+ih.RawString(), peer.RawString())
+	return s.delPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
 func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
 	log.Debug("storage: KeyDB: GraduateLeecher", log.Fields{
-		"InfoHash": ih,
-		"Peer":     peer,
+		"infoHash": ih,
+		"peer":     peer,
 	})
-	infoHash, peerId := ih.RawString(), peer.RawString()
-	ihSeederKey, ihLeecherKey := r.IHSeederKey+infoHash, r.IHLeecherKey+infoHash
+	infoHash, peerID := ih.RawString(), peer.RawString()
+	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6())
+	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
 	var moved bool
-	if moved, err = s.SMove(context.TODO(), ihLeecherKey, ihSeederKey, peerId).Result(); err == nil {
+	if moved, err = s.SMove(context.TODO(), ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
 		if moved {
-			err = s.setPeerTTL(ihSeederKey, peerId)
+			err = s.setPeerTTL(ihSeederKey, peerID)
 		} else {
-			err = s.addPeer(ihSeederKey, peerId)
+			err = s.addPeer(ihSeederKey, peerID)
 		}
 	}
 	return err
@@ -148,22 +153,22 @@ func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (er
 // AnnouncePeers is the same function as redis.AnnouncePeers
 func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) ([]bittorrent.Peer, error) {
 	log.Debug("storage: KeyDB: AnnouncePeers", log.Fields{
-		"InfoHash": ih,
-		"Seeder":   seeder,
-		"NumWant":  numWant,
-		"Peer":     peer,
+		"infoHash": ih,
+		"seeder":   seeder,
+		"numWant":  numWant,
+		"peer":     peer,
 	})
 
-	return s.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string) *redis.StringSliceCmd {
-		return s.SRandMemberN(context.TODO(), infoHashKey, int64(numWant))
+	return s.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+		return s.SRandMemberN(context.TODO(), infoHashKey, int64(maxCount))
 	})
 }
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
 func (s store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32) {
 	log.Debug("storage: KeyDB ScrapeSwarm", log.Fields{
-		"InfoHash": ih,
-		"Peer":     peer,
+		"infoHash": ih,
+		"peer":     peer,
 	})
 	leechers, seeders = s.CountPeers(ih, s.SCard)
 	return
