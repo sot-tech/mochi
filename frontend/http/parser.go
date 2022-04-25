@@ -115,10 +115,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	}
 
 	// Parse the IP address where the client is listening.
-	ip, spoofed, err := requestedIP(r, qp, opts)
-	if err != nil {
-		return nil, bittorrent.ErrInvalidIP
-	}
+	ip, spoofed := requestedIP(r, qp, opts)
 	request.Peer.AddrPort = netip.AddrPortFrom(ip, uint16(port))
 	request.IPProvided = spoofed
 
@@ -141,9 +138,12 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 		return nil, errNoInfoHash
 	}
 
+	ip, _ := requestedIP(r, qp, opts)
+
 	request := &bittorrent.ScrapeRequest{
 		InfoHashes: infoHashes,
 		Params:     qp,
+		Addr:       ip,
 	}
 
 	if err := bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes); err != nil {
@@ -154,29 +154,22 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 }
 
 // requestedIP determines the IP address for a BitTorrent client request.
-func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (netip.Addr, bool, error) {
+func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (ip netip.Addr, spoofed bool) {
 	if opts.AllowIPSpoofing {
-		if ipstr, ok := p.String("ip"); ok {
-			addr, err := netip.ParseAddr(ipstr)
-			return addr, true, err
-		}
-
-		if ipstr, ok := p.String("ipv4"); ok {
-			addr, err := netip.ParseAddr(ipstr)
-			return addr, true, err
-		}
-
-		if ipstr, ok := p.String("ipv6"); ok {
-			addr, err := netip.ParseAddr(ipstr)
-			return addr, true, err
+		for _, f := range []string{"ip", "ipv4", "ipv6"} {
+			if ipStr, ok := p.String(f); ok {
+				spoofed = true
+				ip, _ = netip.ParseAddr(ipStr)
+				return
+			}
 		}
 	}
 
-	if ipstr := r.Header.Get(opts.RealIPHeader); ipstr != "" && opts.RealIPHeader != "" {
-		addr, err := netip.ParseAddr(ipstr)
-		return addr, false, err
+	if ipStr := r.Header.Get(opts.RealIPHeader); ipStr != "" && opts.RealIPHeader != "" {
+		ip, _ = netip.ParseAddr(ipStr)
 	}
 
-	addrPort, err := netip.ParseAddrPort(r.RemoteAddr)
-	return addrPort.Addr(), false, err
+	addrPort, _ := netip.ParseAddrPort(r.RemoteAddr)
+	ip = addrPort.Addr()
+	return
 }

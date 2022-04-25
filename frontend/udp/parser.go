@@ -243,7 +243,7 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 	}
 	if err == nil {
 		// Sanitize the request.
-		request = &bittorrent.ScrapeRequest{InfoHashes: infoHashes}
+		request = &bittorrent.ScrapeRequest{InfoHashes: infoHashes, Addr: r.IP}
 		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
 	}
 

@@ -180,7 +180,9 @@ func (r AnnounceResponse) LogFields() log.Fields {
 
 // ScrapeRequest represents the parsed parameters from a scrape request.
 type ScrapeRequest struct {
-	Peer
+	// netip.Addr not used in internal logic,
+	// but MAY be used in middleware (per-ip block etc.)
+	netip.Addr
 	InfoHashes []InfoHash
 	Params     Params
 }
@@ -188,7 +190,7 @@ type ScrapeRequest struct {
 // LogFields renders the current response as a set of log fields.
 func (r ScrapeRequest) LogFields() log.Fields {
 	return log.Fields{
-		"peer":       r.Peer,
+		"ip":         r.Addr,
 		"infoHashes": r.InfoHashes,
 		"params":     r.Params,
 	}
@@ -264,7 +266,7 @@ func (p Peer) String() string {
 
 // RawString generates concatenation of PeerID, net port and IP-address
 func (p Peer) RawString() string {
-	ip := p.Addr().Unmap()
+	ip := p.Addr()
 	b := make([]byte, PeerIDLen+2+(ip.BitLen()/8))
 	copy(b[:PeerIDLen], p.ID[:])
 	binary.BigEndian.PutUint16(b[PeerIDLen:PeerIDLen+2], p.Port())

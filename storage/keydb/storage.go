@@ -166,10 +166,9 @@ func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, p
 }
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
-func (s store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32) {
+func (s store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
 	log.Debug("storage: KeyDB ScrapeSwarm", log.Fields{
 		"infoHash": ih,
-		"peer":     peer,
 	})
 	leechers, seeders = s.CountPeers(ih, s.SCard)
 	return

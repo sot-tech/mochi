@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"net"
 	"net/http"
 	"net/netip"
 	"time"
@@ -290,9 +289,7 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 	if f.EnableRequestTiming && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
-			if f.EnableRequestTiming && metrics.Enabled() {
-				recordResponseDuration("announce", addr, err, time.Since(start))
-			}
+			recordResponseDuration("announce", addr, err, time.Since(start))
 		}()
 	}
 
@@ -328,9 +325,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	if f.EnableRequestTiming && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
-			if f.EnableRequestTiming && metrics.Enabled() {
-				recordResponseDuration("scrape", addr, err, time.Since(start))
-			}
+			recordResponseDuration("scrape", addr, err, time.Since(start))
 		}()
 	}
 
@@ -339,20 +334,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 		WriteError(w, err)
 		return
 	}
-
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		log.Error("http: unable to determine remote address for scrape", log.Err(err))
-		WriteError(w, err)
-		return
-	}
-
-	addr, err = netip.ParseAddr(host)
-	if err != nil || addr.IsUnspecified() {
-		log.Error("http: invalid IP: neither v4 nor v6", log.Fields{"remoteAddr": r.RemoteAddr})
-		WriteError(w, bittorrent.ErrInvalidIP)
-		return
-	}
+	addr = req.Addr
 
 	ctx := injectRouteParamsToContext(context.Background(), ps)
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)

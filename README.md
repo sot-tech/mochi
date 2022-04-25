@@ -10,16 +10,23 @@ Modified version of [Chihaya](https://github.com/chihaya/chihaya), an open sourc
 
 ## Differences from the original project
 
-* Support BittorrentV2 hashes (SHA-256 and _hybrid_
+* Supports BittorrentV2 hashes (SHA-256 and _hybrid_
   SHA-256-to-160 [BEP52](https://www.bittorrent.org/beps/bep_0052.html), tested with qBittorrent);
-* Support storage in middleware modules to persist useful data;
-* Metrics can be turned off (not enabled till it really needed).
+* Supports storage in middleware modules to persist useful data;
+* Supports [KeyDB](https://keydb.dev) storage;
+* Metrics can be turned off (not enabled till it really needed);
+* Allows mixed peers: IPv4 requesters can fetch IPv6 peers or vice versa;
+* Contains some internal improvements.
+
+_Note: From time to time MoChi fetch modifications from Chihaya but is not 
+fully compatible with original project (mainly in Redis storage structure),
+so it cannot be mixed with Chihaya (i.e. it is impossible create MoChi-Chihaya cluster)._
 
 ## Main goal
 
 The main goal of made modifications is to create semi-private tracker like [Hefur](https://github.com/sot-tech/hefur)
 but with cluster support (allowed torrents limited by pre-existent `list` middleware and another `directory` middleware
-to limit registered torrents).
+to [limit registered torrents](docs/middleware/torrent_approval.md)) and to maximize torrent swarm by providing maximum peers as possible (IPv4+IPv6).
 
 ## Notice
 

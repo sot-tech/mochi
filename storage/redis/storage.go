@@ -564,10 +564,9 @@ func (ps Connection) CountPeers(ih bittorrent.InfoHash, countFn getPeerCountFn) 
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, _ uint32) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
 	log.Debug("storage: Redis ScrapeSwarm", log.Fields{
 		"infoHash": ih,
-		"peer":     peer,
 	})
 
 	leechers, seeders = ps.CountPeers(ih, ps.HLen)

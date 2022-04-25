@@ -33,6 +33,7 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 	}
 
 	log.Debug("sanitized announce", r, log.Fields{
+		"ipPort":         r.AddrPort,
 		"maxNumWant":     maxNumWant,
 		"defaultNumWant": defaultNumWant,
 	})
@@ -46,12 +47,13 @@ func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
 		r.InfoHashes = r.InfoHashes[:maxScrapeInfoHashes]
 	}
 
-	r.AddrPort = netip.AddrPortFrom(r.Addr(), r.Port())
-	if !r.Addr().IsValid() || r.Addr().IsUnspecified() {
+	r.Addr = r.Addr.Unmap()
+	if !r.Addr.IsValid() || r.Addr.IsUnspecified() {
 		return ErrInvalidIP
 	}
 
 	log.Debug("sanitized scrape", r, log.Fields{
+		"ip":                  r.Addr,
 		"maxScrapeInfoHashes": maxScrapeInfoHashes,
 	})
 	return nil

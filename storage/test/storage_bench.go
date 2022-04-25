@@ -448,7 +448,7 @@ func (bh *benchHolder) AnnounceSeeder1kInfoHash(b *testing.B) {
 // ScrapeSwarm can run in parallel.
 func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
 	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
-		ps.ScrapeSwarm(bd.infoHashes[0], bd.peers[0])
+		ps.ScrapeSwarm(bd.infoHashes[0])
 		return nil
 	})
 }
@@ -458,7 +458,7 @@ func (bh *benchHolder) ScrapeSwarm(b *testing.B) {
 // ScrapeSwarm1kInfoHash can run in parallel.
 func (bh *benchHolder) ScrapeSwarm1kInfoHash(b *testing.B) {
 	bh.runBenchmark(b, true, putPeers, func(i int, ps storage.PeerStorage, bd *benchData) error {
-		ps.ScrapeSwarm(bd.infoHashes[i%ihCount], bd.peers[0])
+		ps.ScrapeSwarm(bd.infoHashes[i%ihCount])
 		return nil
 	})
 }

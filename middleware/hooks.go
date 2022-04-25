@@ -103,9 +103,9 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	resp.Incomplete, resp.Complete, _ = h.store.ScrapeSwarm(req.InfoHash, req.Peer)
+	resp.Incomplete, resp.Complete, _ = h.store.ScrapeSwarm(req.InfoHash)
 	if len(req.InfoHash) == bittorrent.InfoHashV2Len {
-		incomplete, complete, _ := h.store.ScrapeSwarm(req.InfoHash.TruncateV1(), req.Peer)
+		incomplete, complete, _ := h.store.ScrapeSwarm(req.InfoHash.TruncateV1())
 		resp.Incomplete, resp.Complete = resp.Incomplete+incomplete, resp.Complete+complete
 	}
 
@@ -175,9 +175,9 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 
 	for _, infoHash := range req.InfoHashes {
 		scr := bittorrent.Scrape{InfoHash: infoHash}
-		scr.Incomplete, scr.Complete, scr.Snatches = h.store.ScrapeSwarm(infoHash, req.Peer)
+		scr.Incomplete, scr.Complete, scr.Snatches = h.store.ScrapeSwarm(infoHash)
 		if len(infoHash) == bittorrent.InfoHashV2Len {
-			leechers, seeders, snatched := h.store.ScrapeSwarm(infoHash.TruncateV1(), req.Peer)
+			leechers, seeders, snatched := h.store.ScrapeSwarm(infoHash.TruncateV1())
 			scr.Incomplete, scr.Complete, scr.Snatches = scr.Incomplete+leechers, scr.Complete+seeders, scr.Snatches+snatched
 		}
 

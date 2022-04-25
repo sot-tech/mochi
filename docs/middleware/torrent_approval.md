@@ -21,9 +21,9 @@ If mode is **black list** (`invert` set to `true`), tracker will allow all hashe
 
 There are two sources of hashes: `list` and `directory`.
 
-`list` is the static set of hashes, specified in configuration file.
+* `list` is the static set of hashes, specified in configuration file.
 
-`directory` will watch for `*.torrent` files in specified path and
+* `directory` will watch for `*.torrent` files in specified path and
 append/delete records from storage. This source will parse all existing
 files at start and then watch for new files to add, or for delete events
 to remove hash from storage.

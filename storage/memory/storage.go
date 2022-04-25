@@ -404,7 +404,7 @@ func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers uint3
 	return
 }
 
-func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash, _ bittorrent.Peer) (leechers uint32, seeders uint32, _ uint32) {
+func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")

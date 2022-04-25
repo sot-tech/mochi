@@ -201,7 +201,7 @@ type PeerStorage interface {
 	// filling the Snatches field is optional.
 	//
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
-	ScrapeSwarm(infoHash bittorrent.InfoHash, peer bittorrent.Peer) (leechers uint32, seeders uint32, snatched uint32)
+	ScrapeSwarm(infoHash bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
 
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
