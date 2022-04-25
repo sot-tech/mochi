@@ -25,7 +25,7 @@ func WriteError(w http.ResponseWriter, err error) {
 	if err = bencode.NewEncoder(w).Encode(map[string]any{
 		"failure reason": message,
 	}); err != nil {
-		log.Error("unable to encode string", log.Err(err))
+		log.Error("unable to encode message", log.Err(err))
 	}
 }
 
@@ -50,21 +50,21 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	// Add the peers to the dictionary in the compact format.
 	if resp.Compact {
 		// Add the IPv4 peers to the dictionary.
-		ipv4CompactDict := make([]byte, 0, (net.IPv4len+2)*len(resp.IPv4Peers))
+		compactAddresses := make([]byte, 0, (net.IPv4len+2)*len(resp.IPv4Peers))
 		for _, peer := range resp.IPv4Peers {
-			ipv4CompactDict = append(ipv4CompactDict, compact4(peer)...)
+			compactAddresses = append(compactAddresses, compactAddress(peer)...)
 		}
-		if len(ipv4CompactDict) > 0 {
-			bdict["peers"] = ipv4CompactDict
+		if len(compactAddresses) > 0 {
+			bdict["peers"] = compactAddresses
 		}
 
 		// Add the IPv6 peers to the dictionary.
-		ipv6CompactDict := make([]byte, 0, (net.IPv6len+2)*len(resp.IPv6Peers)) // IP + port
+		compactAddresses = make([]byte, 0, (net.IPv6len+2)*len(resp.IPv6Peers)) // IP + port
 		for _, peer := range resp.IPv6Peers {
-			ipv6CompactDict = append(ipv6CompactDict, compact6(peer)...)
+			compactAddresses = append(compactAddresses, compactAddress(peer)...)
 		}
-		if len(ipv6CompactDict) > 0 {
-			bdict["peers6"] = ipv6CompactDict
+		if len(compactAddresses) > 0 {
+			bdict["peers6"] = compactAddresses
 		}
 	} else {
 		// Add the peers to the dictionary.
@@ -97,25 +97,16 @@ func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse)
 	})
 }
 
-func compact4(peer bittorrent.Peer) (buf []byte) {
-	ip := peer.Addr().As4()
-	buf = append(buf, ip[:]...)
+func compactAddress(peer bittorrent.Peer) (buf []byte) {
+	buf = append(buf, peer.Addr().AsSlice()...)
 	port := peer.Port()
-	buf = append(buf, byte(port>>8), byte(port&0xff))
-	return
-}
-
-func compact6(peer bittorrent.Peer) (buf []byte) {
-	ip := peer.Addr().As16()
-	buf = append(buf, ip[:]...)
-	port := peer.Port()
-	buf = append(buf, byte(port>>8), byte(port&0xff))
+	buf = append(buf, byte(port>>8), byte(port))
 	return
 }
 
 func dict(peer bittorrent.Peer) map[string]any {
 	return map[string]any{
-		"peer id": string(peer.ID[:]),
+		"peer id": peer.ID.RawString(),
 		"ip":      peer.Addr(),
 		"port":    peer.Port(),
 	}

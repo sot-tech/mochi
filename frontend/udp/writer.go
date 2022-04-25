@@ -14,16 +14,16 @@ import (
 func WriteError(w io.Writer, txID []byte, err error) {
 	// If the client wasn't at fault, acknowledge it.
 	var clientErr bittorrent.ClientError
-	if !errors.As(err, &clientErr) {
+	if !errors.Is(err, &clientErr) {
 		err = fmt.Errorf("internal error occurred: %w", err)
 	}
 
 	buf := newBuffer()
+	defer buf.free()
 	writeHeader(buf, txID, errorActionID)
 	_, _ = buf.WriteString(err.Error())
 	_, _ = buf.WriteRune('\000')
 	_, _ = w.Write(buf.Bytes())
-	buf.free()
 }
 
 // WriteAnnounce encodes an announce response according to BEP 15.
@@ -33,6 +33,7 @@ func WriteError(w io.Writer, txID []byte, err error) {
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
 func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, v6Action, v6Peers bool) {
 	buf := newBuffer()
+	defer buf.free()
 
 	if v6Action {
 		writeHeader(buf, txID, announceV6ActionID)
@@ -54,12 +55,12 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 	}
 
 	_, _ = w.Write(buf.Bytes())
-	buf.free()
 }
 
 // WriteScrape encodes a scrape response according to BEP 15.
 func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 	buf := newBuffer()
+	defer buf.free()
 
 	writeHeader(buf, txID, scrapeActionID)
 
@@ -70,18 +71,17 @@ func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 	}
 
 	_, _ = w.Write(buf.Bytes())
-	buf.free()
 }
 
 // WriteConnectionID encodes a new connection response according to BEP 15.
 func WriteConnectionID(w io.Writer, txID, connID []byte) {
 	buf := newBuffer()
+	defer buf.free()
 
 	writeHeader(buf, txID, connectActionID)
 	_, _ = buf.Write(connID)
 
 	_, _ = w.Write(buf.Bytes())
-	buf.free()
 }
 
 // writeHeader writes the action and transaction ID to the provided response
