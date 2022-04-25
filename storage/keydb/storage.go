@@ -75,6 +75,7 @@ func newStore(cfg r.Config) (*store, error) {
 			logFields:  cfg.LogFields(),
 			peerTTL:    uint(cfg.PeerLifetime.Seconds()),
 		}
+		st.logFields["name"] = Name
 	}
 
 	return st, err

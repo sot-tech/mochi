@@ -116,11 +116,22 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) error {
 	seeding := req.Left == 0
 	max := int(req.NumWant)
-	peers, err := h.store.AnnouncePeers(req.InfoHash, seeding, max, req.Peer)
+	storePeers, err := h.store.AnnouncePeers(req.InfoHash, seeding, max, req.Peer)
 	if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 		return err
 	}
 	err = nil
+	peers := make([]bittorrent.Peer, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers)+len(storePeers))
+
+	// append peers, which added in middleware
+	if req.Peer.Addr().Is6() {
+		peers = append(peers, resp.IPv6Peers...)
+		peers = append(peers, resp.IPv4Peers...)
+	} else {
+		peers = append(peers, resp.IPv4Peers...)
+		peers = append(peers, resp.IPv6Peers...)
+	}
+	peers = append(peers, storePeers...)
 
 	// Some clients expect a minimum of their own peer representation returned to
 	// them if they are the only peer in a swarm.
@@ -133,35 +144,28 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 		peers = append(peers, req.Peer)
 	}
 
-	switch addr := req.Peer.Addr(); {
-	case addr.Is4():
-		resp.IPv4Peers = mergePeers(resp.IPv4Peers, peers, max)
-	case addr.Is6():
-		resp.IPv6Peers = mergePeers(resp.IPv6Peers, peers, max)
-	default:
-		err = bittorrent.ErrInvalidIP
+	uniquePeers := make(map[bittorrent.Peer]interface{}, len(peers))
+
+	resp.IPv4Peers = make([]bittorrent.Peer, 0, len(peers)/2)
+	resp.IPv6Peers = make([]bittorrent.Peer, 0, len(peers)/2)
+
+	for _, p := range peers {
+		if err != nil || len(uniquePeers) > max {
+			break
+		}
+		if _, found := uniquePeers[p]; !found {
+			uniquePeers[p] = nil
+			if p.Addr().Is6() {
+				resp.IPv6Peers = append(resp.IPv6Peers, p)
+			} else if p.Addr().Is4() {
+				resp.IPv4Peers = append(resp.IPv4Peers, p)
+			} else {
+				err = bittorrent.ErrInvalidIP
+			}
+		}
 	}
 
 	return err
-}
-
-func mergePeers(p0, p1 []bittorrent.Peer, max int) (result []bittorrent.Peer) {
-	peers := make(map[string]bittorrent.Peer, len(p0)+len(p1))
-	for _, p := range p0 {
-		peers[p.RawString()] = p
-	}
-	for _, p := range p1 {
-		peers[p.RawString()] = p
-	}
-	result = make([]bittorrent.Peer, 0, len(peers))
-	for _, v := range peers {
-		if len(peers) < max {
-			result = append(result, v)
-		} else {
-			break
-		}
-	}
-	return
 }
 
 func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
