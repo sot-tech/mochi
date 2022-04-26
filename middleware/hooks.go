@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -63,9 +64,13 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 	default:
 		storeFn = h.store.PutLeecher
 	}
-
-	if err = storeFn(req.InfoHash, req.Peer); err == nil && len(req.InfoHash) == bittorrent.InfoHashV2Len {
-		err = storeFn(req.InfoHash.TruncateV1(), req.Peer)
+	for _, p := range req.Peers() {
+		if err = storeFn(req.InfoHash, p); err == nil && len(req.InfoHash) == bittorrent.InfoHashV2Len {
+			err = storeFn(req.InfoHash.TruncateV1(), p)
+		}
+		if err != nil {
+			break
+		}
 	}
 
 	return
@@ -84,17 +89,17 @@ type skipResponseHook struct{}
 // skip.
 var SkipResponseHookKey = skipResponseHook{}
 
-// type scrapeAddressType struct{}
-
-// ScrapeIsIPv6Key is the key under which to store whether or not the
-// address used to request a scrape was an IPv6 address.
-// The value is expected to be of type bool.
-// A missing value or a value that is not a bool for this key is equivalent to
-// it being set to false.
-// var ScrapeIsIPv6Key = scrapeAddressType{}
-
 type responseHook struct {
 	store storage.PeerStorage
+}
+
+func (h *responseHook) scrape(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+	leechers, seeders, snatched = h.store.ScrapeSwarm(ih)
+	if len(ih) == bittorrent.InfoHashV2Len {
+		l, s, n := h.store.ScrapeSwarm(ih.TruncateV1())
+		leechers, seeders, snatched = leechers+l, seeders+s, snatched+n
+	}
+	return
 }
 
 func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (_ context.Context, err error) {
@@ -103,35 +108,56 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	resp.Incomplete, resp.Complete, _ = h.store.ScrapeSwarm(req.InfoHash)
-	if len(req.InfoHash) == bittorrent.InfoHashV2Len {
-		incomplete, complete, _ := h.store.ScrapeSwarm(req.InfoHash.TruncateV1())
-		resp.Incomplete, resp.Complete = resp.Incomplete+incomplete, resp.Complete+complete
-	}
+	resp.Incomplete, resp.Complete, _ = h.scrape(req.InfoHash)
 
 	err = h.appendPeers(req, resp)
 	return ctx, err
 }
 
-func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) error {
+type fetchArgs struct {
+	ih bittorrent.InfoHash
+	v6 bool
+}
+
+func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (err error) {
 	seeding := req.Left == 0
 	max := int(req.NumWant)
-	storePeers, err := h.store.AnnouncePeers(req.InfoHash, seeding, max, req.Peer)
-	if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
-		return err
-	}
-	err = nil
-	peers := make([]bittorrent.Peer, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers)+len(storePeers))
+	peers := make([]bittorrent.Peer, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers))
+	primaryIP := req.GetFirst()
+	v6First := primaryIP.Is6()
+	args := []fetchArgs{{req.InfoHash, v6First}, {req.InfoHash, !v6First}}
 
-	// append peers, which added in middleware
-	if req.Peer.Addr().Is6() {
+	if len(req.InfoHash) == bittorrent.InfoHashV2Len {
+		ih := req.InfoHash.TruncateV1()
+		args = append(args, fetchArgs{ih, v6First}, fetchArgs{ih, !v6First})
+	}
+
+	if v6First {
 		peers = append(peers, resp.IPv6Peers...)
 		peers = append(peers, resp.IPv4Peers...)
 	} else {
 		peers = append(peers, resp.IPv4Peers...)
 		peers = append(peers, resp.IPv6Peers...)
 	}
-	peers = append(peers, storePeers...)
+	if l := len(peers); l > max {
+		peers, max = peers[:max], 0
+	} else {
+		max -= l
+	}
+
+	for _, a := range args {
+		if max <= 0 {
+			break
+		}
+		var storePeers []bittorrent.Peer
+		storePeers, err = h.store.AnnouncePeers(a.ih, seeding, max, a.v6)
+		if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
+			return err
+		}
+		err = nil
+		peers = append(peers, storePeers...)
+		max -= len(storePeers)
+	}
 
 	// Some clients expect a minimum of their own peer representation returned to
 	// them if they are the only peer in a swarm.
@@ -141,31 +167,36 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 		} else {
 			resp.Incomplete++
 		}
-		peers = append(peers, req.Peer)
+		peers = append(peers, req.Peers()...)
 	}
 
-	uniquePeers := make(map[bittorrent.Peer]interface{}, len(peers))
+	l := len(peers)
+	uniquePeers := make(map[bittorrent.Peer]interface{}, l)
 
-	resp.IPv4Peers = make([]bittorrent.Peer, 0, len(peers)/2)
-	resp.IPv6Peers = make([]bittorrent.Peer, 0, len(peers)/2)
+	resp.IPv4Peers = make([]bittorrent.Peer, 0, l/2)
+	resp.IPv6Peers = make([]bittorrent.Peer, 0, l/2)
 
 	for _, p := range peers {
-		if err != nil || len(uniquePeers) > max {
-			break
-		}
 		if _, found := uniquePeers[p]; !found {
-			uniquePeers[p] = nil
 			if p.Addr().Is6() {
 				resp.IPv6Peers = append(resp.IPv6Peers, p)
+				uniquePeers[p] = nil
 			} else if p.Addr().Is4() {
 				resp.IPv4Peers = append(resp.IPv4Peers, p)
+				uniquePeers[p] = nil
 			} else {
-				err = bittorrent.ErrInvalidIP
+				log.Warn("received invalid peer from storage", log.Fields{"peer": p})
 			}
 		}
 	}
+	log.Info("responseHook announce peers", log.Fields{
+		"infoHash":    req.InfoHash,
+		"requestPeer": req.RequestPeer,
+		"ipv4Peers":   resp.IPv4Peers,
+		"ipv6Peers":   resp.IPv6Peers,
+	})
 
-	return err
+	return
 }
 
 func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
@@ -175,12 +206,7 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 
 	for _, infoHash := range req.InfoHashes {
 		scr := bittorrent.Scrape{InfoHash: infoHash}
-		scr.Incomplete, scr.Complete, scr.Snatches = h.store.ScrapeSwarm(infoHash)
-		if len(infoHash) == bittorrent.InfoHashV2Len {
-			leechers, seeders, snatched := h.store.ScrapeSwarm(infoHash.TruncateV1())
-			scr.Incomplete, scr.Complete, scr.Snatches = scr.Incomplete+leechers, scr.Complete+seeders, scr.Snatches+snatched
-		}
-
+		scr.Incomplete, scr.Complete, scr.Snatches = h.scrape(infoHash)
 		resp.Files = append(resp.Files, scr)
 	}
 

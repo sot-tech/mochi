@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/frontend"
 )
 
 const (
@@ -49,29 +50,13 @@ var (
 	errInvalidPeerID     = bittorrent.ClientError("invalid info hash")
 )
 
-// ParseOptions is the configuration used to parse an Announce Request.
-//
-// If AllowIPSpoofing is true, IPs provided via params will be used.
-type ParseOptions struct {
-	AllowIPSpoofing     bool   `cfg:"allow_ip_spoofing"`
-	MaxNumWant          uint32 `cfg:"max_numwant"`
-	DefaultNumWant      uint32 `cfg:"default_numwant"`
-	MaxScrapeInfoHashes uint32 `cfg:"max_scrape_infohashes"`
-}
-
-// Default parser config constants.
-const (
-	defaultMaxNumWant          = 100
-	defaultDefaultNumWant      = 50
-	defaultMaxScrapeInfoHashes = 50
-)
-
 // ParseAnnounce parses an AnnounceRequest from a UDP request.
 //
 // If v6Action is true, the announce is parsed the
 // "old opentracker way":
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
-func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
+func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bittorrent.AnnounceRequest, error) {
+	var err error
 	ipEnd := 84 + net.IPv4len
 	if v6Action {
 		ipEnd = 84 + net.IPv6len
@@ -81,68 +66,42 @@ func ParseAnnounce(r Request, v6Action bool, opts ParseOptions) (*bittorrent.Ann
 		return nil, errMalformedPacket
 	}
 
+	request := new(bittorrent.AnnounceRequest)
+
 	// XXX: pure V2 hashes will cause invalid parsing,
 	// but BEP-52 says, that V2 hashes SHOULD be truncated
-	infoHash := r.Packet[16:36]
-	peerIDBytes := r.Packet[36:56]
-	downloaded := binary.BigEndian.Uint64(r.Packet[56:64])
-	left := binary.BigEndian.Uint64(r.Packet[64:72])
-	uploaded := binary.BigEndian.Uint64(r.Packet[72:80])
+	request.InfoHash, err = bittorrent.NewInfoHash(r.Packet[16:36])
+	if err != nil {
+		return nil, errInvalidInfoHash
+	}
+
+	request.ID, err = bittorrent.NewPeerID(r.Packet[36:56])
+	if err != nil {
+		return nil, errInvalidPeerID
+	}
+
+	request.Downloaded = binary.BigEndian.Uint64(r.Packet[56:64])
+	request.Left = binary.BigEndian.Uint64(r.Packet[64:72])
+	request.Uploaded = binary.BigEndian.Uint64(r.Packet[72:80])
 
 	eventID := int(r.Packet[83])
 	if eventID >= len(eventIDs) {
 		return nil, bittorrent.ErrUnknownEvent
 	}
+	request.Event, request.EventProvided = eventIDs[eventID], true
 
-	ip := r.IP
-	ipProvided := false
+	request.Add(bittorrent.RequestAddress{Addr: r.IP})
 	if opts.AllowIPSpoofing {
-		ipBytes := r.Packet[84:ipEnd]
-		spoofed, ok := netip.AddrFromSlice(ipBytes)
-		if !ok {
-			return nil, bittorrent.ErrInvalidIP
+		if spoofed, ok := netip.AddrFromSlice(r.Packet[84:ipEnd]); ok {
+			request.Add(bittorrent.RequestAddress{Addr: spoofed, Provided: true})
 		}
-		ipProvided = true
-		ip = spoofed
-	}
-	if !opts.AllowIPSpoofing && r.IP.IsUnspecified() {
-		// We have no IP address to fallback on.
-		return nil, bittorrent.ErrInvalidIP
 	}
 
-	numWant := binary.BigEndian.Uint32(r.Packet[ipEnd+4 : ipEnd+8])
-	port := binary.BigEndian.Uint16(r.Packet[ipEnd+8 : ipEnd+10])
-
-	params, err := handleOptionalParameters(r.Packet[ipEnd+10:])
+	request.NumWant, request.NumWantProvided = binary.BigEndian.Uint32(r.Packet[ipEnd+4:ipEnd+8]), true
+	request.Port = binary.BigEndian.Uint16(r.Packet[ipEnd+8 : ipEnd+10])
+	request.Params, err = handleOptionalParameters(r.Packet[ipEnd+10:])
 	if err != nil {
 		return nil, err
-	}
-
-	ih, err := bittorrent.NewInfoHash(infoHash)
-	if err != nil {
-		return nil, errInvalidInfoHash
-	}
-
-	peerID, err := bittorrent.NewPeerID(peerIDBytes)
-	if err != nil {
-		return nil, errInvalidPeerID
-	}
-
-	request := &bittorrent.AnnounceRequest{
-		Event:           eventIDs[eventID],
-		InfoHash:        ih,
-		NumWant:         numWant,
-		Left:            left,
-		Downloaded:      downloaded,
-		Uploaded:        uploaded,
-		IPProvided:      ipProvided,
-		NumWantProvided: true,
-		EventProvided:   true,
-		Peer: bittorrent.Peer{
-			ID:       peerID,
-			AddrPort: netip.AddrPortFrom(ip, port),
-		},
-		Params: params,
 	}
 
 	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
@@ -214,7 +173,7 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 }
 
 // ParseScrape parses a ScrapeRequest from a UDP request.
-func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error) {
+func ParseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeRequest, error) {
 	// If a scrape isn't at least 36 bytes long, it's malformed.
 	if len(r.Packet) < 36 {
 		return nil, errMalformedPacket
@@ -243,7 +202,11 @@ func ParseScrape(r Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error
 	}
 	if err == nil {
 		// Sanitize the request.
-		request = &bittorrent.ScrapeRequest{InfoHashes: infoHashes, Addr: r.IP}
+		request = &bittorrent.ScrapeRequest{
+			InfoHashes:       infoHashes,
+			RequestAddresses: bittorrent.RequestAddresses{bittorrent.RequestAddress{Addr: r.IP}},
+		}
+
 		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
 	}
 

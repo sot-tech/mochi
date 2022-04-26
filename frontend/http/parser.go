@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/frontend"
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.
@@ -14,19 +15,9 @@ import (
 // If RealIPHeader is not empty string, the value of the first HTTP Header with
 // that name will be used.
 type ParseOptions struct {
-	AllowIPSpoofing     bool   `cfg:"allow_ip_spoofing"`
-	RealIPHeader        string `cfg:"real_ip_header"`
-	MaxNumWant          uint32 `cfg:"max_numwant"`
-	DefaultNumWant      uint32 `cfg:"default_numwant"`
-	MaxScrapeInfoHashes uint32 `cfg:"max_scrape_infohashes"`
+	frontend.ParseOptions
+	RealIPHeader string `cfg:"real_ip_header"`
 }
-
-// Default parser config constants.
-const (
-	defaultMaxNumWant          = 100
-	defaultDefaultNumWant      = 50
-	defaultMaxScrapeInfoHashes = 50
-)
 
 var (
 	errNoInfoHash                 = bittorrent.ClientError("no info hash supplied")
@@ -62,7 +53,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	compactStr, _ := qp.String("compact")
 	request.Compact = compactStr != "" && compactStr != "0"
 
-	// Parse the infohash from the request.
+	// Parse the info hash from the request.
 	infoHashes := qp.InfoHashes()
 	if len(infoHashes) < 1 {
 		return nil, errNoInfoHash
@@ -77,7 +68,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	if !ok {
 		return nil, errInvalidPeerID
 	}
-	request.Peer.ID, err = bittorrent.NewPeerID([]byte(peerID))
+	request.ID, err = bittorrent.NewPeerID([]byte(peerID))
 	if err != nil {
 		return nil, errInvalidPeerID
 	}
@@ -100,24 +91,23 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	}
 
 	// Determine the number of peers the client wants in the response.
-	numwant, err := qp.Uint("numwant", 32)
+	numWant, err := qp.Uint("numwant", 32)
 	if err != nil && !errors.Is(err, bittorrent.ErrKeyNotFound) {
 		return nil, errInvalidParameterNumWant
 	}
-	// If there were no errors, the user actually provided the numwant.
+	// If there were no errors, the user actually provided the numWant.
 	request.NumWantProvided = err == nil
-	request.NumWant = uint32(numwant)
+	request.NumWant = uint32(numWant)
 
 	// Parse the port where the client is listening.
 	port, err := qp.Uint("port", 16)
 	if err != nil {
 		return nil, bittorrent.ErrInvalidPort
 	}
+	request.Port = uint16(port)
 
 	// Parse the IP address where the client is listening.
-	ip, spoofed := requestedIP(r, qp, opts)
-	request.Peer.AddrPort = netip.AddrPortFrom(ip, uint16(port))
-	request.IPProvided = spoofed
+	request.RequestAddresses = requestedIPs(r, qp, opts)
 
 	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
 		request = nil
@@ -138,38 +128,43 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 		return nil, errNoInfoHash
 	}
 
-	ip, _ := requestedIP(r, qp, opts)
-
 	request := &bittorrent.ScrapeRequest{
-		InfoHashes: infoHashes,
-		Params:     qp,
-		Addr:       ip,
+		InfoHashes:       infoHashes,
+		Params:           qp,
+		RequestAddresses: requestedIPs(r, qp, opts),
 	}
 
-	if err := bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes); err != nil {
-		return nil, err
-	}
+	err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
 
-	return request, nil
+	return request, err
 }
 
-// requestedIP determines the IP address for a BitTorrent client request.
-func requestedIP(r *http.Request, p bittorrent.Params, opts ParseOptions) (ip netip.Addr, spoofed bool) {
+// requestedIPs determines the IP address for a BitTorrent client request.
+func requestedIPs(r *http.Request, p bittorrent.Params, opts ParseOptions) (addresses bittorrent.RequestAddresses) {
 	if opts.AllowIPSpoofing {
 		for _, f := range []string{"ip", "ipv4", "ipv6"} {
 			if ipStr, ok := p.String(f); ok {
-				spoofed = true
-				ip, _ = netip.ParseAddr(ipStr)
-				return
+				addresses.Add(parseRequestAddress(ipStr, true))
 			}
 		}
 	}
 
 	if ipStr := r.Header.Get(opts.RealIPHeader); ipStr != "" && opts.RealIPHeader != "" {
-		ip, _ = netip.ParseAddr(ipStr)
+		addresses.Add(parseRequestAddress(ipStr, false))
+	} else {
+		addrPort, _ := netip.ParseAddrPort(r.RemoteAddr)
+		addresses.Add(bittorrent.RequestAddress{
+			Addr:     addrPort.Addr(),
+			Provided: false,
+		})
 	}
+	return
+}
 
-	addrPort, _ := netip.ParseAddrPort(r.RemoteAddr)
-	ip = addrPort.Addr()
+func parseRequestAddress(s string, provided bool) (ra bittorrent.RequestAddress) {
+	a, e := netip.ParseAddr(s)
+	if e == nil {
+		ra.Addr, ra.Provided = a, provided
+	}
 	return
 }

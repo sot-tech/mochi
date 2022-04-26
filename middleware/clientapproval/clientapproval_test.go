@@ -63,7 +63,7 @@ func TestHandleAnnounce(t *testing.T) {
 
 			peerid, err := bittorrent.NewPeerID([]byte(tt.peerID))
 			require.Nil(t, err)
-			req.Peer.ID = peerid
+			req.ID = peerid
 
 			nctx, err := h.HandleAnnounce(ctx, req, resp)
 			require.Equal(t, ctx, nctx)

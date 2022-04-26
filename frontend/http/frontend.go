@@ -106,32 +106,7 @@ func (cfg Config) Validate() Config {
 		}
 	}
 
-	if cfg.MaxNumWant <= 0 {
-		validcfg.MaxNumWant = defaultMaxNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "http.MaxNumWant",
-			"provided": cfg.MaxNumWant,
-			"default":  validcfg.MaxNumWant,
-		})
-	}
-
-	if cfg.DefaultNumWant <= 0 {
-		validcfg.DefaultNumWant = defaultDefaultNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "http.DefaultNumWant",
-			"provided": cfg.DefaultNumWant,
-			"default":  validcfg.DefaultNumWant,
-		})
-	}
-
-	if cfg.MaxScrapeInfoHashes <= 0 {
-		validcfg.MaxScrapeInfoHashes = defaultMaxScrapeInfoHashes
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "http.MaxScrapeInfoHashes",
-			"provided": cfg.MaxScrapeInfoHashes,
-			"default":  validcfg.MaxScrapeInfoHashes,
-		})
-	}
+	validcfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate()
 
 	return validcfg
 }
@@ -286,6 +261,7 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 	var err error
 	var start time.Time
 	var addr netip.Addr
+	var req *bittorrent.AnnounceRequest
 	if f.EnableRequestTiming && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
@@ -293,12 +269,12 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 		}()
 	}
 
-	req, err := ParseAnnounce(r, f.ParseOptions)
+	req, err = ParseAnnounce(r, f.ParseOptions)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	addr = req.Addr()
+	addr = req.GetFirst()
 
 	ctx := injectRouteParamsToContext(context.Background(), ps)
 	ctx, resp, err := f.logic.HandleAnnounce(ctx, req)
@@ -334,7 +310,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 		WriteError(w, err)
 		return
 	}
-	addr = req.Addr
+	addr = req.GetFirst()
 
 	ctx := injectRouteParamsToContext(context.Background(), ps)
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)

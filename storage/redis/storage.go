@@ -457,17 +457,15 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 	})
 }
 
-func (ps Connection) parsePeersList(peersResult *redis.StringSliceCmd, skipPeerID string) (peers []bittorrent.Peer, err error) {
+func (ps Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
 	var peerIds []string
 	peerIds, err = peersResult.Result()
 	if err = AsNil(err); err == nil {
 		for _, peerID := range peerIds {
-			if peerID != skipPeerID {
-				if p, err := bittorrent.NewPeer(peerID); err == nil {
-					peers = append(peers, p)
-				} else {
-					log.Error("storage: Redis: unable to decode leecher", log.Fields{"peerID": peerID})
-				}
+			if p, err := bittorrent.NewPeer(peerID); err == nil {
+				peers = append(peers, p)
+			} else {
+				log.Error("storage: Redis: unable to decode leecher", log.Fields{"peerID": peerID})
 			}
 		}
 	}
@@ -480,29 +478,21 @@ type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
 // converts result to bittorrent.Peer array.
 // If forSeeder set to true - returns only leechers, if false -
 // seeders and if maxCount not reached - leechers.
-func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, peer bittorrent.Peer, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
-	infoHash, peerID, isV6 := ih.RawString(), peer.RawString(), peer.Addr().Is6()
+func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
+	infoHash := ih.RawString()
 
-	var infoHashKeys []string
+	infoHashKeys := make([]string, 1, 2)
 
 	if forSeeder {
-		infoHashKeys = append(infoHashKeys, InfoHashKey(infoHash, false, isV6),
-			InfoHashKey(infoHash, false, !isV6))
+		infoHashKeys[0] = InfoHashKey(infoHash, false, isV6)
 	} else {
-		// Append as many peers as possible.
-		// Priority:
-		// same ip family seeders > same ip family leechers >
-		// foreign ip family seeders > foreign ip family leechers
-		infoHashKeys = append(infoHashKeys,
-			InfoHashKey(infoHash, true, isV6),
-			InfoHashKey(infoHash, false, isV6),
-			InfoHashKey(infoHash, true, !isV6),
-			InfoHashKey(infoHash, false, !isV6))
+		infoHashKeys[0] = InfoHashKey(infoHash, true, isV6)
+		infoHashKeys = append(infoHashKeys, InfoHashKey(infoHash, false, isV6))
 	}
 
 	for _, infoHashKey := range infoHashKeys {
 		var peers []bittorrent.Peer
-		peers, err = ps.parsePeersList(membersFn(context.TODO(), infoHashKey, maxCount), peerID)
+		peers, err = ps.parsePeersList(membersFn(context.TODO(), infoHashKey, maxCount))
 		maxCount -= len(peers)
 		out = append(out, peers...)
 		if err != nil || maxCount <= 0 {
@@ -525,15 +515,15 @@ func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount i
 	return
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) ([]bittorrent.Peer, error) {
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	log.Debug("storage: Redis: AnnouncePeers", log.Fields{
 		"infoHash": ih,
 		"seeder":   seeder,
 		"numWant":  numWant,
-		"peer":     peer,
+		"peer":     v6,
 	})
 
-	return ps.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return ps.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return ps.HRandField(ctx, infoHashKey, maxCount, false)
 	})
 }

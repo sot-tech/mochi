@@ -152,15 +152,15 @@ func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (er
 }
 
 // AnnouncePeers is the same function as redis.AnnouncePeers
-func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) ([]bittorrent.Peer, error) {
+func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	log.Debug("storage: KeyDB: AnnouncePeers", log.Fields{
 		"infoHash": ih,
 		"seeder":   seeder,
 		"numWant":  numWant,
-		"peer":     peer,
+		"v6":       v6,
 	})
 
-	return s.GetPeers(ih, seeder, numWant, peer, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return s.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return s.SRandMemberN(context.TODO(), infoHashKey, int64(maxCount))
 	})
 }

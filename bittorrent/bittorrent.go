@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -117,98 +116,6 @@ func (i InfoHash) String() string {
 // RawString returns a string of the raw bytes of the InfoHash.
 func (i InfoHash) RawString() string {
 	return string(i)
-}
-
-// AnnounceRequest represents the parsed parameters from an announce request.
-type AnnounceRequest struct {
-	Event           Event
-	InfoHash        InfoHash
-	Compact         bool
-	EventProvided   bool
-	NumWantProvided bool
-	IPProvided      bool
-	NumWant         uint32
-	Left            uint64
-	Downloaded      uint64
-	Uploaded        uint64
-
-	Peer
-	Params
-}
-
-// LogFields renders the current response as a set of log fields.
-func (r AnnounceRequest) LogFields() log.Fields {
-	return log.Fields{
-		"event":           r.Event,
-		"infoHash":        r.InfoHash,
-		"compact":         r.Compact,
-		"eventProvided":   r.EventProvided,
-		"numWantProvided": r.NumWantProvided,
-		"ipProvided":      r.IPProvided,
-		"numWant":         r.NumWant,
-		"left":            r.Left,
-		"downloaded":      r.Downloaded,
-		"uploaded":        r.Uploaded,
-		"peer":            r.Peer,
-		"params":          r.Params,
-	}
-}
-
-// AnnounceResponse represents the parameters used to create an announce
-// response.
-type AnnounceResponse struct {
-	Compact     bool
-	Complete    uint32
-	Incomplete  uint32
-	Interval    time.Duration
-	MinInterval time.Duration
-	IPv4Peers   []Peer
-	IPv6Peers   []Peer
-}
-
-// LogFields renders the current response as a set of log fields.
-func (r AnnounceResponse) LogFields() log.Fields {
-	return log.Fields{
-		"compact":     r.Compact,
-		"complete":    r.Complete,
-		"interval":    r.Interval,
-		"minInterval": r.MinInterval,
-		"ipv4Peers":   r.IPv4Peers,
-		"ipv6Peers":   r.IPv6Peers,
-	}
-}
-
-// ScrapeRequest represents the parsed parameters from a scrape request.
-type ScrapeRequest struct {
-	// netip.Addr not used in internal logic,
-	// but MAY be used in middleware (per-ip block etc.)
-	netip.Addr
-	InfoHashes []InfoHash
-	Params     Params
-}
-
-// LogFields renders the current response as a set of log fields.
-func (r ScrapeRequest) LogFields() log.Fields {
-	return log.Fields{
-		"ip":         r.Addr,
-		"infoHashes": r.InfoHashes,
-		"params":     r.Params,
-	}
-}
-
-// ScrapeResponse represents the parameters used to create a scrape response.
-//
-// The Scrapes must be in the same order as the InfoHashes in the corresponding
-// ScrapeRequest.
-type ScrapeResponse struct {
-	Files []Scrape
-}
-
-// LogFields renders the current response as a set of Logrus fields.
-func (sr ScrapeResponse) LogFields() log.Fields {
-	return log.Fields{
-		"files": sr.Files,
-	}
 }
 
 // Scrape represents the state of a swarm that is returned in a scrape response.

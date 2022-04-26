@@ -54,11 +54,7 @@ func (th *testHolder) DeleteLeecher(t *testing.T) {
 
 func (th *testHolder) AnnouncePeers(t *testing.T) {
 	for _, c := range testData {
-		peer := v4Peer
-		if c.peer.Addr().Is6() {
-			peer = v6Peer
-		}
-		_, err := th.st.AnnouncePeers(c.ih, false, 50, peer)
+		_, err := th.st.AnnouncePeers(c.ih, false, 50, c.peer.Addr().Is6())
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -77,19 +73,16 @@ func (th *testHolder) ScrapeSwarm(t *testing.T) {
 
 func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
-		peer := v4Peer
-		if c.peer.Addr().Is6() {
-			peer = v6Peer
-		}
+		isV6 := c.peer.Addr().Is6()
 		err := th.st.PutLeecher(c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err := th.st.AnnouncePeers(c.ih, true, 50, peer)
+		peers, err := th.st.AnnouncePeers(c.ih, true, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
 		// non-seeder announce should still return the leecher
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, peer)
+		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
@@ -100,7 +93,7 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 		err = th.st.DeleteLeecher(c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err = th.st.AnnouncePeers(c.ih, true, 50, peer)
+		peers, err = th.st.AnnouncePeers(c.ih, true, 50, isV6)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -111,15 +104,12 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 
 func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
-		peer := v4Peer
-		if c.peer.Addr().Is6() {
-			peer = v6Peer
-		}
+		isV6 := c.peer.Addr().Is6()
 		err := th.st.PutSeeder(c.ih, c.peer)
 		require.Nil(t, err)
 
 		// Should be leecher to see the seeder
-		peers, err := th.st.AnnouncePeers(c.ih, false, 50, peer)
+		peers, err := th.st.AnnouncePeers(c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
@@ -130,7 +120,7 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 		err = th.st.DeleteSeeder(c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, peer)
+		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -141,8 +131,9 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 
 func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
+		isV6 := c.peer.Addr().Is6()
 		peer := v4Peer
-		if c.peer.Addr().Is6() {
+		if isV6 {
 			peer = v6Peer
 		}
 		err := th.st.PutLeecher(c.ih, c.peer)
@@ -152,7 +143,7 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 
 		// Has to be leecher to see the graduated seeder
-		peers, err := th.st.AnnouncePeers(c.ih, false, 50, peer)
+		peers, err := th.st.AnnouncePeers(c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
@@ -161,7 +152,7 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 		require.Equal(t, storage.ErrResourceDoesNotExist, err)
 
 		// Verify it's still there
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, peer)
+		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 

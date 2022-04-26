@@ -32,7 +32,7 @@ type Config struct {
 	PrivateKey          string        `cfg:"private_key"`
 	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
 	EnableRequestTiming bool          `cfg:"enable_request_timing"`
-	ParseOptions
+	frontend.ParseOptions
 }
 
 // LogFields renders the current config as a set of Logrus fields.
@@ -67,32 +67,7 @@ func (cfg Config) Validate() Config {
 		log.Warn("UDP private key was not provided, using generated key", log.Fields{"key": validcfg.PrivateKey})
 	}
 
-	if cfg.MaxNumWant <= 0 {
-		validcfg.MaxNumWant = defaultMaxNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "udp.MaxNumWant",
-			"provided": cfg.MaxNumWant,
-			"default":  validcfg.MaxNumWant,
-		})
-	}
-
-	if cfg.DefaultNumWant <= 0 {
-		validcfg.DefaultNumWant = defaultDefaultNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "udp.DefaultNumWant",
-			"provided": cfg.DefaultNumWant,
-			"default":  validcfg.DefaultNumWant,
-		})
-	}
-
-	if cfg.MaxScrapeInfoHashes <= 0 {
-		validcfg.MaxScrapeInfoHashes = defaultMaxScrapeInfoHashes
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "udp.MaxScrapeInfoHashes",
-			"provided": cfg.MaxScrapeInfoHashes,
-			"default":  validcfg.MaxScrapeInfoHashes,
-		})
-	}
+	validcfg.ParseOptions = cfg.ParseOptions.Validate()
 
 	return validcfg
 }

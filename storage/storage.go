@@ -148,33 +148,33 @@ type PeerStorage interface {
 	DataStorage
 	// PutSeeder adds a Seeder to the Swarm identified by the provided
 	// InfoHash.
-	PutSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
+	PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteSeeder removes a Seeder from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteSeeder(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
+	DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// PutLeecher adds a Leecher to the Swarm identified by the provided
 	// InfoHash.
 	// If the Swarm does not exist already, it is created.
-	PutLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
+	PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteLeecher removes a Leecher from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
+	DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// GraduateLeecher promotes a Leecher to a Seeder in the Swarm
 	// identified by the provided InfoHash.
 	//
 	// If the given Peer is not present as a Leecher or the swarm does not exist
 	// already, the Peer is added as a Seeder and no error is returned.
-	GraduateLeecher(infoHash bittorrent.InfoHash, peer bittorrent.Peer) error
+	GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// AnnouncePeers is a best effort attempt to return Peers from the Swarm
 	// identified by the provided InfoHash.
@@ -191,7 +191,7 @@ type PeerStorage interface {
 	//   leechers
 	//
 	// Returns ErrResourceDoesNotExist if the provided InfoHash is not tracked.
-	AnnouncePeers(infoHash bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error)
+	AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error)
 
 	// ScrapeSwarm returns information required to answer a Scrape request
 	// about a Swarm identified by the given InfoHash.
@@ -201,7 +201,7 @@ type PeerStorage interface {
 	// filling the Snatches field is optional.
 	//
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
-	ScrapeSwarm(infoHash bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
+	ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
 
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.

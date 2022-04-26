@@ -79,7 +79,7 @@ func build(options conf.MapConfig, _ storage.PeerStorage) (middleware.Hook, erro
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
-	clientID := NewClientID(req.Peer.ID)
+	clientID := NewClientID(req.ID)
 
 	if len(h.approved) > 0 {
 		if _, found := h.approved[clientID]; !found {

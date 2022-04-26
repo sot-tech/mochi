@@ -1,8 +1,6 @@
 package bittorrent
 
 import (
-	"net/netip"
-
 	"github.com/sot-tech/mochi/pkg/log"
 )
 
@@ -17,8 +15,12 @@ var (
 // SanitizeAnnounce enforces a max and default NumWant and coerces the peer's
 // IP address into the proper format.
 func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) error {
-	if r.Port() == 0 {
+	if r.Port == 0 {
 		return ErrInvalidPort
+	}
+
+	if !r.Validate() {
+		return ErrInvalidIP
 	}
 
 	if !r.NumWantProvided {
@@ -27,13 +29,9 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 		r.NumWant = maxNumWant
 	}
 
-	r.AddrPort = netip.AddrPortFrom(r.Addr(), r.Port())
-	if !r.Addr().IsValid() || r.Addr().IsUnspecified() {
-		return ErrInvalidIP
-	}
-
 	log.Debug("sanitized announce", r, log.Fields{
-		"ipPort":         r.AddrPort,
+		"port":           r.Port,
+		"addresses":      r.RequestAddresses,
 		"maxNumWant":     maxNumWant,
 		"defaultNumWant": defaultNumWant,
 	})
@@ -41,19 +39,18 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 }
 
 // SanitizeScrape enforces a max number of infohashes for a single scrape
-// request.
+// request and checks if addresses are valid.
 func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
 	if len(r.InfoHashes) > int(maxScrapeInfoHashes) {
 		r.InfoHashes = r.InfoHashes[:maxScrapeInfoHashes]
 	}
 
-	r.Addr = r.Addr.Unmap()
-	if !r.Addr.IsValid() || r.Addr.IsUnspecified() {
+	if !r.Validate() {
 		return ErrInvalidIP
 	}
 
 	log.Debug("sanitized scrape", r, log.Fields{
-		"ip":                  r.Addr,
+		"addresses":           r.RequestAddresses,
 		"maxScrapeInfoHashes": maxScrapeInfoHashes,
 	})
 	return nil

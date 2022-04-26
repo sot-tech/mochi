@@ -193,6 +193,7 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
+	defer shard.Unlock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
@@ -209,7 +210,6 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	// Update the peer in the swarm.
 	shard.swarms[ih].seeders[p] = ps.getClock()
 
-	shard.Unlock()
 	return nil
 }
 
@@ -222,14 +222,13 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
+	defer shard.Unlock()
 
 	if _, ok := shard.swarms[ih]; !ok {
-		shard.Unlock()
 		return storage.ErrResourceDoesNotExist
 	}
 
 	if _, ok := shard.swarms[ih].seeders[p]; !ok {
-		shard.Unlock()
 		return storage.ErrResourceDoesNotExist
 	}
 
@@ -240,7 +239,6 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 		delete(shard.swarms, ih)
 	}
 
-	shard.Unlock()
 	return nil
 }
 
@@ -253,6 +251,7 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
+	defer shard.Unlock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
@@ -269,7 +268,6 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 	// Update the peer in the swarm.
 	shard.swarms[ih].leechers[p] = ps.getClock()
 
-	shard.Unlock()
 	return nil
 }
 
@@ -282,14 +280,13 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
+	defer shard.Unlock()
 
 	if _, ok := shard.swarms[ih]; !ok {
-		shard.Unlock()
 		return storage.ErrResourceDoesNotExist
 	}
 
 	if _, ok := shard.swarms[ih].leechers[p]; !ok {
-		shard.Unlock()
 		return storage.ErrResourceDoesNotExist
 	}
 
@@ -300,7 +297,6 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 		delete(shard.swarms, ih)
 	}
 
-	shard.Unlock()
 	return nil
 }
 
@@ -313,6 +309,7 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
+	defer shard.Unlock()
 
 	if _, ok := shard.swarms[ih]; !ok {
 		shard.swarms[ih] = swarm{
@@ -335,60 +332,44 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 	// Update the peer in the swarm.
 	shard.swarms[ih].seeders[p] = ps.getClock()
 
-	shard.Unlock()
 	return nil
 }
 
-func parsePeers(peersMap map[bittorrent.Peer]int64, maxCount int, skipPeer bittorrent.Peer) (peers []bittorrent.Peer) {
+func parsePeers(peersMap map[bittorrent.Peer]int64, maxCount int) (peers []bittorrent.Peer) {
 	for p := range peersMap {
 		if maxCount == 0 {
 			break
 		}
-		if p != skipPeer {
-			peers = append(peers, p)
-			maxCount--
-		}
+		peers = append(peers, p)
+		maxCount--
 	}
 	return
 }
 
-func (ps *peerStore) getPeers(shard *peerShard, ih bittorrent.InfoHash, maxCount int, leechersOnly bool, skipPeer bittorrent.Peer) (peers []bittorrent.Peer) {
+func (ps *peerStore) getPeers(shard *peerShard, ih bittorrent.InfoHash, maxCount int, forSeeder bool) (peers []bittorrent.Peer) {
 	shard.RLock()
 	defer shard.RUnlock()
 	if swarm, ok := shard.swarms[ih]; ok {
-		if !leechersOnly {
-			peers = append(peers, parsePeers(swarm.seeders, maxCount, skipPeer)...)
-			maxCount -= len(peers)
-		}
-		if maxCount > 0 {
-			peers = append(peers, parsePeers(swarm.leechers, maxCount, skipPeer)...)
+		if forSeeder {
+			peers = parsePeers(swarm.leechers, maxCount)
+		} else {
+			peers = append(peers, parsePeers(swarm.seeders, maxCount)...)
+			if maxCount -= len(peers); maxCount > 0 {
+				peers = append(peers, parsePeers(swarm.leechers, maxCount)...)
+			}
 		}
 	}
 	return
 }
 
-func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, peer bittorrent.Peer) (peers []bittorrent.Peer, err error) {
+func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
 
-	isV6 := peer.Addr().Is6()
-
-	if seeder {
-		// Append leechers as possible.
-		peers = ps.getPeers(ps.shards[ps.shardIndex(ih, isV6)], ih, numWant, true, peer)
-		if numWant -= len(peers); numWant > 0 {
-			peers = append(peers, ps.getPeers(ps.shards[ps.shardIndex(ih, !isV6)], ih, numWant, true, peer)...)
-		}
-	} else {
-		// Append as many seeders as possible.
-		peers = ps.getPeers(ps.shards[ps.shardIndex(ih, isV6)], ih, numWant, false, peer)
-		if numWant -= len(peers); numWant > 0 {
-			peers = append(peers, ps.getPeers(ps.shards[ps.shardIndex(ih, !isV6)], ih, numWant, false, peer)...)
-		}
-	}
+	peers = ps.getPeers(ps.shards[ps.shardIndex(ih, v6)], ih, numWant, seeder)
 
 	return
 }
