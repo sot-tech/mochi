@@ -189,7 +189,7 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 			}
 		}
 	}
-	log.Info("responseHook announce peers", log.Fields{
+	log.Debug("responseHook announce peers", log.Fields{
 		"infoHash":    req.InfoHash,
 		"requestPeer": req.RequestPeer,
 		"ipv4Peers":   resp.IPv4Peers,
