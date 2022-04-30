@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/rs/zerolog"
 )
 
 // Params is used to fetch (optional) request parameters from an Announce.
@@ -31,6 +31,8 @@ type Params interface {
 	// For a request of the form "/announce?port=1234" this would return
 	// "port=1234"
 	RawQuery() string
+
+	zerolog.LogObjectMarshaler
 }
 
 var (
@@ -151,7 +153,6 @@ func parseQuery(query string) (q *QueryParams, err error) {
 			// But frontends record these errors to prometheus, which generates
 			// a lot of time series.
 			// We log it here for debugging instead.
-			log.Debug("failed to unescape query param key", log.Err(err))
 			return nil, ErrInvalidQueryEscape
 		}
 		value, err = url.QueryUnescape(value)
@@ -160,7 +161,6 @@ func parseQuery(query string) (q *QueryParams, err error) {
 			// But frontends record these errors to prometheus, which generates
 			// a lot of time series.
 			// We log it here for debugging instead.
-			log.Debug("failed to unescape query param value", log.Err(err))
 			return nil, ErrInvalidQueryEscape
 		}
 
@@ -209,4 +209,8 @@ func (qp *QueryParams) RawPath() string {
 // RawQuery returns the raw query from the parsed URL.
 func (qp *QueryParams) RawQuery() string {
 	return qp.query
+}
+
+func (qp QueryParams) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("path", qp.path).Str("query", qp.query)
 }

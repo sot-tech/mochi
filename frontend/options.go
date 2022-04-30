@@ -2,6 +2,8 @@ package frontend
 
 import "github.com/sot-tech/mochi/pkg/log"
 
+var logger = log.NewLogger("frontend configurator")
+
 // ParseOptions is the configuration used to parse an Announce Request.
 //
 // If AllowIPSpoofing is true, IPs provided via params will be used.
@@ -18,29 +20,29 @@ func (op ParseOptions) Validate() ParseOptions {
 	valid := op
 	if op.MaxNumWant <= 0 {
 		valid.MaxNumWant = defaultMaxNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "MaxNumWant",
-			"provided": op.MaxNumWant,
-			"default":  valid.MaxNumWant,
-		})
+		logger.Warn().
+			Str("name", "MaxNumWant").
+			Uint32("provided", op.MaxNumWant).
+			Uint32("default", valid.MaxNumWant).
+			Msg("falling back to default configuration")
 	}
 
 	if op.DefaultNumWant <= 0 {
 		valid.DefaultNumWant = defaultDefaultNumWant
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "DefaultNumWant",
-			"provided": op.DefaultNumWant,
-			"default":  valid.DefaultNumWant,
-		})
+		logger.Warn().
+			Str("name", "DefaultNumWant").
+			Uint32("provided", op.DefaultNumWant).
+			Uint32("default", valid.DefaultNumWant).
+			Msg("falling back to default configuration")
 	}
 
 	if op.MaxScrapeInfoHashes <= 0 {
 		valid.MaxScrapeInfoHashes = defaultMaxScrapeInfoHashes
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "MaxScrapeInfoHashes",
-			"provided": op.MaxScrapeInfoHashes,
-			"default":  valid.MaxScrapeInfoHashes,
-		})
+		logger.Warn().
+			Str("name", "MaxScrapeInfoHashes").
+			Uint32("provided", op.MaxScrapeInfoHashes).
+			Uint32("default", valid.MaxScrapeInfoHashes).
+			Msg("falling back to default configuration")
 	}
 	return valid
 }

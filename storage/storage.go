@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -20,6 +22,7 @@ const (
 )
 
 var (
+	logger   = log.NewLogger("storage configurator")
 	driversM sync.RWMutex
 	drivers  = make(map[string]Builder)
 )
@@ -38,21 +41,21 @@ type Config struct {
 func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.GarbageCollectionInterval <= 0 {
 		gcInterval = defaultGarbageCollectionInterval
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "GarbageCollectionInterval",
-			"provided": c.GarbageCollectionInterval,
-			"default":  defaultGarbageCollectionInterval,
-		})
+		logger.Warn().
+			Str("name", "GarbageCollectionInterval").
+			Dur("provided", c.GarbageCollectionInterval).
+			Dur("default", defaultGarbageCollectionInterval).
+			Msg("falling back to default configuration")
 	} else {
 		gcInterval = c.GarbageCollectionInterval
 	}
 	if c.PeerLifetime <= 0 {
 		peerTTL = defaultPeerLifetime
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "PeerLifetime",
-			"provided": c.PeerLifetime,
-			"default":  defaultPeerLifetime,
-		})
+		logger.Warn().
+			Str("name", "PeerLifetime").
+			Dur("provided", c.PeerLifetime).
+			Dur("default", defaultPeerLifetime).
+			Msg("falling back to default configuration")
 	} else {
 		peerTTL = c.PeerLifetime
 	}
@@ -62,11 +65,12 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 	if c.PrometheusReportingInterval < 0 {
 		statInterval = defaultPrometheusReportingInterval
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "PrometheusReportingInterval",
-			"provided": c.PrometheusReportingInterval,
-			"default":  defaultPrometheusReportingInterval,
-		})
+		logger.Warn().
+			Str("name", "PrometheusReportingInterval").
+			Dur("provided", c.PrometheusReportingInterval).
+			Dur("default", defaultPrometheusReportingInterval).
+			Msg("falling back to default configuration")
+
 	}
 	return
 }
@@ -207,9 +211,9 @@ type PeerStorage interface {
 	// For more details see the documentation in the stop package.
 	stop.Stopper
 
-	// Fielder returns a loggable version of the data used to configure and
+	// LogObjectMarshaler returns a loggable version of the data used to configure and
 	// operate a particular PeerStorage.
-	log.Fielder
+	zerolog.LogObjectMarshaler
 }
 
 // RegisterBuilder makes a Builder available by the provided name.
@@ -266,7 +270,7 @@ func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
 			st.ScheduleStatisticsCollection(statInterval)
 		}
 	} else {
-		log.Info("prometheus disabled because of zero reporting interval")
+		logger.Info().Msg("prometheus disabled because of zero reporting interval")
 	}
 
 	return

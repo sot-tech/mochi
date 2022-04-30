@@ -13,8 +13,7 @@ import (
 	"net/netip"
 
 	"github.com/pkg/errors"
-
-	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/rs/zerolog"
 )
 
 // PeerIDLen is length of peer id field in bytes
@@ -126,6 +125,13 @@ type Scrape struct {
 	Incomplete uint32
 }
 
+func (s Scrape) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("infoHash", s.InfoHash).
+		Uint32("snatches", s.Snatches).
+		Uint32("complete", s.Complete).
+		Uint32("incomplete", s.Incomplete)
+}
+
 // Peer represents the connection details of a peer that is returned in an
 // announce response.
 type Peer struct {
@@ -181,13 +187,11 @@ func (p Peer) RawString() string {
 	return string(b)
 }
 
-// LogFields renders the current peer as a set of Logrus fields.
-func (p Peer) LogFields() log.Fields {
-	return log.Fields{
-		"id":   p.ID,
-		"ip":   p.Addr(),
-		"port": p.Port(),
-	}
+func (p Peer) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("id", p.ID).
+		Stringer("address", p.Addr()).
+		Uint16("port", p.Port())
+
 }
 
 // Equal reports whether p and x are the same.

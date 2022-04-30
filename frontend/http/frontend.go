@@ -20,6 +20,8 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
+var logger = log.NewLogger("http frontend")
+
 // Config represents all of the configurable options for an HTTP BitTorrent
 // Frontend.
 type Config struct {
@@ -38,29 +40,6 @@ type Config struct {
 	ParseOptions
 }
 
-// LogFields renders the current config as a set of Logrus fields.
-func (cfg Config) LogFields() log.Fields {
-	return log.Fields{
-		"addr":                cfg.Addr,
-		"httpsAddr":           cfg.HTTPSAddr,
-		"readTimeout":         cfg.ReadTimeout,
-		"writeTimeout":        cfg.WriteTimeout,
-		"idleTimeout":         cfg.IdleTimeout,
-		"enableKeepAlive":     cfg.EnableKeepAlive,
-		"tlsCertPath":         cfg.TLSCertPath,
-		"tlsKeyPath":          cfg.TLSKeyPath,
-		"announceRoutes":      cfg.AnnounceRoutes,
-		"scrapeRoutes":        cfg.ScrapeRoutes,
-		"pingRoutes":          cfg.PingRoutes,
-		"enableRequestTiming": cfg.EnableRequestTiming,
-		"allowIPSpoofing":     cfg.AllowIPSpoofing,
-		"realIPHeader":        cfg.RealIPHeader,
-		"maxNumWant":          cfg.MaxNumWant,
-		"defaultNumWant":      cfg.DefaultNumWant,
-		"maxScrapeInfoHashes": cfg.MaxScrapeInfoHashes,
-	}
-}
-
 // Default config constants.
 const (
 	defaultReadTimeout  = 2 * time.Second
@@ -77,20 +56,21 @@ func (cfg Config) Validate() Config {
 
 	if cfg.ReadTimeout <= 0 {
 		validcfg.ReadTimeout = defaultReadTimeout
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "http.ReadTimeout",
-			"provided": cfg.ReadTimeout,
-			"default":  validcfg.ReadTimeout,
-		})
+		logger.Warn().
+			Str("name", "http.ReadTimeout").
+			Dur("provided", cfg.ReadTimeout).
+			Dur("default", validcfg.ReadTimeout).
+			Msg("falling back to default configuration")
+
 	}
 
 	if cfg.WriteTimeout <= 0 {
 		validcfg.WriteTimeout = defaultWriteTimeout
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     "http.WriteTimeout",
-			"provided": cfg.WriteTimeout,
-			"default":  validcfg.WriteTimeout,
-		})
+		logger.Warn().
+			Str("name", "http.WriteTimeout").
+			Dur("provided", cfg.WriteTimeout).
+			Dur("default", validcfg.WriteTimeout).
+			Msg("falling back to default configuration")
 	}
 
 	if cfg.IdleTimeout <= 0 {
@@ -98,11 +78,11 @@ func (cfg Config) Validate() Config {
 
 		if cfg.EnableKeepAlive {
 			// If keepalive is disabled, this configuration isn't used anyway.
-			log.Warn("falling back to default configuration", log.Fields{
-				"name":     "http.IdleTimeout",
-				"provided": cfg.IdleTimeout,
-				"default":  validcfg.IdleTimeout,
-			})
+			logger.Warn().
+				Str("name", "http.IdleTimeout").
+				Dur("provided", cfg.IdleTimeout).
+				Dur("default", validcfg.IdleTimeout).
+				Msg("falling back to default configuration")
 		}
 	}
 
@@ -178,7 +158,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 	if cfg.Addr != "" {
 		go func() {
 			if err := f.serveHTTP(router, false); err != nil {
-				log.Fatal("failed while serving http", log.Err(err))
+				logger.Fatal().Err(err).Str("proto", "http").Msg("failed while serving")
 			}
 		}()
 	}
@@ -186,7 +166,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 	if cfg.HTTPSAddr != "" {
 		go func() {
 			if err := f.serveHTTP(router, true); err != nil {
-				log.Fatal("failed while serving https", log.Err(err))
+				logger.Fatal().Err(err).Str("proto", "https").Msg("failed while serving")
 			}
 		}()
 	}
@@ -194,7 +174,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 	return f, nil
 }
 
-// Stop provides a thread-safe way to shutdown a currently running Frontend.
+// Stop provides a thread-safe way to shut down a currently running Frontend.
 func (f *Frontend) Stop() stop.Result {
 	stopGroup := stop.NewGroup()
 

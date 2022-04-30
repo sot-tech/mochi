@@ -23,6 +23,8 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
+var logger = log.NewLogger("udp frontend")
+
 var allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 
 // Config represents all of the configurable options for a UDP BitTorrent
@@ -33,20 +35,6 @@ type Config struct {
 	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
 	EnableRequestTiming bool          `cfg:"enable_request_timing"`
 	frontend.ParseOptions
-}
-
-// LogFields renders the current config as a set of Logrus fields.
-func (cfg Config) LogFields() log.Fields {
-	return log.Fields{
-		"addr":                cfg.Addr,
-		"privateKey":          cfg.PrivateKey,
-		"maxClockSkew":        cfg.MaxClockSkew,
-		"enableRequestTiming": cfg.EnableRequestTiming,
-		"allowIPSpoofing":     cfg.AllowIPSpoofing,
-		"maxNumWant":          cfg.MaxNumWant,
-		"defaultNumWant":      cfg.DefaultNumWant,
-		"maxScrapeInfoHashes": cfg.MaxScrapeInfoHashes,
-	}
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -64,7 +52,11 @@ func (cfg Config) Validate() Config {
 		}
 		validcfg.PrivateKey = string(pkeyRunes)
 
-		log.Warn("UDP private key was not provided, using generated key", log.Fields{"key": validcfg.PrivateKey})
+		log.Warn().
+			Str("name", "UDP.PrivateKey").
+			Str("provided", "").
+			Str("key", validcfg.PrivateKey).
+			Msg("falling back to default configuration")
 	}
 
 	validcfg.ParseOptions = cfg.ParseOptions.Validate()
@@ -111,7 +103,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 	f.wg.Add(1)
 	go func() {
 		if err := f.serve(); err != nil {
-			log.Fatal("failed while serving udp", log.Err(err))
+			logger.Fatal().Err(err).Str("proto", "udp").Msg("failed while serving")
 		}
 	}()
 
@@ -157,7 +149,7 @@ func (t *Frontend) serve() error {
 		// Check to see if we need to shutdown.
 		select {
 		case <-t.closing:
-			log.Debug("udp serve() received shutdown signal")
+			log.Debug().Msg("serve received shutdown signal")
 			return nil
 		default:
 		}

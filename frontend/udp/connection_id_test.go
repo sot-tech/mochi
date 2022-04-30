@@ -57,7 +57,11 @@ func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
 
 	// this is just in here because logging impacts performance and we benchmark
 	// this version too.
-	log.Debug("manually generated connection ID", log.Fields{"ip": ip, "now": now, "connID": buf})
+	log.Debug().
+		Stringer("ip", ip).
+		Time("now", now).
+		Bytes("connID", buf).
+		Msg("manually generated connection ID")
 	return buf
 }
 

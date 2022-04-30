@@ -3,132 +3,78 @@
 package log
 
 import (
-	"fmt"
 	"io"
+	"os"
+	"strings"
+	"time"
 
-	"github.com/sirupsen/logrus"
+	_ "code.cloudfoundry.org/go-diodes"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/diode"
+	zl "github.com/rs/zerolog/log"
 )
 
-var (
-	l     = logrus.New()
-	debug = false
-)
+var root = zl.Logger
 
-// SetDebug controls debug logging.
-func SetDebug(to bool) {
-	debug = to
-	l.Level = logrus.DebugLevel
-}
+func ConfigureLogger(output, level string, formatted, colored bool) (err error) {
+	lvl := zerolog.WarnLevel
+	output = strings.ToLower(output)
+	var w io.Writer
+	var stdAny bool
+	switch output {
+	case "stderr", "":
+		w, stdAny = os.Stderr, true
+	case "stdout":
+		w, stdAny = os.Stdout, true
+	default:
+		if w, err = os.OpenFile(output, os.O_APPEND|os.O_CREATE, 0600); err == nil {
+			w = diode.NewWriter(w, 1000, 10*time.Millisecond, func(missed int) {
+				zl.Warn().Int("count", missed).Msg("Logger dropped messages")
+			})
 
-// SetFormatter sets the formatter.
-func SetFormatter(to logrus.Formatter) {
-	l.Formatter = to
-}
-
-// SetOutput sets the output.
-func SetOutput(to io.Writer) {
-	l.Out = to
-}
-
-// Fields is a map of logging fields.
-type Fields map[string]any
-
-// LogFields implements Fielder for Fields.
-func (f Fields) LogFields() Fields {
-	return f
-}
-
-// A Fielder provides Fields via the LogFields method.
-type Fielder interface {
-	LogFields() Fields
-}
-
-// err is a wrapper around an error.
-type err struct {
-	e error
-}
-
-// LogFields provides Fields for logging.
-func (e err) LogFields() Fields {
-	return Fields{
-		"error": e.e.Error(),
-		"type":  fmt.Sprintf("%T", e.e),
-	}
-}
-
-// Err is a wrapper around errors that implements Fielder.
-func Err(e error) Fielder {
-	return err{e}
-}
-
-// mergeFielders merges the Fields of multiple Fielders.
-// Fields from the first Fielder will be used unchanged, Fields from subsequent
-// Fielders will be prefixed with "%d.", starting from 1.
-//
-// must be called with len(fielders) > 0
-func mergeFielders(fielders ...Fielder) logrus.Fields {
-	if fielders[0] == nil {
-		return nil
-	}
-
-	fields := fielders[0].LogFields()
-	for i := 1; i < len(fielders); i++ {
-		if fielders[i] == nil {
-			continue
-		}
-		prefix := fmt.Sprint(i, ".")
-		ff := fielders[i].LogFields()
-		for k, v := range ff {
-			fields[prefix+k] = v
-		}
-	}
-
-	return logrus.Fields(fields)
-}
-
-// Debug logs at the debug level if debug logging is enabled.
-func Debug(v any, fielders ...Fielder) {
-	if debug {
-		if len(fielders) != 0 {
-			l.WithFields(mergeFielders(fielders...)).Debug(v)
 		} else {
-			l.Debug(v)
+			return err
 		}
 	}
+	if stdAny && formatted {
+		w = zerolog.ConsoleWriter{
+			Out:        w,
+			NoColor:    !colored,
+			TimeFormat: "2006-01-02 15:04:05.999",
+		}
+	}
+	if len(level) > 0 {
+		if logLevel, err := zerolog.ParseLevel(strings.ToLower(level)); err == nil {
+			lvl = logLevel
+		} else {
+			return err
+		}
+	}
+	root = zerolog.New(w).With().Timestamp().Logger()
+	zerolog.SetGlobalLevel(lvl)
+	return nil
 }
 
-// Info logs at the info level.
-func Info(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Info(v)
-	} else {
-		l.Info(v)
-	}
+func Debug() *zerolog.Event {
+	return root.Debug()
 }
 
-// Warn logs at the warning level.
-func Warn(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Warn(v)
-	} else {
-		l.Warn(v)
-	}
+func Info() *zerolog.Event {
+	return root.Info()
 }
 
-// Error logs at the error level.
-func Error(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Error(v)
-	} else {
-		l.Error(v)
-	}
+func Warn() *zerolog.Event {
+	return root.Warn()
 }
 
-// Fatal logs at the fatal level and exits with a status code != 0.
-func Fatal(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Fatal(v)
-	} else {
-		l.Fatal(v)
-	}
+func Error() *zerolog.Event {
+	return root.Error()
+}
+
+func Fatal() *zerolog.Event {
+	return root.Fatal()
+}
+
+func NewLogger(component string) zerolog.Logger {
+	return root.With().Str("component", component).Logger()
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sot-tech/mochi/frontend/http"
@@ -55,19 +54,19 @@ func (r *Run) Start(ps storage.PeerStorage) error {
 	r.sg = stop.NewGroup()
 
 	if len(cfg.MetricsAddr) > 0 {
-		log.Info("starting metrics server", log.Fields{"addr": cfg.MetricsAddr})
+		log.Info().Str("addr", cfg.MetricsAddr).Msg("starting metrics server")
 		r.sg.Add(metrics.NewServer(cfg.MetricsAddr))
 	} else {
-		log.Info("metrics disabled because of empty address")
+		log.Info().Msg("metrics disabled because of empty address")
 	}
 
 	if ps == nil {
-		log.Info("starting storage", log.Fields{"name": cfg.Storage.Name})
+		log.Info().Str("name", cfg.Storage.Name).Msg("starting storage")
 		ps, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
 		if err != nil {
 			return fmt.Errorf("failed to create storage: %w", err)
 		}
-		log.Info("started storage", ps)
+		log.Info().Object("config", ps).Msg("started storage")
 	}
 	r.storage = ps
 
@@ -83,7 +82,7 @@ func (r *Run) Start(ps storage.PeerStorage) error {
 	r.logic = middleware.NewLogic(cfg.AnnounceInterval, cfg.MinAnnounceInterval, r.storage, preHooks, postHooks)
 
 	if len(cfg.HTTPConfig) > 0 {
-		log.Info("starting HTTP frontend", cfg.HTTPConfig)
+		log.Info().Object("config", cfg.HTTPConfig).Msg("starting HTTP frontend")
 		httpFE, err := http.NewFrontend(r.logic, cfg.HTTPConfig)
 		if err == nil {
 			r.sg.Add(httpFE)
@@ -93,7 +92,7 @@ func (r *Run) Start(ps storage.PeerStorage) error {
 	}
 
 	if len(cfg.UDPConfig) > 0 {
-		log.Info("starting UDP frontend", cfg.UDPConfig)
+		log.Info().Object("config", cfg.HTTPConfig).Msg("starting UDP frontend")
 		udpFE, err := udp.NewFrontend(r.logic, cfg.UDPConfig)
 		if err == nil {
 			r.sg.Add(udpFE)
@@ -116,18 +115,18 @@ func combineErrors(prefix string, errs []error) error {
 
 // Stop shuts down an instance of Conf.
 func (r *Run) Stop(keepPeerStore bool) (storage.PeerStorage, error) {
-	log.Debug("stopping frontends and metrics server")
+	log.Debug().Msg("stopping frontends and metrics server")
 	if errs := r.sg.Stop().Wait(); len(errs) != 0 {
 		return nil, combineErrors("failed while shutting down frontends", errs)
 	}
 
-	log.Debug("stopping logic")
+	log.Debug().Msg("stopping logic")
 	if errs := r.logic.Stop().Wait(); len(errs) != 0 {
 		return nil, combineErrors("failed while shutting down middleware", errs)
 	}
 
 	if !keepPeerStore {
-		log.Debug("stopping peer store")
+		log.Debug().Msg("stopping peer store")
 		if errs := r.storage.Stop().Wait(); len(errs) != 0 {
 			return nil, combineErrors("failed while shutting down peer store", errs)
 		}
@@ -140,7 +139,7 @@ func (r *Run) Stop(keepPeerStore bool) (storage.PeerStorage, error) {
 // RootRunCmdFunc implements a Cobra command that runs an instance of Conf
 // and handles reloading and shutdown via process signals.
 func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
-	configFilePath, err := cmd.Flags().GetString("config")
+	configFilePath, err := cmd.Flags().GetString(configArg)
 	if err != nil {
 		return err
 	}
@@ -156,7 +155,7 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 	for {
 		select {
 		case <-reload.Done():
-			log.Info("reloading; received reload signal")
+			log.Info().Msg("reloading; received reload signal")
 			peerStore, err := r.Stop(true)
 			if err != nil {
 				return err
@@ -166,7 +165,7 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 				return err
 			}
 		case <-shutdown.Done():
-			log.Info("shutting down; received shutdown signal")
+			log.Info().Msg("shutting down; received shutdown signal")
 			if _, err := r.Stop(false); err != nil {
 				return err
 			}
@@ -176,56 +175,60 @@ func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
 	}
 }
 
-// RootPreRunCmdFunc handles command line flags for the Run command.
-func RootPreRunCmdFunc(cmd *cobra.Command, _ []string) error {
-	noColors, err := cmd.Flags().GetBool("nocolors")
+const (
+	appName      = "mochi"
+	logOutArg    = "logOut"
+	logLevelArg  = "logLevel"
+	logPrettyArg = "logPretty"
+	logColorsArg = "logColored"
+	configArg    = "config"
+)
+
+// configureLogger handles command line flags for the logger.
+func configureLogger(cmd *cobra.Command, _ []string) (err error) {
+	var out, lvl string
+	var pretty, colored bool
+
+	flags := cmd.Flags()
+
+	out, err = flags.GetString(logOutArg)
 	if err != nil {
 		return err
 	}
-	if noColors {
-		log.SetFormatter(&logrus.TextFormatter{DisableColors: true})
-	}
 
-	jsonLog, err := cmd.Flags().GetBool("json")
+	lvl, err = flags.GetString(logLevelArg)
 	if err != nil {
 		return err
 	}
-	if jsonLog {
-		log.SetFormatter(&logrus.JSONFormatter{})
-		log.Info("enabled JSON logging")
-	}
 
-	debugLog, err := cmd.Flags().GetBool("debug")
+	pretty, err = flags.GetBool(logPrettyArg)
 	if err != nil {
 		return err
 	}
-	if debugLog {
-		log.SetDebug(true)
-		log.Info("enabled debug logging")
+
+	colored, err = cmd.Flags().GetBool(logColorsArg)
+	if err != nil {
+		return err
 	}
 
-	return nil
-}
-
-// RootPostRunCmdFunc handles clean up of any state initialized by command line
-// flags.
-func RootPostRunCmdFunc(_ *cobra.Command, _ []string) error {
-	return nil
+	return log.ConfigureLogger(out, lvl, pretty, colored)
 }
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:                "mochi",
-		Short:              "BitTorrent Tracker",
-		Long:               "A customizable, multi-protocol BitTorrent Tracker",
-		PersistentPreRunE:  RootPreRunCmdFunc,
-		RunE:               RootRunCmdFunc,
-		PersistentPostRunE: RootPostRunCmdFunc,
+		Use:               appName,
+		Short:             "BitTorrent Tracker",
+		Long:              "A customizable, multi-protocol BitTorrent Tracker",
+		PersistentPreRunE: configureLogger,
+		RunE:              RootRunCmdFunc,
 	}
 
-	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
-	rootCmd.PersistentFlags().Bool("json", false, "enable json logging")
-	rootCmd.PersistentFlags().Bool("nocolors", runtime.GOOS == "windows", "disable log coloring")
+	flags := rootCmd.PersistentFlags()
+
+	flags.String(logOutArg, "", "output for logging, might be 'stderr', 'stdout' of file path. 'stderr' if not set")
+	flags.String(logLevelArg, "info", "logging level (trace, debug, info, warn, error, fatal, panic). 'warn' if not set")
+	flags.Bool(logPrettyArg, false, "enable log pretty print. used only if 'logOut' set to 'stdout' or 'stderr'. if not set, log outputs json)")
+	flags.Bool(logColorsArg, runtime.GOOS == "windows", "enable log coloring. used only if set 'logPretty'")
 
 	rootCmd.Flags().String("config", "/etc/mochi.yaml", "location of configuration file")
 
@@ -234,6 +237,6 @@ func main() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("failed when executing root cobra command: " + err.Error())
+		log.Fatal().Err(err).Msg("failed while executing root command")
 	}
 }

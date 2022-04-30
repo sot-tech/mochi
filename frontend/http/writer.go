@@ -9,7 +9,6 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/log"
 )
 
 // WriteError communicates an error to a BitTorrent client over HTTP.
@@ -19,13 +18,13 @@ func WriteError(w http.ResponseWriter, err error) {
 	if errors.As(err, &clientErr) {
 		message = clientErr.Error()
 	} else {
-		log.Error("http: internal error", log.Err(err))
+		logger.Error().Err(err).Msg("http: internal error")
 	}
 
 	if err = bencode.NewEncoder(w).Encode(map[string]any{
 		"failure reason": message,
 	}); err != nil {
-		log.Error("unable to encode message", log.Err(err))
+		logger.Error().Err(err).Msg("unable to encode message")
 	}
 }
 

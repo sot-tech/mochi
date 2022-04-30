@@ -23,6 +23,8 @@ import (
 // Name of this container for registry
 const Name = "directory"
 
+var logger = log.NewLogger("torrent approval directory")
+
 func init() {
 	container.Register(Name, build)
 }
