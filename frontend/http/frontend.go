@@ -61,7 +61,6 @@ func (cfg Config) Validate() Config {
 			Dur("provided", cfg.ReadTimeout).
 			Dur("default", validcfg.ReadTimeout).
 			Msg("falling back to default configuration")
-
 	}
 
 	if cfg.WriteTimeout <= 0 {

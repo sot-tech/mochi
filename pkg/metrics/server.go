@@ -16,7 +16,10 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
-var serverCounter = new(int32)
+var (
+	logger        = log.NewLogger("metrics")
+	serverCounter = new(int32)
+)
 
 // Enabled indicates that configured at least one metrics server
 func Enabled() bool {
@@ -74,7 +77,7 @@ func NewServer(addr string) *Server {
 		atomic.AddInt32(serverCounter, 1)
 		defer atomic.AddInt32(serverCounter, -1)
 		if err := s.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal("failed while serving prometheus", log.Err(err))
+			logger.Error().Err(err).Msg("failed while serving prometheus")
 		}
 	}()
 

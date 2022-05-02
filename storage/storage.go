@@ -70,7 +70,6 @@ func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 			Dur("provided", c.PrometheusReportingInterval).
 			Dur("default", defaultPrometheusReportingInterval).
 			Msg("falling back to default configuration")
-
 	}
 	return
 }
@@ -262,15 +261,33 @@ func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
 	}
 
 	if gc, isOk := ps.(GCAware); isOk {
-		gc.ScheduleGC(c.sanitizeGCConfig())
+		gcInterval, peerTTL := c.sanitizeGCConfig()
+		logger.Info().
+			Str("type", name).
+			Dur("gcInterval", gcInterval).
+			Dur("peerTTL", peerTTL).
+			Msg("scheduling GC")
+		gc.ScheduleGC(gcInterval, peerTTL)
+	} else {
+		logger.Debug().
+			Str("type", name).
+			Msg("storage does not support GC")
 	}
 
-	if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
-		if st, isOk := ps.(StatisticsAware); isOk {
+	if st, isOk := ps.(StatisticsAware); isOk {
+		if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
+			logger.Info().
+				Str("type", name).
+				Dur("statInterval", statInterval).
+				Msg("scheduling statistics collection")
 			st.ScheduleStatisticsCollection(statInterval)
+		} else {
+			logger.Info().Str("type", name).Msg("statistics collection disabled because of zero reporting interval")
 		}
 	} else {
-		logger.Info().Msg("prometheus disabled because of zero reporting interval")
+		logger.Debug().
+			Str("type", name).
+			Msg("storage does not support statistics collection")
 	}
 
 	return

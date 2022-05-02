@@ -38,6 +38,7 @@ type Logic struct {
 
 // HandleAnnounce generates a response for an Announce.
 func (l *Logic) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest) (_ context.Context, resp *bittorrent.AnnounceResponse, err error) {
+	logger.Debug().Object("request", req).Msg("new announce request")
 	resp = &bittorrent.AnnounceResponse{
 		Interval:    l.announceInterval,
 		MinInterval: l.minAnnounceInterval,
@@ -70,6 +71,7 @@ func (l *Logic) AfterAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 
 // HandleScrape generates a response for a Scrape.
 func (l *Logic) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest) (_ context.Context, resp *bittorrent.ScrapeResponse, err error) {
+	logger.Debug().Object("request", req).Msg("new scrape request")
 	resp = &bittorrent.ScrapeResponse{
 		Files: make([]bittorrent.Scrape, 0, len(req.InfoHashes)),
 	}

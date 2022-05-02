@@ -16,10 +16,6 @@ type RequestAddress struct {
 	Provided bool
 }
 
-func (a RequestAddress) MarshalZerologObject(e *zerolog.Event) {
-	e.Stringer("address", a.Addr).Bool("provided", a.Provided)
-}
-
 // Validate checks if netip.Addr is valid and not unspecified (0.0.0.0)
 func (a RequestAddress) Validate() bool {
 	return a.IsValid() && !a.IsUnspecified()
@@ -35,18 +31,17 @@ func (a RequestAddress) String() string {
 	return fmt.Sprint(a.Addr.String(), p)
 }
 
+// MarshalZerologObject writes fields into zerolog event
+func (a RequestAddress) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("address", a.Addr).Bool("provided", a.Provided)
+}
+
 // RequestAddresses is an array of RequestAddress used mainly for
 // sort.Interface implementation.
 // Frontends may determine peer's address from connections info
 // or from provided values or combine these addresses to fetch maximum
 // connection information about peer
 type RequestAddresses []RequestAddress
-
-func (aa RequestAddresses) MarshalZerologArray(a *zerolog.Array) {
-	for _, addr := range aa {
-		a.Object(addr)
-	}
-}
 
 func (aa RequestAddresses) Len() int {
 	return len(aa)
@@ -99,8 +94,17 @@ func (aa RequestAddresses) GetFirst() netip.Addr {
 	return a
 }
 
+// MarshalZerologArray writes array elements to zerolog event
+func (aa RequestAddresses) MarshalZerologArray(a *zerolog.Array) {
+	for _, addr := range aa {
+		a.Object(addr)
+	}
+}
+
+// Peers wrapper of array of Peer-s
 type Peers []Peer
 
+// MarshalZerologArray writes array elements to zerolog event
 func (p Peers) MarshalZerologArray(a *zerolog.Array) {
 	for _, peer := range p {
 		a.Object(peer)
@@ -115,12 +119,6 @@ type RequestPeer struct {
 	RequestAddresses
 }
 
-func (rp RequestPeer) MarshalZerologObject(e *zerolog.Event) {
-	e.Stringer("id", rp.ID).
-		Array("addresses", rp.RequestAddresses).
-		Uint16("port", rp.Port)
-}
-
 // Peers constructs array of Peer-s with the same ID and Port
 // for every RequestAddress array.
 func (rp RequestPeer) Peers() (peers Peers) {
@@ -131,6 +129,13 @@ func (rp RequestPeer) Peers() (peers Peers) {
 		})
 	}
 	return
+}
+
+// MarshalZerologObject writes fields into zerolog event
+func (rp RequestPeer) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("id", rp.ID).
+		Array("addresses", rp.RequestAddresses).
+		Uint16("port", rp.Port)
 }
 
 // AnnounceRequest represents the parsed parameters from an announce request.
@@ -149,6 +154,7 @@ type AnnounceRequest struct {
 	Params
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (r AnnounceRequest) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("event", r.Event).
 		Stringer("infoHash", r.InfoHash).
@@ -175,6 +181,7 @@ type AnnounceResponse struct {
 	IPv6Peers   Peers
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (r AnnounceResponse) MarshalZerologObject(e *zerolog.Event) {
 	e.Bool("compact", r.Compact).
 		Uint32("complete", r.Complete).
@@ -185,8 +192,10 @@ func (r AnnounceResponse) MarshalZerologObject(e *zerolog.Event) {
 		Array("ipv6Peers", r.IPv6Peers)
 }
 
+// InfoHashes wrapper of array of InfoHash-es
 type InfoHashes []InfoHash
 
+// MarshalZerologArray writes array elements to zerolog event
 func (i InfoHashes) MarshalZerologArray(a *zerolog.Array) {
 	for _, ih := range i {
 		a.Str(ih.String())
@@ -202,14 +211,17 @@ type ScrapeRequest struct {
 	Params     Params
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (r ScrapeRequest) MarshalZerologObject(e *zerolog.Event) {
 	e.Array("addresses", r.RequestAddresses).
 		Array("infoHashes", r.InfoHashes).
 		Object("params", r.Params)
 }
 
+// Scrapes wrapper of array of Scrape-s
 type Scrapes []Scrape
 
+// MarshalZerologArray writes array elements to zerolog event
 func (s Scrapes) MarshalZerologArray(a *zerolog.Array) {
 	for _, scrape := range s {
 		a.Object(scrape)
@@ -224,6 +236,7 @@ type ScrapeResponse struct {
 	Files Scrapes
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (sr ScrapeResponse) MarshalZerologObject(e *zerolog.Event) {
 	e.Array("scrapes", sr.Files)
 }

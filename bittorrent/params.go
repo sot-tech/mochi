@@ -211,6 +211,7 @@ func (qp *QueryParams) RawQuery() string {
 	return qp.query
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (qp QueryParams) MarshalZerologObject(e *zerolog.Event) {
 	e.Str("path", qp.path).Str("query", qp.query)
 }

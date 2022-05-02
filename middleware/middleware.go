@@ -47,11 +47,11 @@ func RegisterBuilder(name string, d Builder) {
 	drivers[name] = d
 }
 
-// New attempts to initialize a new middleware instance from the
+// NewHook attempts to initialize a new middleware instance from the
 // list of registered Builders.
 //
 // If a driver does not exist, returns ErrBuilderDoesNotExist.
-func New(name string, options conf.MapConfig, storage storage.PeerStorage) (Hook, error) {
+func NewHook(name string, options conf.MapConfig, storage storage.PeerStorage) (Hook, error) {
 	driversM.RLock()
 	defer driversM.RUnlock()
 
@@ -70,9 +70,9 @@ type Config struct {
 	Options conf.MapConfig
 }
 
-// HooksFromHookConfigs is a utility function for initializing Hooks in bulk.
+// NewHooks is a utility function for initializing Hooks in bulk.
 // each element of configs must contain pairs `name` - string and `options` - map[string]any
-func HooksFromHookConfigs(configs []conf.MapConfig, storage storage.PeerStorage) (hooks []Hook, err error) {
+func NewHooks(configs []conf.MapConfig, storage storage.PeerStorage) (hooks []Hook, err error) {
 	for _, cfg := range configs {
 		var c Config
 
@@ -81,7 +81,7 @@ func HooksFromHookConfigs(configs []conf.MapConfig, storage storage.PeerStorage)
 		}
 
 		var h Hook
-		h, err = New(c.Name, c.Options, storage)
+		h, err = NewHook(c.Name, c.Options, storage)
 		if err != nil {
 			break
 		}

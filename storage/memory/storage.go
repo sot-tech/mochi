@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -26,6 +28,8 @@ const (
 	Name              = "memory"
 	defaultShardCount = 1024
 )
+
+var logger = log.NewLogger(Name)
 
 func init() {
 	// Register the storage driver.
@@ -45,12 +49,9 @@ type Config struct {
 	ShardCount int `cfg:"shard_count"`
 }
 
-// LogFields renders the current config as a set of Logrus fields.
-func (cfg Config) LogFields() log.Fields {
-	return log.Fields{
-		"name":       Name,
-		"shardCount": cfg.ShardCount,
-	}
+// MarshalZerologObject writes configuration into zerolog event
+func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
+	e.Int("shardCount", cfg.ShardCount)
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -62,11 +63,11 @@ func (cfg Config) Validate() Config {
 
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
 		validcfg.ShardCount = defaultShardCount
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".ShardCount",
-			"provided": cfg.ShardCount,
-			"default":  validcfg.ShardCount,
-		})
+		log.Warn().
+			Str("name", "ShardCount").
+			Int("provided", cfg.ShardCount).
+			Int("default", validcfg.ShardCount).
+			Msg("falling back to default configuration")
 	}
 
 	return validcfg
@@ -111,6 +112,11 @@ type peerStore struct {
 	wg     sync.WaitGroup
 }
 
+// MarshalZerologObject writes configuration into zerolog event
+func (ps *peerStore) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("type", Name).Object("config", ps.cfg)
+}
+
 var _ storage.PeerStorage = &peerStore{}
 
 func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
@@ -125,10 +131,12 @@ func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				return
 			case <-t.C:
 				before := time.Now().Add(-peerLifeTime)
-				log.Debug("storage: Memory purging peers with no announces since", log.Fields{"before": before})
+				logger.Trace().Time("before", before).Msg("purging peers with no announces")
 				start := time.Now()
 				ps.gc(before)
-				storage.PromGCDurationMilliseconds.Observe(float64(time.Since(start).Nanoseconds()) / float64(time.Millisecond))
+				duration := time.Since(start)
+				logger.Debug().Dur("timeTaken", duration).Msg("gc complete")
+				storage.PromGCDurationMilliseconds.Observe(float64(duration.Milliseconds()))
 			}
 		}
 	}()
@@ -162,7 +170,7 @@ func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) 
 					storage.PromInfoHashesCount.Set(float64(numInfohashes))
 					storage.PromSeedersCount.Set(float64(numSeeders))
 					storage.PromLeechersCount.Set(float64(numLeechers))
-					log.Debug("storage: Memory: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+					logger.Debug().TimeDiff("timeTaken", time.Now(), before).Msg("populate prom complete")
 				}
 			}
 		}
@@ -539,8 +547,4 @@ func (ps *peerStore) Stop() stop.Result {
 	}()
 
 	return c.Result()
-}
-
-func (ps *peerStore) LogFields() log.Fields {
-	return ps.cfg.LogFields()
 }

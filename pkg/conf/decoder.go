@@ -19,6 +19,7 @@ var ErrNilConfigMap = errors.New("unable to process nil map")
 // MapConfig is just alias for map[string]any
 type MapConfig map[string]any
 
+// MarshalZerologObject writes map into zerolog event
 func (m MapConfig) MarshalZerologObject(e *zerolog.Event) {
 	e.Fields(map[string]any(m))
 }

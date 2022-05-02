@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	logger = log.NewLogger("bittorrent")
 	// ErrInvalidIP indicates an invalid IP for an Announce.
 	ErrInvalidIP = ClientError("invalid IP")
 
@@ -29,12 +30,7 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 		r.NumWant = maxNumWant
 	}
 
-	log.Debug("sanitized announce", r, log.Fields{
-		"port":           r.Port,
-		"addresses":      r.RequestAddresses,
-		"maxNumWant":     maxNumWant,
-		"defaultNumWant": defaultNumWant,
-	})
+	logger.Debug().Object("request", r).Msg("sanitized announce")
 	return nil
 }
 
@@ -49,9 +45,6 @@ func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
 		return ErrInvalidIP
 	}
 
-	log.Debug("sanitized scrape", r, log.Fields{
-		"addresses":           r.RequestAddresses,
-		"maxScrapeInfoHashes": maxScrapeInfoHashes,
-	})
+	logger.Debug().Object("request", r).Msg("sanitized scrape")
 	return nil
 }

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -64,8 +65,11 @@ const (
 	CountLeecherKey = "CHI_C_L"
 )
 
-// ErrSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
-var ErrSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
+var (
+	logger = log.NewLogger(Name)
+	// ErrSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
+	ErrSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
+)
 
 func init() {
 	// Register the storage builder.
@@ -98,7 +102,6 @@ func newStore(cfg Config) (*store, error) {
 		Connection: rs,
 		closed:     make(chan any),
 		wg:         sync.WaitGroup{},
-		logFields:  cfg.LogFields(),
 	}, nil
 }
 
@@ -118,21 +121,18 @@ type Config struct {
 	ConnectTimeout time.Duration `cfg:"connect_timeout"`
 }
 
-// LogFields renders the current config as a set of Logrus fields.
-func (cfg Config) LogFields() log.Fields {
-	return log.Fields{
-		"name":           Name,
-		"peerLifetime":   cfg.PeerLifetime,
-		"addresses":      cfg.Addresses,
-		"db":             cfg.DB,
-		"poolSize":       cfg.PoolSize,
-		"sentinel":       cfg.Sentinel,
-		"sentinelMaster": cfg.SentinelMaster,
-		"cluster":        cfg.Cluster,
-		"readTimeout":    cfg.ReadTimeout,
-		"writeTimeout":   cfg.WriteTimeout,
-		"connectTimeout": cfg.ConnectTimeout,
-	}
+// MarshalZerologObject writes configuration fields into zerolog event
+func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
+	e.Strs("addresses", cfg.Addresses).
+		Int("db", cfg.DB).
+		Int("poolSize", cfg.PoolSize).
+		Bool("sentinel", cfg.Sentinel).
+		Str("sentinelMaster", cfg.SentinelMaster).
+		Bool("cluster", cfg.Cluster).
+		Dur("readTimeout", cfg.ReadTimeout).
+		Dur("writeTimeout", cfg.WriteTimeout).
+		Dur("connectTimeout", cfg.ConnectTimeout).
+		Dur("peerLifetime", cfg.PeerLifetime)
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -157,38 +157,38 @@ func (cfg Config) Validate() (Config, error) {
 	validCfg.Addresses = addresses
 	if len(cfg.Addresses) == 0 {
 		validCfg.Addresses = []string{defaultRedisAddress}
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".Addresses",
-			"provided": cfg.Addresses,
-			"default":  validCfg.Addresses,
-		})
+		logger.Warn().
+			Str("name", "Addresses").
+			Strs("provided", cfg.Addresses).
+			Strs("default", validCfg.Addresses).
+			Msg("falling back to default configuration")
 	}
 
 	if cfg.ReadTimeout <= 0 {
 		validCfg.ReadTimeout = defaultReadTimeout
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".ReadTimeout",
-			"provided": cfg.ReadTimeout,
-			"default":  validCfg.ReadTimeout,
-		})
+		logger.Warn().
+			Str("name", "ReadTimeout").
+			Dur("provided", cfg.ReadTimeout).
+			Dur("default", validCfg.ReadTimeout).
+			Msg("falling back to default configuration")
 	}
 
 	if cfg.WriteTimeout <= 0 {
 		validCfg.WriteTimeout = defaultWriteTimeout
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".WriteTimeout",
-			"provided": cfg.WriteTimeout,
-			"default":  validCfg.WriteTimeout,
-		})
+		logger.Warn().
+			Str("name", "WriteTimeout").
+			Dur("provided", cfg.WriteTimeout).
+			Dur("default", validCfg.WriteTimeout).
+			Msg("falling back to default configuration")
 	}
 
 	if cfg.ConnectTimeout <= 0 {
 		validCfg.ConnectTimeout = defaultConnectTimeout
-		log.Warn("falling back to default configuration", log.Fields{
-			"name":     Name + ".ConnectTimeout",
-			"provided": cfg.ConnectTimeout,
-			"default":  validCfg.ConnectTimeout,
-		})
+		logger.Warn().
+			Str("name", "ConnectTimeout").
+			Dur("provided", cfg.ConnectTimeout).
+			Dur("default", validCfg.ConnectTimeout).
+			Msg("falling back to default configuration")
 	}
 
 	return validCfg, nil
@@ -238,7 +238,13 @@ func (cfg Config) Connect() (con Connection, err error) {
 		_ = rs.Close()
 		rs = nil
 	}
-	return Connection{rs}, err
+	cfg.Login, cfg.Password = "", ""
+	return Connection{rs, cfg}, err
+}
+
+// MarshalZerologObject writes configuration into zerolog event
+func (ps *store) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("type", Name).Object("config", ps.Config)
 }
 
 func (ps *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
@@ -254,9 +260,9 @@ func (ps *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 			case <-t.C:
 				start := time.Now()
 				ps.gc(time.Now().Add(-peerLifeTime))
-				duration := time.Since(start).Milliseconds()
-				log.Debug("storage: Redis: recordGCDuration", log.Fields{"timeTaken(ms)": duration})
-				storage.PromGCDurationMilliseconds.Observe(float64(duration))
+				duration := time.Since(start)
+				logger.Debug().Dur("timeTaken", duration).Msg("gc complete")
+				storage.PromGCDurationMilliseconds.Observe(float64(duration.Milliseconds()))
 				t.Reset(gcInterval)
 			}
 		}
@@ -285,7 +291,7 @@ func (ps *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 					storage.PromInfoHashesCount.Set(float64(numInfoHashes))
 					storage.PromSeedersCount.Set(float64(numSeeders))
 					storage.PromLeechersCount.Set(float64(numLeechers))
-					log.Debug("storage: Redis: populateProm() finished", log.Fields{"timeTaken": time.Since(before)})
+					logger.Debug().TimeDiff("timeTaken", time.Now(), before).Msg("populate prom complete")
 				}
 			}
 		}
@@ -295,13 +301,13 @@ func (ps *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 // Connection is wrapper for redis.UniversalClient
 type Connection struct {
 	redis.UniversalClient
+	Config
 }
 
 type store struct {
 	Connection
-	closed    chan any
-	wg        sync.WaitGroup
-	logFields log.Fields
+	closed chan any
+	wg     sync.WaitGroup
 }
 
 func (ps *store) count(key string, getLength bool) (n uint64) {
@@ -313,10 +319,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	}
 	err = AsNil(err)
 	if err != nil {
-		log.Error("storage: Redis: GET/SCARD failure", log.Fields{
-			"key":   key,
-			"error": err,
-		})
+		logger.Error().Err(err).Str("key", key).Msg("storage: Redis: GET/SCARD failure")
 	}
 	return
 }
@@ -375,11 +378,10 @@ func InfoHashKey(infoHash string, seeder, v6 bool) (infoHashKey string) {
 }
 
 func (ps *store) putPeer(infoHashKey, peerCountKey, peerID string) error {
-	log.Debug("storage: Redis: PutPeer", log.Fields{
-		"infoHashKey":  infoHashKey,
-		"peerCountKey": peerCountKey,
-		"peerID":       peerID,
-	})
+	logger.Trace().
+		Str("infoHashKey", infoHashKey).
+		Str("peerID", peerID).
+		Msg("put peer")
 	return ps.tx(func(tx redis.Pipeliner) (err error) {
 		if err = tx.HSet(context.TODO(), infoHashKey, peerID, ps.getClock()).Err(); err != nil {
 			return
@@ -393,11 +395,10 @@ func (ps *store) putPeer(infoHashKey, peerCountKey, peerID string) error {
 }
 
 func (ps *store) delPeer(infoHashKey, peerCountKey, peerID string) error {
-	log.Debug("storage: Redis: DeletePeer", log.Fields{
-		"infoHashKey":  infoHashKey,
-		"peerCountKey": peerCountKey,
-		"peerID":       peerID,
-	})
+	logger.Trace().
+		Str("infoHashKey", infoHashKey).
+		Str("peerID", peerID).
+		Msg("del peer")
 	deleted, err := ps.HDel(context.TODO(), infoHashKey, peerID).Uint64()
 	err = AsNil(err)
 	if err == nil {
@@ -428,10 +429,10 @@ func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) err
 }
 
 func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	log.Debug("storage: Redis: GraduateLeecher", log.Fields{
-		"infoHash": ih,
-		"peer":     peer,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", peer).
+		Msg("graduate leecher")
 
 	infoHash, peerID, isV6 := ih.RawString(), peer.RawString(), peer.Addr().Is6()
 	ihSeederKey, ihLeecherKey := InfoHashKey(infoHash, true, isV6), InfoHashKey(infoHash, false, isV6)
@@ -465,7 +466,7 @@ func (ps Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []
 			if p, err := bittorrent.NewPeer(peerID); err == nil {
 				peers = append(peers, p)
 			} else {
-				log.Error("storage: Redis: unable to decode leecher", log.Fields{"peerID": peerID})
+				logger.Error().Err(err).Str("peerID", peerID).Msg("unable to decode peer")
 			}
 		}
 	}
@@ -506,22 +507,19 @@ func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount i
 		}
 	} else if l > 0 {
 		err = nil
-		log.Warn("storage: Redis: error occurred while retrieving peers", log.Fields{
-			"infoHash": infoHash,
-			"error":    err,
-		})
+		logger.Warn().Err(err).Stringer("infoHash", ih).Msg("error occurred while retrieving peers")
 	}
 
 	return
 }
 
 func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
-	log.Debug("storage: Redis: AnnouncePeers", log.Fields{
-		"infoHash": ih,
-		"seeder":   seeder,
-		"numWant":  numWant,
-		"peer":     v6,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Bool("seeder", seeder).
+		Int("numWant", numWant).
+		Bool("v6", v6).
+		Msg("announce peers")
 
 	return ps.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return ps.HRandField(ctx, infoHashKey, maxCount, false)
@@ -534,10 +532,7 @@ func (ps Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uint
 	count, err := countFn(context.TODO(), infoHashKey).Result()
 	err = AsNil(err)
 	if err != nil {
-		log.Error("storage: Redis: key size calculation failure", log.Fields{
-			"infoHashKey": infoHashKey,
-			"error":       err,
-		})
+		logger.Error().Err(err).Str("infoHashKey", infoHashKey).Msg("key size calculation failure")
 	}
 	return uint32(count)
 }
@@ -555,9 +550,9 @@ func (ps Connection) CountPeers(ih bittorrent.InfoHash, countFn getPeerCountFn) 
 }
 
 func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
-	log.Debug("storage: Redis ScrapeSwarm", log.Fields{
-		"infoHash": ih,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Msg("scrape swarm")
 
 	leechers, seeders = ps.CountPeers(ih, ps.HLen)
 
@@ -579,7 +574,7 @@ func (ps Connection) Put(ctx string, values ...storage.Entry) (err error) {
 			err = ps.HSet(context.TODO(), PrefixKey+ctx, args...).Err()
 			if err != nil {
 				if strings.Contains(err.Error(), argNumErrorMsg) {
-					log.Warn("This Redis version/implementation does not support variadic arguments for HSET")
+					logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HSET")
 					for _, p := range values {
 						if err = ps.HSet(context.TODO(), PrefixKey+ctx, p.Key, p.Value).Err(); err != nil {
 							break
@@ -613,7 +608,7 @@ func (ps Connection) Delete(ctx string, keys ...string) (err error) {
 		err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
-				log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
+				logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
 					if err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, k).Err()); err != nil {
 						break
@@ -676,7 +671,6 @@ func (Connection) Preservable() bool {
 //	 transaction. The infohash key will remain in the addressFamil hash and
 //	 we'll attempt to clean it up the next time gc runs.
 func (ps *store) gc(cutoff time.Time) {
-	log.Debug("storage: Redis: purging peers with no announces since", log.Fields{"before": cutoff})
 	cutoffNanos := cutoff.UnixNano()
 	// list all infoHashKeys in the group
 	infoHashKeys, err := ps.SMembers(context.Background(), IHKey).Result()
@@ -690,7 +684,7 @@ func (ps *store) gc(cutoff time.Time) {
 			} else if strings.HasPrefix(infoHashKey, IH4LeecherKey) || strings.HasPrefix(infoHashKey, IH6LeecherKey) {
 				cntKey = CountLeecherKey
 			} else {
-				log.Warn("storage: Redis: unexpected record found in info hash set", log.Fields{"infoHashKey": infoHashKey})
+				logger.Warn().Str("infoHashKey", infoHashKey).Msg("unexpected record found in info hash set")
 				continue
 			}
 			// list all (peer, timeout) pairs for the ih
@@ -701,16 +695,15 @@ func (ps *store) gc(cutoff time.Time) {
 				for peerID, timeStamp := range peerList {
 					if mtime, err := strconv.ParseInt(timeStamp, 10, 64); err == nil {
 						if mtime <= cutoffNanos {
-							log.Debug("storage: Redis: adding peer to remove list", log.Fields{"peerID": peerID})
+							logger.Trace().Str("peerID", peerID).Msg("adding peer to remove list")
 							peersToRemove = append(peersToRemove, peerID)
 						}
 					} else {
-						log.Error("storage: Redis: unable to decode peer timestamp", log.Fields{
-							"infoHashKey": infoHashKey,
-							"peerID":      peerID,
-							"timestamp":   timeStamp,
-							"error":       err,
-						})
+						logger.Error().Err(err).
+							Str("infoHashKey", infoHashKey).
+							Str("peerID", peerID).
+							Str("timestamp", timeStamp).
+							Msg("unable to decode peer timestamp")
 					}
 				}
 				if len(peersToRemove) > 0 {
@@ -718,35 +711,32 @@ func (ps *store) gc(cutoff time.Time) {
 					err = AsNil(err)
 					if err != nil {
 						if strings.Contains(err.Error(), argNumErrorMsg) {
-							log.Warn("This Redis version/implementation does not support variadic arguments for HDEL")
+							logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HDEL")
 							for _, k := range peersToRemove {
 								count, err := ps.HDel(context.Background(), infoHashKey, k).Result()
 								err = AsNil(err)
 								if err != nil {
-									log.Error("storage: Redis: unable to delete peer", log.Fields{
-										"infoHashKey": infoHashKey,
-										"peerID":      k,
-										"error":       err,
-									})
+									logger.Error().Err(err).
+										Str("infoHashKey", infoHashKey).
+										Str("peerID", k).
+										Msg("unable to delete peer")
 								} else {
 									removedPeerCount += count
 								}
 							}
 						} else {
-							log.Error("storage: Redis: unable to delete peers", log.Fields{
-								"infoHashKey": infoHashKey,
-								"peerIds":     peersToRemove,
-								"error":       err,
-							})
+							logger.Error().Err(err).
+								Str("infoHashKey", infoHashKey).
+								Strs("peerIDs", peersToRemove).
+								Msg("unable to delete peers")
 						}
 					}
 					if removedPeerCount > 0 { // DECR seeder/leecher counter
 						if err = ps.DecrBy(context.Background(), cntKey, removedPeerCount).Err(); err != nil {
-							log.Error("storage: Redis: unable to decrement seeder/leecher peer count", log.Fields{
-								"infoHashKey": infoHashKey,
-								"countKey":    cntKey,
-								"error":       err,
-							})
+							logger.Error().Err(err).
+								Str("infoHashKey", infoHashKey).
+								Str("countKey", cntKey).
+								Msg("unable to decrement seeder/leecher peer count")
 						}
 					}
 				}
@@ -764,20 +754,20 @@ func (ps *store) gc(cutoff time.Time) {
 					return err
 				}, infoHashKey))
 				if err != nil {
-					log.Error("storage: Redis: unable to clean info hash records", log.Fields{
-						"infoHashKey": infoHashKey,
-						"error":       err,
-					})
+					logger.Error().Err(err).
+						Str("infoHashKey", infoHashKey).
+						Msg("unable to clean info hash records")
 				}
 			} else {
-				log.Error("storage: Redis: unable to fetch info hash peers", log.Fields{
-					"infoHashKey": infoHashKey,
-					"error":       err,
-				})
+				logger.Error().Err(err).
+					Str("infoHashKey", infoHashKey).
+					Msg("unable to fetch info hash peers")
 			}
 		}
 	} else {
-		log.Error("storage: Redis: unable to fetch info hash set", log.Fields{"hashSet": IHKey, "error": err})
+		logger.Error().Err(err).
+			Str("hashSet", IHKey).
+			Msg("unable to fetch info hash peers")
 	}
 }
 
@@ -790,7 +780,7 @@ func (ps *store) Stop() stop.Result {
 		ps.wg.Wait()
 		var err error
 		if ps.UniversalClient != nil {
-			log.Info("storage: Redis: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
+			logger.Info().Msg("storage: Redis: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
 			err = ps.UniversalClient.Close()
 			ps.UniversalClient = nil
 		}
@@ -798,12 +788,4 @@ func (ps *store) Stop() stop.Result {
 	}()
 
 	return c.Result()
-}
-
-func (ps *store) LogFields() log.Fields {
-	fields := make(log.Fields, len(ps.logFields))
-	for k, v := range ps.logFields {
-		fields[k] = v
-	}
-	return fields
 }

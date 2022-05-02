@@ -3,18 +3,18 @@
 This storage mainly the same as Redis and uses some of [redis](redis.md) store logic
 with next exceptions:
 
-* peers stored in [sets](https://redis.io/docs/manual/data-types/#sets) 
-instead of [hashes](https://redis.io/docs/manual/data-types/#hashes);
+* peers stored in [sets](https://redis.io/docs/manual/data-types/#sets)
+  instead of [hashes](https://redis.io/docs/manual/data-types/#hashes);
 
 * keys such as `CHI_I`, `CHI_S_C` and `CHI_L_C` not used (at all);
 
-* peer TTL relies on KeyDB's [EXPIREMEMBER](https://docs.keydb.dev/docs/commands/#expiremember) 
-command, so MoChi does not need to periodically check peer expiration;
+* peer TTL relies on KeyDB's [EXPIREMEMBER](https://docs.keydb.dev/docs/commands/#expiremember)
+  command, so MoChi does not need to periodically check peer expiration;
 
 * storage does not execute periodical statistics collection (peer/lecher/info hash count)
-because:
-  * manual calculation (INC/DEC peers count) is not usable 
-  * manual scan of all keys is quite expensive operation.
+  because:
+	* manual calculation (INC/DEC peers count) is not usable
+	* manual scan of all keys is quite expensive operation.
 
 ## Use Case
 

@@ -52,7 +52,7 @@ func (cfg Config) Validate() Config {
 		}
 		validcfg.PrivateKey = string(pkeyRunes)
 
-		log.Warn().
+		logger.Warn().
 			Str("name", "UDP.PrivateKey").
 			Str("provided", "").
 			Str("key", validcfg.PrivateKey).

@@ -125,6 +125,7 @@ type Scrape struct {
 	Incomplete uint32
 }
 
+// MarshalZerologObject writes fields into zerolog event
 func (s Scrape) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("infoHash", s.InfoHash).
 		Uint32("snatches", s.Snatches).
@@ -170,13 +171,6 @@ func NewPeer(data string) (Peer, error) {
 	return peer, err
 }
 
-// String implements fmt.Stringer to return a human-readable representation.
-// The string will have the format <PeerID>@[<IP>]:<port>, for example
-// "0102030405060708090a0b0c0d0e0f1011121314@[10.11.12.13]:1234"
-func (p Peer) String() string {
-	return fmt.Sprintf("%s@[%s]:%d", p.ID, p.Addr(), p.Port())
-}
-
 // RawString generates concatenation of PeerID, net port and IP-address
 func (p Peer) RawString() string {
 	ip := p.Addr()
@@ -187,25 +181,16 @@ func (p Peer) RawString() string {
 	return string(b)
 }
 
+// Addr returns unmapped peer's IP address
+func (p Peer) Addr() netip.Addr {
+	return p.AddrPort.Addr().Unmap()
+}
+
+// MarshalZerologObject writes fields into zerolog event
 func (p Peer) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("id", p.ID).
 		Stringer("address", p.Addr()).
 		Uint16("port", p.Port())
-
-}
-
-// Equal reports whether p and x are the same.
-func (p Peer) Equal(x Peer) bool { return p.EqualEndpoint(x) && p.ID == x.ID }
-
-// EqualEndpoint reports whether p and x have the same endpoint.
-func (p Peer) EqualEndpoint(x Peer) bool {
-	return p.Port() == x.Port() &&
-		p.Addr().Compare(x.Addr()) == 0
-}
-
-// Addr returns unmapped peer's IP address
-func (p Peer) Addr() netip.Addr {
-	return p.AddrPort.Addr().Unmap()
 }
 
 // ClientError represents an error that should be exposed to the client over

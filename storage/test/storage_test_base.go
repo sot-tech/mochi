@@ -9,14 +9,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
 )
+
+func init() {
+	_ = log.ConfigureLogger("", "warn", false, false)
+}
 
 // PeerEqualityFunc is the boolean function to use to check two Peers for
 // equality.
 // Depending on the implementation of the PeerStorage, this can be changed to
 // use (Peer).EqualEndpoint instead.
-var PeerEqualityFunc = func(p1, p2 bittorrent.Peer) bool { return p1.Equal(p2) }
+var PeerEqualityFunc = func(p1, p2 bittorrent.Peer) bool {
+	return p1.Port() == p2.Port() &&
+		p1.Addr().Compare(p1.Addr()) == 0 &&
+		p1.ID == p2.ID
+}
 
 type testHolder struct {
 	st storage.PeerStorage
