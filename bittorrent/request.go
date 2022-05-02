@@ -56,19 +56,29 @@ func (aa *RequestAddresses) Add(a RequestAddress) {
 	}
 }
 
-// Validate checks if array is not empty and every RequestAddress is valid,
-// then sorts addresses with Sort
-func (aa RequestAddresses) Validate() bool {
-	if len(aa) == 0 {
+// Validate checks if array is not empty and at least one RequestAddress is valid,
+// then make them unique and sorts with Less rule
+func (aa *RequestAddresses) Validate() bool {
+	if len(*aa) == 0 {
 		return false
 	}
-	for _, a := range aa {
-		if !a.Validate() {
-			return false
+	uniqueAddresses := make(map[netip.Addr]bool, len(*aa))
+	for _, a := range *aa {
+		if a.Validate() {
+			if provided, found := uniqueAddresses[a.Addr]; !found || !provided && a.Provided {
+				uniqueAddresses[a.Addr] = a.Provided
+			}
 		}
 	}
-	if len(aa) > 1 {
-		sort.Sort(aa)
+	if len(uniqueAddresses) == 0 {
+		return false
+	}
+	*aa = make(RequestAddresses, 0, len(uniqueAddresses))
+	for a, p := range uniqueAddresses {
+		*aa = append(*aa, RequestAddress{a, p})
+	}
+	if len(*aa) > 1 {
+		sort.Sort(*aa)
 	}
 	return true
 }

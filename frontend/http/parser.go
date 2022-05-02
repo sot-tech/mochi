@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"strings"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
@@ -149,8 +150,14 @@ func requestedIPs(r *http.Request, p bittorrent.Params, opts ParseOptions) (addr
 		}
 	}
 
-	if ipStr := r.Header.Get(opts.RealIPHeader); ipStr != "" && opts.RealIPHeader != "" {
-		addresses.Add(parseRequestAddress(ipStr, false))
+	if ipValues := r.Header.Values(opts.RealIPHeader); len(ipValues) > 0 && opts.RealIPHeader != "" {
+		for _, ipStr := range ipValues {
+			for _, ipStr := range strings.Split(ipStr, ",") {
+				if ipStr = strings.TrimSpace(ipStr); len(ipStr) > 0 {
+					addresses.Add(parseRequestAddress(ipStr, false))
+				}
+			}
+		}
 	} else {
 		addrPort, _ := netip.ParseAddrPort(r.RemoteAddr)
 		addresses.Add(bittorrent.RequestAddress{
