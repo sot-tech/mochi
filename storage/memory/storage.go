@@ -198,6 +198,10 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", p).
+		Msg("put seeder")
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
@@ -227,6 +231,10 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", p).
+		Msg("delete seeder")
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
@@ -256,6 +264,10 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", p).
+		Msg("put leecher")
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
@@ -285,6 +297,10 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", p).
+		Msg("delete leecher")
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
@@ -314,6 +330,10 @@ func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) 
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", p).
+		Msg("graduate leecher")
 
 	shard := ps.shards[ps.shardIndex(ih, p.Addr().Is6())]
 	shard.Lock()
@@ -376,6 +396,12 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Bool("seeder", seeder).
+		Int("numWant", numWant).
+		Bool("v6", v6).
+		Msg("announce peers")
 
 	peers = ps.getPeers(ps.shards[ps.shardIndex(ih, v6)], ih, numWant, seeder)
 
@@ -399,6 +425,9 @@ func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seede
 		panic("attempted to interact with stopped memory store")
 	default:
 	}
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Msg("scrape swarm")
 
 	leechers, seeders = ps.countPeers(ih, true)
 	l, s := ps.countPeers(ih, false)

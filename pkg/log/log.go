@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+
 	// needs for async file logging
 	_ "code.cloudfoundry.org/go-diodes"
 	"github.com/rs/zerolog"

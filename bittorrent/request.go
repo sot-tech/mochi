@@ -1,7 +1,6 @@
 package bittorrent
 
 import (
-	"fmt"
 	"net/netip"
 	"sort"
 	"time"
@@ -19,16 +18,6 @@ type RequestAddress struct {
 // Validate checks if netip.Addr is valid and not unspecified (0.0.0.0)
 func (a RequestAddress) Validate() bool {
 	return a.IsValid() && !a.IsUnspecified()
-}
-
-func (a RequestAddress) String() string {
-	var p string
-	if a.Provided {
-		p = "(provided)"
-	} else {
-		p = "(detected)"
-	}
-	return fmt.Sprint(a.Addr.String(), p)
 }
 
 // MarshalZerologObject writes fields into zerolog event
