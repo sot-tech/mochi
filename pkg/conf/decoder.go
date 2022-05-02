@@ -6,8 +6,7 @@ import (
 	"errors"
 
 	"github.com/mitchellh/mapstructure"
-
-	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/rs/zerolog"
 )
 
 // TagName is a tag name, used for decoder customization
@@ -20,9 +19,9 @@ var ErrNilConfigMap = errors.New("unable to process nil map")
 // MapConfig is just alias for map[string]any
 type MapConfig map[string]any
 
-// LogFields just returns this map as a set of Logrus fields.
-func (m MapConfig) LogFields() log.Fields {
-	return log.Fields(m)
+// MarshalZerologObject writes map into zerolog event
+func (m MapConfig) MarshalZerologObject(e *zerolog.Event) {
+	e.Fields(map[string]any(m))
 }
 
 // Unmarshal decodes receiver map into provided structure.

@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	logger = log.NewLogger("request sanitizer")
 	// ErrInvalidIP indicates an invalid IP for an Announce.
 	ErrInvalidIP = ClientError("invalid IP")
 
@@ -15,6 +16,7 @@ var (
 // SanitizeAnnounce enforces a max and default NumWant and coerces the peer's
 // IP address into the proper format.
 func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) error {
+	logger.Trace().Object("request", r).Msg("source announce")
 	if r.Port == 0 {
 		return ErrInvalidPort
 	}
@@ -29,18 +31,14 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 		r.NumWant = maxNumWant
 	}
 
-	log.Debug("sanitized announce", r, log.Fields{
-		"port":           r.Port,
-		"addresses":      r.RequestAddresses,
-		"maxNumWant":     maxNumWant,
-		"defaultNumWant": defaultNumWant,
-	})
+	logger.Trace().Object("request", r).Msg("sanitized announce")
 	return nil
 }
 
 // SanitizeScrape enforces a max number of infohashes for a single scrape
 // request and checks if addresses are valid.
 func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
+	logger.Trace().Object("request", r).Msg("source scrape")
 	if len(r.InfoHashes) > int(maxScrapeInfoHashes) {
 		r.InfoHashes = r.InfoHashes[:maxScrapeInfoHashes]
 	}
@@ -49,9 +47,6 @@ func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
 		return ErrInvalidIP
 	}
 
-	log.Debug("sanitized scrape", r, log.Fields{
-		"addresses":           r.RequestAddresses,
-		"maxScrapeInfoHashes": maxScrapeInfoHashes,
-	})
+	logger.Trace().Object("request", r).Msg("sanitized scrape")
 	return nil
 }

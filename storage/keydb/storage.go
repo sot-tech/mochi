@@ -14,6 +14,7 @@ import (
 	"errors"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -29,9 +30,12 @@ const (
 	expireMemberCmd = "EXPIREMEMBER"
 )
 
-// ErrNotKeyDB returned from initializer if connected does not support KeyDB
-// specific command (EXPIREMEMBER)
-var ErrNotKeyDB = errors.New("provided instance seems not KeyDB")
+var (
+	logger = log.NewLogger(Name)
+	// ErrNotKeyDB returned from initializer if connected does not support KeyDB
+	// specific command (EXPIREMEMBER)
+	ErrNotKeyDB = errors.New("provided instance seems not KeyDB")
+)
 
 func init() {
 	// Register the storage driver.
@@ -72,10 +76,8 @@ func newStore(cfg r.Config) (*store, error) {
 	if err == nil {
 		st = &store{
 			Connection: rs,
-			logFields:  cfg.LogFields(),
 			peerTTL:    uint(cfg.PeerLifetime.Seconds()),
 		}
-		st.logFields["name"] = Name
 	}
 
 	return st, err
@@ -83,8 +85,12 @@ func newStore(cfg r.Config) (*store, error) {
 
 type store struct {
 	r.Connection
-	logFields log.Fields
-	peerTTL   uint
+	peerTTL uint
+}
+
+// MarshalZerologObject writes configuration into zerolog event
+func (s store) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("type", Name).Object("config", s.Config)
 }
 
 func (s store) setPeerTTL(infoHashKey, peerID string) error {
@@ -92,10 +98,10 @@ func (s store) setPeerTTL(infoHashKey, peerID string) error {
 }
 
 func (s store) addPeer(infoHashKey, peerID string) (err error) {
-	log.Debug("storage: KeyDB: PutPeer", log.Fields{
-		"infoHashKey": infoHashKey,
-		"peerID":      peerID,
-	})
+	logger.Trace().
+		Str("infoHashKey", infoHashKey).
+		Str("peerID", peerID).
+		Msg("add peer")
 	if err = s.SAdd(context.TODO(), infoHashKey, peerID).Err(); err == nil {
 		err = s.setPeerTTL(infoHashKey, peerID)
 	}
@@ -103,10 +109,10 @@ func (s store) addPeer(infoHashKey, peerID string) (err error) {
 }
 
 func (s store) delPeer(infoHashKey, peerID string) error {
-	log.Debug("storage: KeyDB: DeletePeer", log.Fields{
-		"infoHashKey": infoHashKey,
-		"peerID":      peerID,
-	})
+	logger.Trace().
+		Str("infoHashKey", infoHashKey).
+		Str("peerID", peerID).
+		Msg("del peer")
 	deleted, err := s.SRem(context.TODO(), infoHashKey, peerID).Uint64()
 	err = r.AsNil(err)
 	if err == nil && deleted == 0 {
@@ -133,10 +139,10 @@ func (s store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
 }
 
 func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
-	log.Debug("storage: KeyDB: GraduateLeecher", log.Fields{
-		"infoHash": ih,
-		"peer":     peer,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Object("peer", peer).
+		Msg("graduate leecher")
 	infoHash, peerID := ih.RawString(), peer.RawString()
 	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6())
 	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
@@ -153,12 +159,12 @@ func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (er
 
 // AnnouncePeers is the same function as redis.AnnouncePeers
 func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
-	log.Debug("storage: KeyDB: AnnouncePeers", log.Fields{
-		"infoHash": ih,
-		"seeder":   seeder,
-		"numWant":  numWant,
-		"v6":       v6,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Bool("seeder", seeder).
+		Int("numWant", numWant).
+		Bool("v6", v6).
+		Msg("announce peers")
 
 	return s.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return s.SRandMemberN(context.TODO(), infoHashKey, int64(maxCount))
@@ -167,9 +173,9 @@ func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
 func (s store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
-	log.Debug("storage: KeyDB ScrapeSwarm", log.Fields{
-		"infoHash": ih,
-	})
+	logger.Trace().
+		Stringer("infoHash", ih).
+		Msg("scrape swarm")
 	leechers, seeders = s.CountPeers(ih, s.SCard)
 	return
 }
@@ -181,8 +187,4 @@ func (s *store) Stop() stop.Result {
 		s.UniversalClient = nil
 	}
 	return c.Result()
-}
-
-func (s store) LogFields() log.Fields {
-	return s.logFields
 }

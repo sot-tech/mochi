@@ -9,8 +9,13 @@ import (
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
+	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage/memory"
 )
+
+func init() {
+	_ = log.ConfigureLogger("", "warn", false, false)
+}
 
 var cases = []struct {
 	cfg      baseConfig

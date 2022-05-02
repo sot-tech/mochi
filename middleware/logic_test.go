@@ -9,7 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/log"
 )
+
+func init() {
+	_ = log.ConfigureLogger("", "warn", false, false)
+}
 
 // nopHook is a Hook to measure the overhead of a no-operation Hook through
 // benchmarks.

@@ -1,82 +1,50 @@
-//go:build e2e
-// +build e2e
-
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
 	"github.com/anacrolix/torrent/tracker"
-	"github.com/spf13/cobra"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/log"
 )
 
-func init() {
-	e2eCmd = &cobra.Command{
-		Use:   "e2e",
-		Short: "exec e2e tests",
-		Long:  "Execute the Conf end-to-end test suite",
-		RunE:  EndToEndRunCmdFunc,
-	}
+func main() {
+	httpAddress := flag.String("httpaddr", "http://127.0.0.1:6969/announce", "address of the HTTP tracker")
+	udpAddress := flag.String("udpaddr", "udp://127.0.0.1:6969", "address of the UDP tracker")
+	delay := flag.Duration("delay", time.Second, "delay between announces")
+	flag.Parse()
 
-	e2eCmd.Flags().String("httpaddr", "http://127.0.0.1:6969/announce", "address of the HTTP tracker")
-	e2eCmd.Flags().String("udpaddr", "udp://127.0.0.1:6969", "address of the UDP tracker")
-	e2eCmd.Flags().Duration("delay", time.Second, "delay between announces")
-}
-
-// EndToEndRunCmdFunc implements a Cobra command that runs the end-to-end test
-// suite for a Conf build.
-func EndToEndRunCmdFunc(cmd *cobra.Command, args []string) error {
-	delay, err := cmd.Flags().GetDuration("delay")
-	if err != nil {
-		return err
-	}
-
-	// Test the HTTP tracker
-	httpAddr, err := cmd.Flags().GetString("httpaddr")
-	if err != nil {
-		return err
-	}
-
-	if len(httpAddr) != 0 {
-		log.Info("testing HTTP...")
-		err := test(httpAddr, delay)
+	if len(*httpAddress) != 0 {
+		log.Println("testing HTTP...")
+		err := test(*httpAddress, *delay)
 		if err != nil {
-			return err
+			log.Fatal(err)
 		}
-		log.Info("success")
+		log.Println("success")
 	}
 
-	// Test the UDP tracker.
-	udpAddr, err := cmd.Flags().GetString("udpaddr")
-	if err != nil {
-		return err
-	}
-
-	if len(udpAddr) != 0 {
-		log.Info("testing UDP...")
-		err := test(udpAddr, delay)
+	if len(*udpAddress) != 0 {
+		log.Println("testing UDP...")
+		err := test(*udpAddress, *delay)
 		if err != nil {
-			return err
+			log.Fatal(err)
 		}
-		log.Info("success")
+		log.Println("success")
 	}
-
-	return nil
 }
 
 func test(addr string, delay time.Duration) error {
 	b := make([]byte, bittorrent.InfoHashV1Len)
 	rand.Read(b)
 	ih, _ := bittorrent.NewInfoHash(b)
-	return testWithInfohash(ih, addr, delay)
+	return testWithInfoHash(ih, addr, delay)
 }
 
-func testWithInfohash(infoHash bittorrent.InfoHash, url string, delay time.Duration) error {
+func testWithInfoHash(infoHash bittorrent.InfoHash, url string, delay time.Duration) error {
 	var ih [bittorrent.InfoHashV1Len]byte
 	req := tracker.AnnounceRequest{
 		InfoHash:   ih,

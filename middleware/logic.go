@@ -11,7 +11,10 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-var _ frontend.TrackerLogic = &Logic{}
+var (
+	logger                       = log.NewLogger("middleware")
+	_      frontend.TrackerLogic = &Logic{}
+)
 
 // NewLogic creates a new instance of a TrackerLogic that executes the provided
 // middleware hooks.
@@ -35,6 +38,7 @@ type Logic struct {
 
 // HandleAnnounce generates a response for an Announce.
 func (l *Logic) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest) (_ context.Context, resp *bittorrent.AnnounceResponse, err error) {
+	logger.Debug().Object("request", req).Msg("new announce request")
 	resp = &bittorrent.AnnounceResponse{
 		Interval:    l.announceInterval,
 		MinInterval: l.minAnnounceInterval,
@@ -46,7 +50,7 @@ func (l *Logic) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequ
 		}
 	}
 
-	log.Debug("generated announce response", resp)
+	logger.Debug().Object("response", resp).Msg("generated announce response")
 	return ctx, resp, nil
 }
 
@@ -56,7 +60,10 @@ func (l *Logic) AfterAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 	var err error
 	for _, h := range l.postHooks {
 		if ctx, err = h.HandleAnnounce(ctx, req, resp); err != nil {
-			log.Error("post-announce hooks failed", log.Err(err))
+			logger.Error().Err(err).
+				Object("request", req).
+				Object("response", resp).
+				Msg("post-announce hooks failed")
 			return
 		}
 	}
@@ -64,6 +71,7 @@ func (l *Logic) AfterAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 
 // HandleScrape generates a response for a Scrape.
 func (l *Logic) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest) (_ context.Context, resp *bittorrent.ScrapeResponse, err error) {
+	logger.Debug().Object("request", req).Msg("new scrape request")
 	resp = &bittorrent.ScrapeResponse{
 		Files: make([]bittorrent.Scrape, 0, len(req.InfoHashes)),
 	}
@@ -73,7 +81,7 @@ func (l *Logic) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest)
 		}
 	}
 
-	log.Debug("generated scrape response", resp)
+	logger.Debug().Object("response", resp).Msg("generated scrape response")
 	return ctx, resp, nil
 }
 
@@ -83,7 +91,11 @@ func (l *Logic) AfterScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 	var err error
 	for _, h := range l.postHooks {
 		if ctx, err = h.HandleScrape(ctx, req, resp); err != nil {
-			log.Error("post-scrape hooks failed", log.Err(err))
+			logger.Error().
+				Err(err).
+				Object("request", req).
+				Object("response", resp).
+				Msg("post-scrape hooks failed")
 			return
 		}
 	}

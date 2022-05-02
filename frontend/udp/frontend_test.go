@@ -6,10 +6,15 @@ import (
 	"github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
+	"github.com/sot-tech/mochi/pkg/log"
 	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 	_ "github.com/sot-tech/mochi/storage/memory"
 )
+
+func init() {
+	_ = log.ConfigureLogger("", "warn", false, false)
+}
 
 func TestStartStopRaceIssue437(t *testing.T) {
 	ps, err := storage.NewStorage("memory", conf.MapConfig{})

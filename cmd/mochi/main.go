@@ -1,239 +1,43 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
+	"flag"
+	"log"
+	"os"
 	"os/signal"
 	"runtime"
-	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-
-	"github.com/sot-tech/mochi/frontend/http"
-	"github.com/sot-tech/mochi/frontend/udp"
-	"github.com/sot-tech/mochi/middleware"
-	"github.com/sot-tech/mochi/pkg/conf"
-	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/metrics"
-	_ "github.com/sot-tech/mochi/pkg/randseed"
-	"github.com/sot-tech/mochi/pkg/stop"
-	"github.com/sot-tech/mochi/storage"
+	l "github.com/sot-tech/mochi/pkg/log"
 )
 
-var e2eCmd *cobra.Command
-
-// Run represents the state of a running instance of Conf.
-type Run struct {
-	configFilePath string
-	storage        storage.PeerStorage
-	logic          *middleware.Logic
-	sg             *stop.Group
-}
-
-// NewRun runs an instance of Conf.
-func NewRun(configFilePath string) (*Run, error) {
-	r := &Run{
-		configFilePath: configFilePath,
-	}
-
-	return r, r.Start(nil)
-}
-
-// Start begins an instance of Conf.
-// It is optional to provide an instance of the peer store to avoid the
-// creation of a new one.
-func (r *Run) Start(ps storage.PeerStorage) error {
-	configFile, err := ParseConfigFile(r.configFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-	cfg := configFile.Conf
-
-	r.sg = stop.NewGroup()
-
-	if len(cfg.MetricsAddr) > 0 {
-		log.Info("starting metrics server", log.Fields{"addr": cfg.MetricsAddr})
-		r.sg.Add(metrics.NewServer(cfg.MetricsAddr))
-	} else {
-		log.Info("metrics disabled because of empty address")
-	}
-
-	if ps == nil {
-		log.Info("starting storage", log.Fields{"name": cfg.Storage.Name})
-		ps, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
-		if err != nil {
-			return fmt.Errorf("failed to create storage: %w", err)
-		}
-		log.Info("started storage", ps)
-	}
-	r.storage = ps
-
-	preHooks, err := middleware.HooksFromHookConfigs(cfg.PreHooks, r.storage)
-	if err != nil {
-		return fmt.Errorf("failed to validate hook config: %w", err)
-	}
-	postHooks, err := middleware.HooksFromHookConfigs(cfg.PostHooks, r.storage)
-	if err != nil {
-		return fmt.Errorf("failed to validate hook config: %w", err)
-	}
-
-	r.logic = middleware.NewLogic(cfg.AnnounceInterval, cfg.MinAnnounceInterval, r.storage, preHooks, postHooks)
-
-	if len(cfg.HTTPConfig) > 0 {
-		log.Info("starting HTTP frontend", cfg.HTTPConfig)
-		httpFE, err := http.NewFrontend(r.logic, cfg.HTTPConfig)
-		if err == nil {
-			r.sg.Add(httpFE)
-		} else if !errors.Is(err, conf.ErrNilConfigMap) {
-			return err
-		}
-	}
-
-	if len(cfg.UDPConfig) > 0 {
-		log.Info("starting UDP frontend", cfg.UDPConfig)
-		udpFE, err := udp.NewFrontend(r.logic, cfg.UDPConfig)
-		if err == nil {
-			r.sg.Add(udpFE)
-		} else if !errors.Is(err, conf.ErrNilConfigMap) {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func combineErrors(prefix string, errs []error) error {
-	errStrs := make([]string, 0, len(errs))
-	for _, err := range errs {
-		errStrs = append(errStrs, err.Error())
-	}
-
-	return errors.New(prefix + ": " + strings.Join(errStrs, "; "))
-}
-
-// Stop shuts down an instance of Conf.
-func (r *Run) Stop(keepPeerStore bool) (storage.PeerStorage, error) {
-	log.Debug("stopping frontends and metrics server")
-	if errs := r.sg.Stop().Wait(); len(errs) != 0 {
-		return nil, combineErrors("failed while shutting down frontends", errs)
-	}
-
-	log.Debug("stopping logic")
-	if errs := r.logic.Stop().Wait(); len(errs) != 0 {
-		return nil, combineErrors("failed while shutting down middleware", errs)
-	}
-
-	if !keepPeerStore {
-		log.Debug("stopping peer store")
-		if errs := r.storage.Stop().Wait(); len(errs) != 0 {
-			return nil, combineErrors("failed while shutting down peer store", errs)
-		}
-		r.storage = nil
-	}
-
-	return r.storage, nil
-}
-
-// RootRunCmdFunc implements a Cobra command that runs an instance of Conf
-// and handles reloading and shutdown via process signals.
-func RootRunCmdFunc(cmd *cobra.Command, _ []string) error {
-	configFilePath, err := cmd.Flags().GetString("config")
-	if err != nil {
-		return err
-	}
-
-	r, err := NewRun(configFilePath)
-	if err != nil {
-		return err
-	}
-
-	shutdown, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	reload, _ := signal.NotifyContext(context.Background(), ReloadSignals...)
-
-	for {
-		select {
-		case <-reload.Done():
-			log.Info("reloading; received reload signal")
-			peerStore, err := r.Stop(true)
-			if err != nil {
-				return err
-			}
-
-			if err := r.Start(peerStore); err != nil {
-				return err
-			}
-		case <-shutdown.Done():
-			log.Info("shutting down; received shutdown signal")
-			if _, err := r.Stop(false); err != nil {
-				return err
-			}
-
-			return nil
-		}
-	}
-}
-
-// RootPreRunCmdFunc handles command line flags for the Run command.
-func RootPreRunCmdFunc(cmd *cobra.Command, _ []string) error {
-	noColors, err := cmd.Flags().GetBool("nocolors")
-	if err != nil {
-		return err
-	}
-	if noColors {
-		log.SetFormatter(&logrus.TextFormatter{DisableColors: true})
-	}
-
-	jsonLog, err := cmd.Flags().GetBool("json")
-	if err != nil {
-		return err
-	}
-	if jsonLog {
-		log.SetFormatter(&logrus.JSONFormatter{})
-		log.Info("enabled JSON logging")
-	}
-
-	debugLog, err := cmd.Flags().GetBool("debug")
-	if err != nil {
-		return err
-	}
-	if debugLog {
-		log.SetDebug(true)
-		log.Info("enabled debug logging")
-	}
-
-	return nil
-}
-
-// RootPostRunCmdFunc handles clean up of any state initialized by command line
-// flags.
-func RootPostRunCmdFunc(_ *cobra.Command, _ []string) error {
-	return nil
-}
+const (
+	logOutArg    = "logOut"
+	logLevelArg  = "logLevel"
+	logPrettyArg = "logPretty"
+	logColorsArg = "logColored"
+	configArg    = "config"
+)
 
 func main() {
-	rootCmd := &cobra.Command{
-		Use:                "mochi",
-		Short:              "BitTorrent Tracker",
-		Long:               "A customizable, multi-protocol BitTorrent Tracker",
-		PersistentPreRunE:  RootPreRunCmdFunc,
-		RunE:               RootRunCmdFunc,
-		PersistentPostRunE: RootPostRunCmdFunc,
+	var s Server
+
+	logOut := flag.String(logOutArg, "stderr", "output for logging, might be 'stderr', 'stdout' or file path")
+	logLevel := flag.String(logLevelArg, "warn", "logging level: trace, debug, info, warn, error, fatal, panic")
+	logPretty := flag.Bool(logPrettyArg, false, "enable log pretty print. used only if 'logOut' set to 'stdout' or 'stderr'. if not set, log outputs json")
+	logColored := flag.Bool(logColorsArg, runtime.GOOS == "windows", "enable log coloring. used only if set 'logPretty'")
+	configPath := flag.String(configArg, "/etc/mochi.yaml", "location of configuration file")
+	flag.Parse()
+
+	if err := l.ConfigureLogger(*logOut, *logLevel, *logPretty, *logColored); err != nil {
+		log.Fatal("unable to configure logger ", err)
 	}
 
-	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
-	rootCmd.PersistentFlags().Bool("json", false, "enable json logging")
-	rootCmd.PersistentFlags().Bool("nocolors", runtime.GOOS == "windows", "disable log coloring")
-
-	rootCmd.Flags().String("config", "/etc/mochi.yaml", "location of configuration file")
-
-	if e2eCmd != nil {
-		rootCmd.AddCommand(e2eCmd)
+	if err := s.Run(*configPath); err != nil {
+		log.Fatal("unable to start server ", err)
 	}
-
-	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("failed when executing root cobra command: " + err.Error())
-	}
+	defer s.Dispose()
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	<-ch
 }

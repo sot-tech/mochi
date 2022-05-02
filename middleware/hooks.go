@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -185,16 +184,10 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 				resp.IPv4Peers = append(resp.IPv4Peers, p)
 				uniquePeers[p] = nil
 			} else {
-				log.Warn("received invalid peer from storage", log.Fields{"peer": p})
+				logger.Warn().Object("peer", p).Msg("received invalid peer from storage")
 			}
 		}
 	}
-	log.Debug("responseHook announce peers", log.Fields{
-		"infoHash":    req.InfoHash,
-		"requestPeer": req.RequestPeer,
-		"ipv4Peers":   resp.IPv4Peers,
-		"ipv6Peers":   resp.IPv6Peers,
-	})
 
 	return
 }

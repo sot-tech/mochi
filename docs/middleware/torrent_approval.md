@@ -24,9 +24,9 @@ There are two sources of hashes: `list` and `directory`.
 * `list` is the static set of hashes, specified in configuration file.
 
 * `directory` will watch for `*.torrent` files in specified path and
-append/delete records from storage. This source will parse all existing
-files at start and then watch for new files to add, or for delete events
-to remove hash from storage.
+  append/delete records from storage. This source will parse all existing
+  files at start and then watch for new files to add, or for delete events
+  to remove hash from storage.
 
 Note: if storage is not `memory`, and `preserve` option set to `true`, records
 will be persisted in storage until _somebody_ or _something_ (different tool with access

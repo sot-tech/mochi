@@ -24,42 +24,49 @@ const (
 	// Completed is the event sent by a BitTorrent client when it finishes
 	// downloading all of the required chunks.
 	Completed
+
+	// NoneStr string representation of None event
+	NoneStr = "none"
+
+	// StartedStr string representation of Started event
+	StartedStr = "started"
+
+	// StoppedStr string representation of Stopped event
+	StoppedStr = "stopped"
+
+	// CompletedStr string representation of Completed event
+	CompletedStr = "completed"
 )
-
-var (
-	eventToString = make(map[Event]string)
-	stringToEvent = make(map[string]Event)
-)
-
-func init() {
-	eventToString[None] = "none"
-	eventToString[Started] = "started"
-	eventToString[Stopped] = "stopped"
-	eventToString[Completed] = "completed"
-
-	stringToEvent[""] = None
-
-	for k, v := range eventToString {
-		stringToEvent[v] = k
-	}
-}
 
 // NewEvent returns the proper Event given a string.
 func NewEvent(eventStr string) (evt Event, err error) {
-	if e, ok := stringToEvent[strings.ToLower(eventStr)]; ok {
-		evt = e
-	} else {
+	switch strings.ToLower(eventStr) {
+	case NoneStr, "":
+		evt = None
+	case StartedStr:
+		evt = Started
+	case StoppedStr:
+		evt = Stopped
+	case CompletedStr:
+		evt = Completed
+	default:
 		evt, err = None, ErrUnknownEvent
 	}
-
 	return
 }
 
 // String implements Stringer for an event.
 func (e Event) String() (s string) {
-	if name, ok := eventToString[e]; ok {
-		s = name
-	} else {
+	switch e {
+	case None:
+		s = NoneStr
+	case Started:
+		s = StartedStr
+	case Stopped:
+		s = StoppedStr
+	case Completed:
+		s = CompletedStr
+	default:
 		s = "<unknown>"
 	}
 	return

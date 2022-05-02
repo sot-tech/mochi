@@ -81,14 +81,22 @@ func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) []byte {
 	g.scratch = g.mac.Sum(g.scratch)
 	copy(g.connID[4:8], g.scratch[:4])
 
-	log.Debug("generated connection ID", log.Fields{"ip": ip, "now": now, "connID": g.connID})
+	log.Debug().
+		Stringer("ip", ip).
+		Time("now", now).
+		Bytes("connID", g.connID).
+		Msg("generated connection ID")
 	return g.connID
 }
 
 // Validate validates the given connection ID for an IP and the current time.
 func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration) bool {
 	ts := time.Unix(int64(binary.BigEndian.Uint32(connectionID[:4])), 0)
-	log.Debug("validating connection ID", log.Fields{"connID": connectionID, "ip": ip, "ts": ts, "now": now})
+	log.Debug().
+		Stringer("ip", ip).
+		Time("ts", ts).Time("now", now).
+		Bytes("connID", g.connID).
+		Msg("validating connection ID")
 	if now.After(ts.Add(ttl)) || ts.After(now.Add(maxClockSkew)) {
 		return false
 	}

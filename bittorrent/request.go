@@ -1,12 +1,11 @@
 package bittorrent
 
 import (
-	"fmt"
 	"net/netip"
 	"sort"
 	"time"
 
-	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/rs/zerolog"
 )
 
 // RequestAddress wrapper for netip.Addr with Provided flag.
@@ -21,14 +20,9 @@ func (a RequestAddress) Validate() bool {
 	return a.IsValid() && !a.IsUnspecified()
 }
 
-func (a RequestAddress) String() string {
-	var p string
-	if a.Provided {
-		p = "(provided)"
-	} else {
-		p = "(detected)"
-	}
-	return fmt.Sprint(a.Addr.String(), p)
+// MarshalZerologObject writes fields into zerolog event
+func (a RequestAddress) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("address", a.Addr).Bool("provided", a.Provided)
 }
 
 // RequestAddresses is an array of RequestAddress used mainly for
@@ -89,6 +83,23 @@ func (aa RequestAddresses) GetFirst() netip.Addr {
 	return a
 }
 
+// MarshalZerologArray writes array elements to zerolog event
+func (aa RequestAddresses) MarshalZerologArray(a *zerolog.Array) {
+	for _, addr := range aa {
+		a.Object(addr)
+	}
+}
+
+// Peers wrapper of array of Peer-s
+type Peers []Peer
+
+// MarshalZerologArray writes array elements to zerolog event
+func (p Peers) MarshalZerologArray(a *zerolog.Array) {
+	for _, peer := range p {
+		a.Object(peer)
+	}
+}
+
 // RequestPeer is bundle of peer ID, provided or
 // determined addresses and net port
 type RequestPeer struct {
@@ -99,7 +110,7 @@ type RequestPeer struct {
 
 // Peers constructs array of Peer-s with the same ID and Port
 // for every RequestAddress array.
-func (rp RequestPeer) Peers() (peers []Peer) {
+func (rp RequestPeer) Peers() (peers Peers) {
 	for _, a := range rp.RequestAddresses {
 		peers = append(peers, Peer{
 			ID:       rp.ID,
@@ -107,6 +118,13 @@ func (rp RequestPeer) Peers() (peers []Peer) {
 		})
 	}
 	return
+}
+
+// MarshalZerologObject writes fields into zerolog event
+func (rp RequestPeer) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("id", rp.ID).
+		Array("addresses", rp.RequestAddresses).
+		Uint16("port", rp.Port)
 }
 
 // AnnounceRequest represents the parsed parameters from an announce request.
@@ -125,21 +143,19 @@ type AnnounceRequest struct {
 	Params
 }
 
-// LogFields renders the current response as a set of log fields.
-func (r AnnounceRequest) LogFields() log.Fields {
-	return log.Fields{
-		"event":           r.Event,
-		"infoHash":        r.InfoHash,
-		"compact":         r.Compact,
-		"eventProvided":   r.EventProvided,
-		"numWantProvided": r.NumWantProvided,
-		"numWant":         r.NumWant,
-		"left":            r.Left,
-		"downloaded":      r.Downloaded,
-		"uploaded":        r.Uploaded,
-		"peers":           r.RequestPeer,
-		"params":          r.Params,
-	}
+// MarshalZerologObject writes fields into zerolog event
+func (r AnnounceRequest) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("event", r.Event).
+		Stringer("infoHash", r.InfoHash).
+		Bool("compact", r.Compact).
+		Bool("eventProvided", r.EventProvided).
+		Bool("numWantProvided", r.NumWantProvided).
+		Uint32("numWant", r.NumWant).
+		Uint64("left", r.Left).
+		Uint64("downloaded", r.Downloaded).
+		Uint64("uploaded", r.Uploaded).
+		Object("peers", r.RequestPeer).
+		Object("params", r.Params)
 }
 
 // AnnounceResponse represents the parameters used to create an announce
@@ -150,19 +166,28 @@ type AnnounceResponse struct {
 	Incomplete  uint32
 	Interval    time.Duration
 	MinInterval time.Duration
-	IPv4Peers   []Peer
-	IPv6Peers   []Peer
+	IPv4Peers   Peers
+	IPv6Peers   Peers
 }
 
-// LogFields renders the current response as a set of log fields.
-func (r AnnounceResponse) LogFields() log.Fields {
-	return log.Fields{
-		"compact":     r.Compact,
-		"complete":    r.Complete,
-		"interval":    r.Interval,
-		"minInterval": r.MinInterval,
-		"ipv4Peers":   r.IPv4Peers,
-		"ipv6Peers":   r.IPv6Peers,
+// MarshalZerologObject writes fields into zerolog event
+func (r AnnounceResponse) MarshalZerologObject(e *zerolog.Event) {
+	e.Bool("compact", r.Compact).
+		Uint32("complete", r.Complete).
+		Uint32("incomplete", r.Incomplete).
+		Dur("interval", r.Interval).
+		Dur("minInterval", r.MinInterval).
+		Array("ipv4Peers", r.IPv4Peers).
+		Array("ipv6Peers", r.IPv6Peers)
+}
+
+// InfoHashes wrapper of array of InfoHash-es
+type InfoHashes []InfoHash
+
+// MarshalZerologArray writes array elements to zerolog event
+func (i InfoHashes) MarshalZerologArray(a *zerolog.Array) {
+	for _, ih := range i {
+		a.Str(ih.String())
 	}
 }
 
@@ -171,16 +196,24 @@ type ScrapeRequest struct {
 	// RequestAddresses not used in internal logic,
 	// but MAY be used in middleware (per-ip block etc.)
 	RequestAddresses
-	InfoHashes []InfoHash
+	InfoHashes InfoHashes
 	Params     Params
 }
 
-// LogFields renders the current response as a set of log fields.
-func (r ScrapeRequest) LogFields() log.Fields {
-	return log.Fields{
-		"ip":         r.RequestAddresses,
-		"infoHashes": r.InfoHashes,
-		"params":     r.Params,
+// MarshalZerologObject writes fields into zerolog event
+func (r ScrapeRequest) MarshalZerologObject(e *zerolog.Event) {
+	e.Array("addresses", r.RequestAddresses).
+		Array("infoHashes", r.InfoHashes).
+		Object("params", r.Params)
+}
+
+// Scrapes wrapper of array of Scrape-s
+type Scrapes []Scrape
+
+// MarshalZerologArray writes array elements to zerolog event
+func (s Scrapes) MarshalZerologArray(a *zerolog.Array) {
+	for _, scrape := range s {
+		a.Object(scrape)
 	}
 }
 
@@ -189,12 +222,10 @@ func (r ScrapeRequest) LogFields() log.Fields {
 // The Scrapes must be in the same order as the InfoHashes in the corresponding
 // ScrapeRequest.
 type ScrapeResponse struct {
-	Files []Scrape
+	Files Scrapes
 }
 
-// LogFields renders the current response as a set of Logrus fields.
-func (sr ScrapeResponse) LogFields() log.Fields {
-	return log.Fields{
-		"files": sr.Files,
-	}
+// MarshalZerologObject writes fields into zerolog event
+func (sr ScrapeResponse) MarshalZerologObject(e *zerolog.Event) {
+	e.Array("scrapes", sr.Files)
 }

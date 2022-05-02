@@ -1,134 +1,304 @@
-// Package log adds a thin wrapper around logrus to improve non-debug logging
-// performance.
+// Package log adds a thin wrapper around zerolog to improve logging performance.
+//
+// Root logger (called by log.Info, log.Warn etc.) uses global zerolog.Logger instance
+// until ConfigureLogger called. Any child logger created with NewLogger will not
+// produce any events until logger configured, so any function which uses child
+// logger will come stuck because of root initialization synchronization.
 package log
 
 import (
-	"fmt"
 	"io"
+	"os"
+	"strings"
+	"sync"
 
-	"github.com/sirupsen/logrus"
+	// needs for async file logging
+	_ "code.cloudfoundry.org/go-diodes"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/diode"
+	zl "github.com/rs/zerolog/log"
 )
 
 var (
-	l     = logrus.New()
-	debug = false
+	root        = zl.Logger
+	rootWg      = sync.WaitGroup{}
+	customOut   io.WriteCloser
+	customOutMu = sync.Mutex{}
 )
 
-// SetDebug controls debug logging.
-func SetDebug(to bool) {
-	debug = to
-	l.Level = logrus.DebugLevel
+func init() {
+	rootWg.Add(1)
 }
 
-// SetFormatter sets the formatter.
-func SetFormatter(to logrus.Formatter) {
-	l.Formatter = to
-}
-
-// SetOutput sets the output.
-func SetOutput(to io.Writer) {
-	l.Out = to
-}
-
-// Fields is a map of logging fields.
-type Fields map[string]any
-
-// LogFields implements Fielder for Fields.
-func (f Fields) LogFields() Fields {
-	return f
-}
-
-// A Fielder provides Fields via the LogFields method.
-type Fielder interface {
-	LogFields() Fields
-}
-
-// err is a wrapper around an error.
-type err struct {
-	e error
-}
-
-// LogFields provides Fields for logging.
-func (e err) LogFields() Fields {
-	return Fields{
-		"error": e.e.Error(),
-		"type":  fmt.Sprintf("%T", e.e),
-	}
-}
-
-// Err is a wrapper around errors that implements Fielder.
-func Err(e error) Fielder {
-	return err{e}
-}
-
-// mergeFielders merges the Fields of multiple Fielders.
-// Fields from the first Fielder will be used unchanged, Fields from subsequent
-// Fielders will be prefixed with "%d.", starting from 1.
-//
-// must be called with len(fielders) > 0
-func mergeFielders(fielders ...Fielder) logrus.Fields {
-	if fielders[0] == nil {
-		return nil
-	}
-
-	fields := fielders[0].LogFields()
-	for i := 1; i < len(fielders); i++ {
-		if fielders[i] == nil {
-			continue
-		}
-		prefix := fmt.Sprint(i, ".")
-		ff := fielders[i].LogFields()
-		for k, v := range ff {
-			fields[prefix+k] = v
-		}
-	}
-
-	return logrus.Fields(fields)
-}
-
-// Debug logs at the debug level if debug logging is enabled.
-func Debug(v any, fielders ...Fielder) {
-	if debug {
-		if len(fielders) != 0 {
-			l.WithFields(mergeFielders(fielders...)).Debug(v)
+// ConfigureLogger initializes root and all child loggers.
+// NOTE: this function MUST be called before any child log call
+//  otherwise any goroutine, which uses logger will wait logger initialization
+func ConfigureLogger(output, level string, formatted, colored bool) (err error) {
+	lvl := zerolog.WarnLevel
+	output = strings.ToLower(output)
+	var w io.Writer
+	var stdAny bool
+	switch output {
+	case "stderr", "":
+		w, stdAny = os.Stderr, true
+	case "stdout":
+		w, stdAny = os.Stdout, true
+	default:
+		if w, err = os.OpenFile(output, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600); err == nil {
+			customOutMu.Lock()
+			defer customOutMu.Unlock()
+			customOut = diode.NewWriter(w, 1000, 0, func(missed int) {
+				zl.Warn().Int("count", missed).Msg("Logger dropped messages")
+			})
+			w = customOut
 		} else {
-			l.Debug(v)
+			return err
 		}
 	}
+	if stdAny && formatted {
+		w = zerolog.ConsoleWriter{
+			Out:        w,
+			NoColor:    !colored,
+			TimeFormat: "2006-01-02 15:04:05.999",
+		}
+	}
+	if len(level) > 0 {
+		if logLevel, err := zerolog.ParseLevel(strings.ToLower(level)); err == nil {
+			lvl = logLevel
+		} else {
+			return err
+		}
+	}
+	root = zerolog.New(w).With().Timestamp().Logger()
+	zerolog.SetGlobalLevel(lvl)
+	rootWg.Done()
+	return nil
 }
 
-// Info logs at the info level.
-func Info(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Info(v)
-	} else {
-		l.Info(v)
+// Logger is the holder for zerolog.Logger which
+// waits until root logger initialized to prevent
+// mixed logging format and output
+type Logger struct {
+	comp   string
+	zlOnce sync.Once
+	zerolog.Logger
+}
+
+func (l *Logger) init() {
+	l.zlOnce.Do(func() {
+		rootWg.Wait()
+		l.Logger = root.With().Str("component", l.comp).Logger()
+	})
+}
+
+// ==== copied from zerolog ====
+
+// Trace starts a new message with trace level.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Trace() *zerolog.Event {
+	l.init()
+	return l.Logger.Trace()
+}
+
+// Debug starts a new message with debug level.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Debug() *zerolog.Event {
+	l.init()
+	return l.Logger.Debug()
+}
+
+// Info starts a new message with info level.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Info() *zerolog.Event {
+	l.init()
+	return l.Logger.Info()
+}
+
+// Warn starts a new message with warn level.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Warn() *zerolog.Event {
+	l.init()
+	return l.Logger.Warn()
+}
+
+// Error starts a new message with error level.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Error() *zerolog.Event {
+	l.init()
+	return l.Logger.Error()
+}
+
+// Err starts a new message with error level with err as a field if not nil or
+// with info level if err is nil.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Err(err error) *zerolog.Event {
+	l.init()
+	return l.Logger.Err(err)
+}
+
+// Fatal starts a new message with fatal level. The os.Exit(1) function
+// is called by the Msg method, which terminates the program immediately.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Fatal() *zerolog.Event {
+	l.init()
+	return l.Logger.Fatal()
+}
+
+// Panic starts a new message with panic level. The panic() function
+// is called by the Msg method, which stops the ordinary flow of a goroutine.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Panic() *zerolog.Event {
+	l.init()
+	return l.Logger.Panic()
+}
+
+// WithLevel starts a new message with level. Unlike Fatal and Panic
+// methods, WithLevel does not terminate the program or stop the ordinary
+// flow of a gourotine when used with their respective levels.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) WithLevel(level zerolog.Level) *zerolog.Event {
+	l.init()
+	return l.Logger.WithLevel(level)
+}
+
+// Log starts a new message with no level. Setting GlobalLevel to Disabled
+// will still disable events produced by this method.
+//
+// You must call Msg on the returned event in order to send the event.
+func (l *Logger) Log() *zerolog.Event {
+	l.init()
+	return l.Logger.Log()
+}
+
+// Print sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Print.
+func (l *Logger) Print(v ...interface{}) {
+	l.init()
+	l.Logger.Print(v...)
+}
+
+// Printf sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Printf.
+func (l *Logger) Printf(format string, v ...interface{}) {
+	l.init()
+	l.Logger.Printf(format, v...)
+}
+
+// Write implements the io.Writer interface. This is useful to set as a writer
+// for the standard library log.
+func (l *Logger) Write(p []byte) (n int, err error) {
+	l.init()
+	return l.Logger.Write(p)
+}
+
+// Err starts a new message with error level with err as a field if not nil or
+// with info level if err is nil.
+//
+// You must call Msg on the returned event in order to send the event.
+func Err(err error) *zerolog.Event {
+	return root.Err(err)
+}
+
+// Trace starts a new message with trace level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Trace() *zerolog.Event {
+	return root.Trace()
+}
+
+// Debug starts a new message with debug level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Debug() *zerolog.Event {
+	return root.Debug()
+}
+
+// Info starts a new message with info level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Info() *zerolog.Event {
+	return root.Info()
+}
+
+// Warn starts a new message with warn level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Warn() *zerolog.Event {
+	return root.Warn()
+}
+
+// Error starts a new message with error level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Error() *zerolog.Event {
+	return root.Error()
+}
+
+// Fatal starts a new message with fatal level. The os.Exit(1) function
+// is called by the Msg method.
+//
+// You must call Msg on the returned event in order to send the event.
+func Fatal() *zerolog.Event {
+	return root.Fatal()
+}
+
+// Panic starts a new message with panic level. The message is also sent
+// to the panic function.
+//
+// You must call Msg on the returned event in order to send the event.
+func Panic() *zerolog.Event {
+	return root.Panic()
+}
+
+// WithLevel starts a new message with level.
+//
+// You must call Msg on the returned event in order to send the event.
+func WithLevel(level zerolog.Level) *zerolog.Event {
+	return root.WithLevel(level)
+}
+
+// Log starts a new message with no level. Setting zerolog.GlobalLevel to
+// zerolog.Disabled will still disable events produced by this method.
+//
+// You must call Msg on the returned event in order to send the event.
+func Log() *zerolog.Event {
+	return root.Log()
+}
+
+// Print sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Print.
+func Print(v ...interface{}) {
+	root.Print(v...)
+}
+
+// Printf sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Printf.
+func Printf(format string, v ...interface{}) {
+	root.Printf(format, v...)
+}
+
+// Close closes custom output writer if it configured
+func Close() {
+	customOutMu.Lock()
+	defer customOutMu.Unlock()
+	if customOut != nil {
+		_ = customOut.Close()
+		customOut = nil
 	}
 }
 
-// Warn logs at the warning level.
-func Warn(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Warn(v)
-	} else {
-		l.Warn(v)
-	}
-}
-
-// Error logs at the error level.
-func Error(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Error(v)
-	} else {
-		l.Error(v)
-	}
-}
-
-// Fatal logs at the fatal level and exits with a status code != 0.
-func Fatal(v any, fielders ...Fielder) {
-	if len(fielders) != 0 {
-		l.WithFields(mergeFielders(fielders...)).Fatal(v)
-	} else {
-		l.Fatal(v)
-	}
+// NewLogger creates child logger with specified component name
+// NOTE: root logger MUST be initialized with ConfigureLogger
+//  before any logger call
+func NewLogger(component string) *Logger {
+	return &Logger{comp: component}
 }

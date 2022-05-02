@@ -15,6 +15,8 @@ import (
 // Name of this container for registry.
 const Name = "list"
 
+var logger = log.NewLogger("torrent approval list")
+
 func init() {
 	container.Register(Name, build)
 }
@@ -45,7 +47,11 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	}
 
 	if len(l.StorageCtx) == 0 {
-		log.Info("Storage context not set, using default value: " + container.DefaultStorageCtxName)
+		logger.Warn().
+			Str("name", "StorageCtx").
+			Str("provided", l.StorageCtx).
+			Str("default", container.DefaultStorageCtxName).
+			Msg("falling back to default configuration")
 		l.StorageCtx = container.DefaultStorageCtxName
 	}
 
@@ -93,7 +99,7 @@ func (l *List) Approved(hash bittorrent.InfoHash) (contains bool) {
 		}
 	}
 	if err != nil {
-		log.Err(err)
+		logger.Error().Err(err).Stringer("infoHash", hash).Msg("unable load hash information from storage")
 	}
 	return contains != l.Invert
 }
