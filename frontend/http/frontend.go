@@ -308,6 +308,15 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
-func (f Frontend) ping(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	w.WriteHeader(http.StatusOK)
+func (f Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var err error
+	if r.Method == http.MethodGet {
+		err = f.logic.Ping(context.Background())
+	}
+	if err == nil {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		logger.Error().Err(err).Msg("ping completed with error")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 }

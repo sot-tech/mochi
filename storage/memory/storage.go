@@ -557,6 +557,10 @@ func (ps *peerStore) gc(cutoff time.Time) {
 	}
 }
 
+func (*peerStore) Ping() error {
+	return nil
+}
+
 func (ps *peerStore) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {

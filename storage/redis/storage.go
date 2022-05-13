@@ -458,7 +458,7 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 	})
 }
 
-func (ps Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
+func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
 	var peerIds []string
 	peerIds, err = peersResult.Result()
 	if err = AsNil(err); err == nil {
@@ -479,7 +479,7 @@ type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
 // converts result to bittorrent.Peer array.
 // If forSeeder set to true - returns only leechers, if false -
 // seeders and if maxCount not reached - leechers.
-func (ps Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
+func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
 	infoHash := ih.RawString()
 
 	infoHashKeys := make([]string, 1, 2)
@@ -528,7 +528,7 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int,
 
 type getPeerCountFn func(context.Context, string) *redis.IntCmd
 
-func (ps Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uint32 {
+func (ps *Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uint32 {
 	count, err := countFn(context.TODO(), infoHashKey).Result()
 	err = AsNil(err)
 	if err != nil {
@@ -538,7 +538,7 @@ func (ps Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uint
 }
 
 // CountPeers calls provided countFn and returns seeders and leechers count for specified info hash
-func (ps Connection) CountPeers(ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount uint32) {
+func (ps *Connection) CountPeers(ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount uint32) {
 	infoHash := ih.RawString()
 
 	leechersCount = ps.countPeers(InfoHashKey(infoHash, false, false), countFn) +
@@ -562,7 +562,7 @@ func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders u
 const argNumErrorMsg = "ERR wrong number of arguments"
 
 // Put - storage.DataStorage implementation
-func (ps Connection) Put(ctx string, values ...storage.Entry) (err error) {
+func (ps *Connection) Put(ctx string, values ...storage.Entry) (err error) {
 	if l := len(values); l > 0 {
 		if l == 1 {
 			err = ps.HSet(context.TODO(), PrefixKey+ctx, values[0].Key, values[0].Value).Err()
@@ -588,13 +588,13 @@ func (ps Connection) Put(ctx string, values ...storage.Entry) (err error) {
 }
 
 // Contains - storage.DataStorage implementation
-func (ps Connection) Contains(ctx string, key string) (bool, error) {
+func (ps *Connection) Contains(ctx string, key string) (bool, error) {
 	exist, err := ps.HExists(context.TODO(), PrefixKey+ctx, key).Result()
 	return exist, AsNil(err)
 }
 
 // Load - storage.DataStorage implementation
-func (ps Connection) Load(ctx string, key string) (v any, err error) {
+func (ps *Connection) Load(ctx string, key string) (v any, err error) {
 	v, err = ps.HGet(context.TODO(), PrefixKey+ctx, key).Result()
 	if err != nil && errors.Is(err, redis.Nil) {
 		v, err = nil, nil
@@ -603,7 +603,7 @@ func (ps Connection) Load(ctx string, key string) (v any, err error) {
 }
 
 // Delete - storage.DataStorage implementation
-func (ps Connection) Delete(ctx string, keys ...string) (err error) {
+func (ps *Connection) Delete(ctx string, keys ...string) (err error) {
 	if len(keys) > 0 {
 		err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, keys...).Err())
 		if err != nil {
@@ -623,6 +623,11 @@ func (ps Connection) Delete(ctx string, keys ...string) (err error) {
 // Preservable - storage.DataStorage implementation
 func (Connection) Preservable() bool {
 	return true
+}
+
+// Ping sends `PING` request to Redis server
+func (ps *Connection) Ping() error {
+	return ps.UniversalClient.Ping(context.TODO()).Err()
 }
 
 // GC deletes all Peers from the PeerStorage which are older than the

@@ -206,6 +206,10 @@ type PeerStorage interface {
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
 	ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
 
+	// Ping used for checks if storage is alive
+	// (connection could be established, enough space etc.)
+	Ping() error
+
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper

@@ -66,6 +66,8 @@ mochi:
         # An array of routes to listen ping requests.
         # Used just to ensure if server is operational. Returns nothing,
         # just HTTP 200 without body. Listens both GET and HEAD HTTP methods.
+        # HEAD method just checks http server, GET checks all hooks,
+        # which support ping
         ping_routes:
             - "/ping"
 

@@ -19,12 +19,19 @@ var (
 // NewLogic creates a new instance of a TrackerLogic that executes the provided
 // middleware hooks.
 func NewLogic(annInterval, minAnnInterval time.Duration, peerStore storage.PeerStorage, preHooks, postHooks []Hook) *Logic {
-	return &Logic{
+	l := &Logic{
 		announceInterval:    annInterval,
 		minAnnounceInterval: minAnnInterval,
 		preHooks:            append(preHooks, &responseHook{store: peerStore}),
 		postHooks:           append(postHooks, &swarmInteractionHook{store: peerStore}),
+		pingers:             make([]Pinger, 0, 1),
 	}
+	for _, h := range l.preHooks {
+		if ph, isOk := h.(Pinger); isOk {
+			l.pingers = append(l.pingers, ph)
+		}
+	}
+	return l
 }
 
 // Logic is an implementation of the TrackerLogic that functions by
@@ -34,6 +41,7 @@ type Logic struct {
 	minAnnounceInterval time.Duration
 	preHooks            []Hook
 	postHooks           []Hook
+	pingers             []Pinger
 }
 
 // HandleAnnounce generates a response for an Announce.
@@ -99,6 +107,16 @@ func (l *Logic) AfterScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 			return
 		}
 	}
+}
+
+// Ping performs check if all Hook-s are operational
+func (l *Logic) Ping(ctx context.Context) (err error) {
+	for _, p := range l.pingers {
+		if err = p.Ping(ctx); err != nil {
+			break
+		}
+	}
+	return
 }
 
 // Stop stops the Logic.

@@ -18,6 +18,16 @@ type Hook interface {
 	HandleScrape(context.Context, *bittorrent.ScrapeRequest, *bittorrent.ScrapeResponse) (context.Context, error)
 }
 
+// Pinger is an optional interface that may be implemented by a pre Hook
+// to check if it is operational. Used in frontend.TrackerLogic.
+//
+// It may be useful in cases when Hook performs foreign requests to
+// some external resources (i.e. storage) and `ping` request should
+// also check resource availability.
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 type skipSwarmInteraction struct{}
 
 // SkipSwarmInteractionKey is a key for the context of an Announce to control
@@ -204,4 +214,8 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 	}
 
 	return ctx, nil
+}
+
+func (h *responseHook) Ping(_ context.Context) error {
+	return h.store.Ping()
 }

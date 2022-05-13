@@ -30,4 +30,7 @@ type TrackerLogic interface {
 
 	// AfterScrape does something with the results of a Scrape after it has been completed.
 	AfterScrape(context.Context, *bittorrent.ScrapeRequest, *bittorrent.ScrapeResponse)
+
+	// Ping executes checks if all hooks are operational
+	Ping(context.Context) error
 }
