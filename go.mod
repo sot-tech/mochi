@@ -5,7 +5,7 @@ go 1.18
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20220420211542-53509ccdf174
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc
-	github.com/anacrolix/torrent v1.42.0
+	github.com/anacrolix/torrent v1.44.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mendsley/gojwk v0.0.0-20141217222730-4d5ec6e58103
