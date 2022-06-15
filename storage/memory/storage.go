@@ -390,7 +390,7 @@ func (ps *peerStore) getPeers(shard *peerShard, ih bittorrent.InfoHash, maxCount
 	return
 }
 
-func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -398,12 +398,12 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant 
 	}
 	logger.Trace().
 		Stringer("infoHash", ih).
-		Bool("seeder", seeder).
+		Bool("forSeeder", forSeeder).
 		Int("numWant", numWant).
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	peers = ps.getPeers(ps.shards[ps.shardIndex(ih, v6)], ih, numWant, seeder)
+	peers = ps.getPeers(ps.shards[ps.shardIndex(ih, v6)], ih, numWant, forSeeder)
 
 	return
 }
@@ -497,6 +497,14 @@ func (ds *dataStore) Delete(ctx string, keys ...string) error {
 
 func (*dataStore) Preservable() bool {
 	return false
+}
+
+func (*peerStore) GCAware() bool {
+	return true
+}
+
+func (*peerStore) StatisticsAware() bool {
+	return true
 }
 
 // GC deletes all Peers from the PeerStorage which are older than the

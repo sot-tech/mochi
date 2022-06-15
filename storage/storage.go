@@ -115,23 +115,6 @@ type DataStorage interface {
 	Preservable() bool
 }
 
-// GCAware is the interface for storage that supports periodic
-// stale peers collection
-type GCAware interface {
-	// ScheduleGC used to delete stale data, such as timed out seeders/leechers.
-	// Note: implementation must create subroutine by itself
-	ScheduleGC(gcInterval, peerLifeTime time.Duration)
-}
-
-// StatisticsAware is the interface for storage that supports periodic
-// statistics collection
-type StatisticsAware interface {
-	// ScheduleStatisticsCollection used to receive statistics information about hashes,
-	// seeders and leechers count.
-	// Note: implementation must create subroutine by itself
-	ScheduleStatisticsCollection(reportInterval time.Duration)
-}
-
 // PeerStorage is an interface that abstracts the interactions of storing and
 // manipulating Peers such that it can be implemented for various data stores.
 //
@@ -194,7 +177,7 @@ type PeerStorage interface {
 	//   leechers
 	//
 	// Returns ErrResourceDoesNotExist if the provided InfoHash is not tracked.
-	AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error)
+	AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error)
 
 	// ScrapeSwarm returns information required to answer a Scrape request
 	// about a Swarm identified by the given InfoHash.
@@ -209,6 +192,23 @@ type PeerStorage interface {
 	// Ping used for checks if storage is alive
 	// (connection could be established, enough space etc.)
 	Ping() error
+
+	// GCAware marks that this storage supports periodic
+	// peers collection
+	GCAware() bool
+
+	// ScheduleGC used to delete stale data, such as timed out seeders/leechers.
+	// Note: implementation must create subroutine by itself
+	ScheduleGC(gcInterval, peerLifeTime time.Duration)
+
+	// StatisticsAware marks that this storage supports periodic
+	// statistics collection
+	StatisticsAware() bool
+
+	// ScheduleStatisticsCollection used to receive statistics information about hashes,
+	// seeders and leechers count.
+	// Note: implementation must create subroutine by itself
+	ScheduleStatisticsCollection(reportInterval time.Duration)
 
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
@@ -264,27 +264,27 @@ func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
 		return
 	}
 
-	if gc, isOk := ps.(GCAware); isOk {
+	if gc := ps.GCAware(); gc {
 		gcInterval, peerTTL := c.sanitizeGCConfig()
 		logger.Info().
 			Str("type", name).
 			Dur("gcInterval", gcInterval).
 			Dur("peerTTL", peerTTL).
 			Msg("scheduling GC")
-		gc.ScheduleGC(gcInterval, peerTTL)
+		ps.ScheduleGC(gcInterval, peerTTL)
 	} else {
 		logger.Debug().
 			Str("type", name).
 			Msg("storage does not support GC")
 	}
 
-	if st, isOk := ps.(StatisticsAware); isOk {
+	if st := ps.StatisticsAware(); st {
 		if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
 			logger.Info().
 				Str("type", name).
 				Dur("statInterval", statInterval).
 				Msg("scheduling statistics collection")
-			st.ScheduleStatisticsCollection(statInterval)
+			ps.ScheduleStatisticsCollection(statInterval)
 		} else {
 			logger.Info().Str("type", name).Msg("statistics collection disabled because of zero reporting interval")
 		}
