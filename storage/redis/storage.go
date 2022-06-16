@@ -319,7 +319,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	}
 	err = AsNil(err)
 	if err != nil {
-		logger.Error().Err(err).Str("key", key).Msg("storage: Redis: GET/SCARD failure")
+		logger.Error().Err(err).Str("key", key).Msg("GET/SCARD failure")
 	}
 	return
 }
@@ -793,7 +793,7 @@ func (ps *store) Stop() stop.Result {
 		ps.wg.Wait()
 		var err error
 		if ps.UniversalClient != nil {
-			logger.Info().Msg("storage: Redis: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
+			logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
 			err = ps.UniversalClient.Close()
 			ps.UniversalClient = nil
 		}
