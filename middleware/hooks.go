@@ -180,7 +180,7 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 	}
 
 	l := len(peers)
-	uniquePeers := make(map[bittorrent.Peer]interface{}, l)
+	uniquePeers := make(map[bittorrent.Peer]any, l)
 
 	resp.IPv4Peers = make([]bittorrent.Peer, 0, l/2)
 	resp.IPv6Peers = make([]bittorrent.Peer, 0, l/2)

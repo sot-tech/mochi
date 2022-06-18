@@ -29,14 +29,16 @@ const (
 	Name = "pg"
 
 	defaultPingQuery = "SELECT 0"
+
+	errRequiredParameterNotSetMsg = "required parameter not provided: %s"
+	errRequiredColumnsNotFoundMsg = "one or more required columns not found in result set: %v"
+	errRollBackMsg                = "error occurred while rolling back failed query: %v, failed query error: %v"
 )
 
 var (
 	logger = log.NewLogger(Name)
 
 	errConnectionStringNotProvided = errors.New("database address not provided")
-	errRequiredParameterNotSetMsg  = "required parameter not provided: %s"
-	errRequiredColumnsNotFoundMsg  = "one or more required columns not found in result set: %v"
 
 	tc = timecache.New()
 )
@@ -53,6 +55,10 @@ func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 		return nil, err
 	}
 
+	return newStore(cfg)
+}
+
+func newStore(cfg Config) (storage.PeerStorage, error) {
 	cfg, err := cfg.Validate()
 	if err != nil {
 		return nil, err
@@ -72,32 +78,36 @@ func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	return &store{Config: cfg, Pool: con, wg: sync.WaitGroup{}, closed: make(chan any)}, nil
 }
 
+type peerQueryConf struct {
+	AddQuery            string `cfg:"add_query"`
+	DelQuery            string `cfg:"del_query"`
+	GraduateQuery       string `cfg:"graduate_query"`
+	CountQuery          string `cfg:"count_query"`
+	CountSeedersColumn  string `cfg:"count_seeders_column"`
+	CountLeechersColumn string `cfg:"count_leechers_column"`
+	ByInfoHashClause    string `cfg:"by_info_hash_clause"`
+}
+
+type announceQueryConf struct {
+	Query         string
+	PeerIDColumn  string `cfg:"peer_id_column"`
+	AddressColumn string `cfg:"address_column"`
+	PortColumn    string `cfg:"port_column"`
+}
+
+type dataQueryConf struct {
+	AddQuery string `cfg:"add_query"`
+	GetQuery string `cfg:"get_query"`
+	DelQuery string `cfg:"del_query"`
+}
+
 // Config holds the configuration of a redis PeerStorage.
 type Config struct {
-	ConnectionString string `cfg:"connection_string"`
-	PingQuery        string `cfg:"ping_query"`
-	Peer             struct {
-		AddQuery      string `cfg:"add_query"`
-		DelQuery      string `cfg:"del_query"`
-		GraduateQuery string `cfg:"graduate_query"`
-		// SELECT COUNT(1) FILTER (WHERE seeder) AS seeders, COUNT(1) FILTER (WHERE NOT seeder) AS leechers FROM peers
-		CountQuery          string `cfg:"count_query"`
-		CountSeedersColumn  string `cfg:"count_seeders_column"`
-		CountLeechersColumn string `cfg:"count_leechers_column"`
-		// WHERE ih = ?
-		ByInfoHashClause string `cfg:"by_info_hash_clause"`
-	}
-	Announce struct {
-		Query         string
-		PeerIDColumn  string `cfg:"peer_id_column"`
-		AddressColumn string `cfg:"address_column"`
-		PortColumn    string `cfg:"port_column"`
-	}
-	Data struct {
-		AddQuery string `cfg:"add_query"`
-		GetQuery string `cfg:"get_query"`
-		DelQuery string `cfg:"del_query"`
-	}
+	ConnectionString   string `cfg:"connection_string"`
+	PingQuery          string `cfg:"ping_query"`
+	Peer               peerQueryConf
+	Announce           announceQueryConf
+	Data               dataQueryConf
 	GCQuery            string `cfg:"gc_query"`
 	InfoHashCountQuery string `cfg:"info_hash_count_query"`
 }
@@ -208,8 +218,8 @@ func (cfg Config) Validate() (Config, error) {
 	}
 
 	validCfg.Announce.PeerIDColumn = strings.ToUpper(validCfg.Announce.PeerIDColumn)
-	validCfg.Announce.PeerIDColumn = strings.ToUpper(validCfg.Announce.AddressColumn)
-	validCfg.Announce.PeerIDColumn = strings.ToUpper(validCfg.Announce.PortColumn)
+	validCfg.Announce.AddressColumn = strings.ToUpper(validCfg.Announce.AddressColumn)
+	validCfg.Announce.PortColumn = strings.ToUpper(validCfg.Announce.PortColumn)
 
 	validCfg.Peer.CountSeedersColumn = strings.ToUpper(validCfg.Peer.CountSeedersColumn)
 	validCfg.Peer.CountLeechersColumn = strings.ToUpper(validCfg.Peer.CountLeechersColumn)
@@ -224,24 +234,74 @@ type store struct {
 	closed chan any
 }
 
-func (s *store) Put(ctx string, values ...storage.Entry) error {
-	// TODO implement me
-	panic("implement me")
+func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
+	var tx pgx.Tx
+	if tx, err = s.Begin(context.TODO()); err == nil {
+		for _, v := range values {
+			val := v.Value
+			switch tOut := val.(type) {
+			case string:
+				val = []byte(tOut)
+			}
+			if _, err = tx.Exec(context.TODO(), s.Data.AddQuery, ctx, v.Key, val); err != nil {
+				break
+			}
+		}
+		if err == nil {
+			err = tx.Commit(context.TODO())
+		} else {
+			if txErr := tx.Rollback(context.TODO()); txErr != nil {
+				err = fmt.Errorf(errRollBackMsg, txErr, err)
+			}
+		}
+	}
+	return
 }
 
-func (s *store) Contains(ctx string, key string) (bool, error) {
-	// TODO implement me
-	panic("implement me")
+func (s *store) Contains(ctx string, key string) (contains bool, err error) {
+	var rows pgx.Rows
+	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, key); err == nil {
+		defer rows.Close()
+		contains = rows.Next()
+	}
+	return
 }
 
-func (s *store) Load(ctx string, key string) (any, error) {
-	// TODO implement me
-	panic("implement me")
+func (s *store) Load(ctx string, key string) (out any, err error) {
+	var rows pgx.Rows
+	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, key); err == nil {
+		defer rows.Close()
+		if rows.Next() {
+			var values []any
+			if values, err = rows.Values(); err == nil && len(values) > 0 {
+				out = values[0]
+				switch tOut := out.(type) {
+				case []byte:
+					out = string(tOut)
+				}
+			}
+		}
+	}
+	return
 }
 
-func (s *store) Delete(ctx string, keys ...string) error {
-	// TODO implement me
-	panic("implement me")
+func (s *store) Delete(ctx string, keys ...string) (err error) {
+	var tx pgx.Tx
+	if tx, err = s.Begin(context.TODO()); err == nil {
+		for _, k := range keys {
+			if _, err = tx.Exec(context.TODO(), s.Data.DelQuery, ctx, k); err != nil {
+				break
+			}
+		}
+		if err == nil {
+			err = tx.Commit(context.TODO())
+		} else {
+			if txErr := tx.Rollback(context.TODO()); txErr != nil {
+				err = fmt.Errorf(errRollBackMsg, txErr, err)
+			}
+		}
+	}
+	return
 }
 
 func (s *store) Preservable() bool {
@@ -318,7 +378,7 @@ func (s *store) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder boo
 		Object("peer", peer).
 		Bool("seeder", seeder).
 		Msg("put peer")
-	args := []interface{}{[]byte(ih), peer.ID[:], net.IP(peer.Addr().AsSlice()), peer.Port(), seeder, peer.Addr().Is6()}
+	args := []any{[]byte(ih), peer.ID[:], net.IP(peer.Addr().AsSlice()), peer.Port(), seeder, peer.Addr().Is6()}
 	if s.GCAware() {
 		args = append(args, tc.Now())
 	}
@@ -330,7 +390,6 @@ func (s *store) delPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder boo
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
-		Bool("seeder", seeder).
 		Msg("del peer")
 	_, err := s.Exec(context.TODO(), s.Peer.DelQuery, []byte(ih), peer.ID[:], net.IP(peer.Addr().AsSlice()), peer.Port(), seeder)
 	return err
@@ -357,13 +416,13 @@ func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) er
 		Stringer("infoHash", ih).
 		Object("peer", peer).
 		Msg("graduate leecher")
-	_, err := s.Exec(context.TODO(), s.Peer.GraduateQuery, []byte(ih), peer.ID[:], peer.Addr(), peer.Port())
+	_, err := s.Exec(context.TODO(), s.Peer.GraduateQuery, []byte(ih), peer.ID[:], net.IP(peer.Addr().AsSlice()), peer.Port())
 	return err
 }
 
 func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
 	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Announce.Query, []byte(ih), isV6, seeders, maxCount); err == nil {
+	if rows, err = s.Query(context.TODO(), s.Announce.Query, []byte(ih), seeders, isV6, maxCount); err == nil {
 		defer rows.Close()
 		idIndex, ipIndex, portIndex := -1, -1, -1
 		for i, field := range rows.FieldDescriptions() {
@@ -399,7 +458,7 @@ func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV
 			var id []byte
 			var ip net.IP
 			var port int
-			into := make([]interface{}, maxIndex+1)
+			into := make([]any, maxIndex+1)
 			into[idIndex], into[ipIndex], into[portIndex] = &id, &ip, &port
 
 			if err = rows.Scan(into...); err == nil {
@@ -455,7 +514,7 @@ func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant in
 	return
 }
 
-func (s *store) countPeers(ih bittorrent.InfoHash) (leechers int, seeders int) {
+func (s *store) countPeers(ih bittorrent.InfoHash) (seeders int, leechers int) {
 	var rows pgx.Rows
 	var err error
 	if ih == bittorrent.NoneInfoHash {
@@ -485,7 +544,7 @@ func (s *store) countPeers(ih bittorrent.InfoHash) (leechers int, seeders int) {
 				} else {
 					mi = li
 				}
-				into := make([]interface{}, mi+1)
+				into := make([]any, mi+1)
 				into[si], into[li] = &seeders, &leechers
 
 				err = rows.Scan(into...)
@@ -514,7 +573,18 @@ func (s *store) Ping() error {
 
 func (s *store) Stop() stop.Result {
 	c := make(stop.Channel)
-	s.Close()
+	go func() {
+		if s.closed != nil {
+			close(s.closed)
+		}
+		s.wg.Wait()
+		if s.Pool != nil {
+			logger.Info().Msg("pg exiting. mochi does not clear data in database when exiting.")
+			s.Close()
+			s.Pool = nil
+		}
+		c.Done()
+	}()
 	return c.Result()
 }
 
