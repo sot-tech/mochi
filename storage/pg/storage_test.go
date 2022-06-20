@@ -16,7 +16,7 @@ CREATE TABLE mo_peers (
 	info_hash bytea NOT NULL,
 	peer_id bytea NOT NULL,
 	address inet NOT NULL,
-	port int2 NOT NULL,
+	port int4 NOT NULL,
 	is_seeder bool NOT NULL,
 	is_v6 bool NOT NULL,
 	created timestamp NOT NULL DEFAULT current_timestamp,
@@ -38,7 +38,7 @@ CREATE TABLE mo_kv (
 )
 
 var cfg = Config{
-	ConnectionString: "host=127.0.0.1 database=test user=postgres",
+	ConnectionString: "host=127.0.0.1 database=test user=postgres pool_max_conns=50",
 	PingQuery:        "SELECT 1",
 	Peer: peerQueryConf{
 		AddQuery:            "INSERT INTO mo_peers VALUES($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder",
