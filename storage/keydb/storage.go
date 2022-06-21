@@ -12,6 +12,7 @@ package keydb
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog"
@@ -32,9 +33,9 @@ const (
 
 var (
 	logger = log.NewLogger(Name)
-	// ErrNotKeyDB returned from initializer if connected does not support KeyDB
+	// errNotKeyDB returned from initializer if connected does not support KeyDB
 	// specific command (EXPIREMEMBER)
-	ErrNotKeyDB = errors.New("provided instance seems not KeyDB")
+	errNotKeyDB = errors.New("provided instance seems not KeyDB")
 )
 
 func init() {
@@ -69,7 +70,7 @@ func newStore(cfg r.Config) (*store, error) {
 	_ = rs.Process(context.Background(), cmd)
 	err = r.AsNil(cmd.Err())
 	if err == nil && len(cmd.Val()) == 0 {
-		err = ErrNotKeyDB
+		err = errNotKeyDB
 	}
 
 	var st *store
@@ -158,15 +159,15 @@ func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (er
 }
 
 // AnnouncePeers is the same function as redis.AnnouncePeers
-func (s store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
+func (s store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
-		Bool("seeder", seeder).
+		Bool("forSeeder", forSeeder).
 		Int("numWant", numWant).
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return s.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return s.GetPeers(ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return s.SRandMemberN(context.TODO(), infoHashKey, int64(maxCount))
 	})
 }
@@ -179,6 +180,18 @@ func (s store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uin
 	leechers, seeders = s.CountPeers(ih, s.SCard)
 	return
 }
+
+func (store) GCAware() bool {
+	return false
+}
+
+func (store) ScheduleGC(_, _ time.Duration) {}
+
+func (store) StatisticsAware() bool {
+	return false
+}
+
+func (store) ScheduleStatisticsCollection(_ time.Duration) {}
 
 func (s *store) Stop() stop.Result {
 	c := make(stop.Channel)

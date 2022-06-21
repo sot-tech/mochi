@@ -67,8 +67,8 @@ const (
 
 var (
 	logger = log.NewLogger(Name)
-	// ErrSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
-	ErrSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
+	// errSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
+	errSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
 )
 
 func init() {
@@ -141,7 +141,7 @@ func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
 // This function warns to the logger when a value is changed.
 func (cfg Config) Validate() (Config, error) {
 	if cfg.Sentinel && cfg.Cluster {
-		return cfg, ErrSentinelAndClusterChecked
+		return cfg, errSentinelAndClusterChecked
 	}
 
 	validCfg := cfg
@@ -319,7 +319,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	}
 	err = AsNil(err)
 	if err != nil {
-		logger.Error().Err(err).Str("key", key).Msg("storage: Redis: GET/SCARD failure")
+		logger.Error().Err(err).Str("key", key).Msg("GET/SCARD failure")
 	}
 	return
 }
@@ -513,15 +513,15 @@ func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount 
 	return
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, seeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
+func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
-		Bool("seeder", seeder).
+		Bool("forSeeder", forSeeder).
 		Int("numWant", numWant).
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return ps.GetPeers(ih, seeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return ps.GetPeers(ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return ps.HRandField(ctx, infoHashKey, maxCount, false)
 	})
 }
@@ -622,6 +622,14 @@ func (ps *Connection) Delete(ctx string, keys ...string) (err error) {
 
 // Preservable - storage.DataStorage implementation
 func (Connection) Preservable() bool {
+	return true
+}
+
+func (*store) GCAware() bool {
+	return true
+}
+
+func (*store) StatisticsAware() bool {
 	return true
 }
 
@@ -785,7 +793,7 @@ func (ps *store) Stop() stop.Result {
 		ps.wg.Wait()
 		var err error
 		if ps.UniversalClient != nil {
-			logger.Info().Msg("storage: Redis: exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
+			logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
 			err = ps.UniversalClient.Close()
 			ps.UniversalClient = nil
 		}

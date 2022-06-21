@@ -36,7 +36,7 @@ func generateInfoHashes() (a [ihCount]bittorrent.InfoHash) {
 func generatePeers() (a [peersCount]bittorrent.Peer) {
 	for i := range a {
 		var ip []byte
-		if i < peersCount/2 {
+		if i%2 == 0 {
 			ip = make([]byte, net.IPv4len)
 		} else {
 			ip = make([]byte, net.IPv6len)

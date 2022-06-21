@@ -11,7 +11,6 @@ import (
 
 var cfg = Config{
 	Addresses:      []string{"localhost:6379"},
-	PeerLifetime:   30 * time.Minute,
 	ReadTimeout:    10 * time.Second,
 	WriteTimeout:   10 * time.Second,
 	ConnectTimeout: 10 * time.Second,
@@ -22,7 +21,7 @@ func createNew() s.PeerStorage {
 	var err error
 	ps, err = newStore(cfg)
 	if err != nil {
-		panic(fmt.Sprint("Unable to create KeyDB connection: ", err, "\nThis driver needs real Redis instance"))
+		panic(fmt.Sprint("Unable to create Redis connection: ", err, "\nThis driver needs real Redis instance"))
 	}
 	return ps
 }

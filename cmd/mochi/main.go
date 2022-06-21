@@ -30,11 +30,11 @@ func main() {
 	flag.Parse()
 
 	if err := l.ConfigureLogger(*logOut, *logLevel, *logPretty, *logColored); err != nil {
-		log.Fatal("unable to configure logger ", err)
+		log.Fatal("unable to configure logger: ", err)
 	}
 
 	if err := s.Run(*configPath); err != nil {
-		log.Fatal("unable to start server ", err)
+		log.Fatal("unable to start server: ", err)
 	}
 	defer s.Dispose()
 	ch := make(chan os.Signal, 2)

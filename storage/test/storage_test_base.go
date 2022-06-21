@@ -13,6 +13,8 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
+const kvStoreCtx = "test"
+
 func init() {
 	_ = log.ConfigureLogger("", "warn", false, false)
 }
@@ -39,7 +41,10 @@ type hashPeer struct {
 func (th *testHolder) DeleteSeeder(t *testing.T) {
 	for _, c := range testData {
 		err := th.st.DeleteSeeder(c.ih, c.peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 	}
 }
 
@@ -57,7 +62,10 @@ func (th *testHolder) PutLeecher(t *testing.T) {
 func (th *testHolder) DeleteLeecher(t *testing.T) {
 	for _, c := range testData {
 		err := th.st.DeleteLeecher(c.ih, c.peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 	}
 }
 
@@ -158,7 +166,10 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 
 		// Deleting the Peer as a Leecher should have no effect
 		err = th.st.DeleteLeecher(c.ih, c.peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 
 		// Verify it's still there
 		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
@@ -171,23 +182,29 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 
 		// Test ErrDNE for missing leecher
 		err = th.st.DeleteLeecher(c.ih, peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 
 		err = th.st.DeleteSeeder(c.ih, c.peer)
 		require.Nil(t, err)
 
 		err = th.st.DeleteSeeder(c.ih, c.peer)
-		require.Equal(t, storage.ErrResourceDoesNotExist, err)
+		if errors.Is(err, storage.ErrResourceDoesNotExist) {
+			err = nil
+		}
+		require.Nil(t, err)
 	}
 }
 
 func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 	for _, c := range testData {
-		err := th.st.Put("test", storage.Entry{Key: c.peer.String(), Value: c.ih.RawString()})
+		err := th.st.Put(kvStoreCtx, storage.Entry{Key: c.peer.String(), Value: c.ih.RawString()})
 		require.Nil(t, err)
 
 		// check if exist in ctx we put
-		contains, err := th.st.Contains("test", c.peer.String())
+		contains, err := th.st.Contains(kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 		require.True(t, contains)
 
@@ -197,7 +214,7 @@ func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 		require.False(t, contains)
 
 		// check value and type in ctx we put
-		out, err := th.st.Load("test", c.peer.String())
+		out, err := th.st.Load(kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
@@ -208,10 +225,10 @@ func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 		require.Nil(t, err)
 		require.Nil(t, dummy)
 
-		err = th.st.Delete("test", c.peer.String())
+		err = th.st.Delete(kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 
-		contains, err = th.st.Contains("peers", c.peer.String())
+		contains, err = th.st.Contains("", c.peer.String())
 		require.Nil(t, err)
 		require.False(t, contains)
 	}
@@ -228,29 +245,29 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 			Value: c.ih.RawString(),
 		})
 	}
-	err := th.st.Put("test", pairs...)
+	err := th.st.Put(kvStoreCtx, pairs...)
 	require.Nil(t, err)
 
 	// check if exist in ctx we put
 	for _, k := range keys {
-		contains, err := th.st.Contains("test", k)
+		contains, err := th.st.Contains(kvStoreCtx, k)
 		require.Nil(t, err)
 		require.True(t, contains)
 	}
 
 	// check value and type in ctx we put
 	for _, p := range pairs {
-		out, _ := th.st.Load("test", p.Key)
+		out, _ := th.st.Load(kvStoreCtx, p.Key)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
 		require.Equal(t, p.Value, ih.RawString())
 	}
 
-	err = th.st.Delete("test", keys...)
+	err = th.st.Delete(kvStoreCtx, keys...)
 	require.Nil(t, err)
 
 	for _, k := range keys {
-		contains, err := th.st.Contains("test", k)
+		contains, err := th.st.Contains(kvStoreCtx, k)
 		require.Nil(t, err)
 		require.False(t, contains)
 	}

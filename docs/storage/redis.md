@@ -35,8 +35,11 @@ mochi:
       # To avoid churn, keep this slightly larger than `announce_interval`
       peer_lifetime: 31m
 
-      # The address of redis storage.
-      redis_broker: "redis://pwd@127.0.0.1:6379/0"
+      # The addresses of redis storage.
+      addresses: ["127.0.0.1:6379"]
+      
+      # Database number
+      db: 0
 
       # The timeout for reading a command reply from redis.
       read_timeout: 15s
