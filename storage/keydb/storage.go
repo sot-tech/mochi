@@ -185,17 +185,13 @@ func (store) GCAware() bool {
 	return false
 }
 
-func (store) ScheduleGC(_, _ time.Duration) {
-
-}
+func (store) ScheduleGC(_, _ time.Duration) {}
 
 func (store) StatisticsAware() bool {
 	return false
 }
 
-func (store) ScheduleStatisticsCollection(_ time.Duration) {
-
-}
+func (store) ScheduleStatisticsCollection(_ time.Duration) {}
 
 func (s *store) Stop() stop.Result {
 	c := make(stop.Channel)

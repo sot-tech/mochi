@@ -18,6 +18,7 @@ import (
 	// Imports to register storage drivers.
 	_ "github.com/sot-tech/mochi/storage/keydb"
 	_ "github.com/sot-tech/mochi/storage/memory"
+	_ "github.com/sot-tech/mochi/storage/pg"
 	_ "github.com/sot-tech/mochi/storage/redis"
 )
 

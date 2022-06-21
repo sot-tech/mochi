@@ -311,7 +311,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 func (f Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var err error
 	if r.Method == http.MethodGet {
-		err = f.logic.Ping(context.Background())
+		err = f.logic.Ping(context.TODO())
 	}
 	if err == nil {
 		w.WriteHeader(http.StatusOK)

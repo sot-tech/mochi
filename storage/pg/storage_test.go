@@ -20,19 +20,18 @@ CREATE TABLE mo_peers (
 	is_seeder bool NOT NULL,
 	is_v6 bool NOT NULL,
 	created timestamp NOT NULL DEFAULT current_timestamp,
-	UNIQUE(info_hash, peer_id, address, port)
+	PRIMARY KEY (info_hash, peer_id, address, port)
 );
 
-CREATE INDEX peers_ih_idx ON mo_peers(info_hash);
-CREATE INDEX peers_created_idx ON mo_peers(created);
-CREATE INDEX peers_announce_idx ON mo_peers(info_hash, is_seeder, is_v6);
+CREATE INDEX mo_peers_created_idx ON mo_peers(created);
+CREATE INDEX mo_peers_announce_idx ON mo_peers(info_hash, is_seeder, is_v6);
 
 DROP TABLE IF EXISTS mo_kv;
 CREATE TABLE mo_kv (
 	context varchar NOT NULL,
-	name varchar NOT NULL,
+	name bytea NOT NULL,
 	value bytea,
-	UNIQUE (context, name)
+	PRIMARY KEY (context, name)
 );
 `
 )
@@ -56,7 +55,7 @@ var cfg = Config{
 		PortColumn:    "port",
 	},
 	Data: dataQueryConf{
-		AddQuery: "INSERT INTO mo_kv VALUES($1, $2, ($3)::bytea) ON CONFLICT (context, name) DO NOTHING",
+		AddQuery: "INSERT INTO mo_kv VALUES($1, $2, $3) ON CONFLICT (context, name) DO NOTHING",
 		GetQuery: "SELECT value FROM mo_kv WHERE context=$1 AND name=$2",
 		DelQuery: "DELETE FROM mo_kv WHERE context=$1 AND name=$2",
 	},

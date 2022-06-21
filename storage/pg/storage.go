@@ -38,9 +38,7 @@ const (
 var (
 	logger = log.NewLogger(Name)
 
-	errConnectionStringNotProvided = errors.New("database address not provided")
-
-	tc = timecache.New()
+	errConnectionStringNotProvided = errors.New("database connection string not provided")
 )
 
 func init() {
@@ -161,59 +159,59 @@ func (cfg Config) Validate() (Config, error) {
 		return
 	}
 
-	if err := fn(&validCfg.Peer.AddQuery, "Peer.AddQuery"); err != nil {
+	if err := fn(&validCfg.Peer.AddQuery, "peer.addQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.DelQuery, "Peer.DelQuery"); err != nil {
+	if err := fn(&validCfg.Peer.DelQuery, "peer.aelQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.GraduateQuery, "Peer.GraduateQuery"); err != nil {
+	if err := fn(&validCfg.Peer.GraduateQuery, "peer.graduateQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountQuery, "Peer.CountQuery"); err != nil {
+	if err := fn(&validCfg.Peer.CountQuery, "peer.countQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountSeedersColumn, "Peer.CountSeedersColumn"); err != nil {
+	if err := fn(&validCfg.Peer.CountSeedersColumn, "peer.countSeedersColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountLeechersColumn, "Peer.CountLeechersColumn"); err != nil {
+	if err := fn(&validCfg.Peer.CountLeechersColumn, "peer.countLeechersColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.ByInfoHashClause, "Peer.ByInfoHashClause"); err != nil {
+	if err := fn(&validCfg.Peer.ByInfoHashClause, "peer.byInfoHashClause"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.Query, "Announce.Query"); err != nil {
+	if err := fn(&validCfg.Announce.Query, "announce.query"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.PeerIDColumn, "Announce.PeerIDColumn"); err != nil {
+	if err := fn(&validCfg.Announce.PeerIDColumn, "announce.peerIDColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.AddressColumn, "Announce.AddressColumn"); err != nil {
+	if err := fn(&validCfg.Announce.AddressColumn, "announce.addressColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.PortColumn, "Announce.PortColumn"); err != nil {
+	if err := fn(&validCfg.Announce.PortColumn, "announce.portColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.AddQuery, "Data.AddQuery"); err != nil {
+	if err := fn(&validCfg.Data.AddQuery, "data.addQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.GetQuery, "Data.GetQuery"); err != nil {
+	if err := fn(&validCfg.Data.GetQuery, "data.getQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.DelQuery, "Data.DelQuery"); err != nil {
+	if err := fn(&validCfg.Data.DelQuery, "data.delQuery"); err != nil {
 		return cfg, err
 	}
 
@@ -243,7 +241,7 @@ func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
 			case string:
 				val = []byte(tOut)
 			}
-			if _, err = tx.Exec(context.TODO(), s.Data.AddQuery, ctx, v.Key, val); err != nil {
+			if _, err = tx.Exec(context.TODO(), s.Data.AddQuery, ctx, []byte(v.Key), val); err != nil {
 				break
 			}
 		}
@@ -260,7 +258,7 @@ func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
 
 func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, key); err == nil {
+	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, []byte(key)); err == nil {
 		defer rows.Close()
 		contains = rows.Next()
 	}
@@ -269,7 +267,7 @@ func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 
 func (s *store) Load(ctx string, key string) (out any, err error) {
 	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, key); err == nil {
+	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, []byte(key)); err == nil {
 		defer rows.Close()
 		if rows.Next() {
 			var values []any
@@ -289,7 +287,7 @@ func (s *store) Delete(ctx string, keys ...string) (err error) {
 	var tx pgx.Tx
 	if tx, err = s.Begin(context.TODO()); err == nil {
 		for _, k := range keys {
-			if _, err = tx.Exec(context.TODO(), s.Data.DelQuery, ctx, k); err != nil {
+			if _, err = tx.Exec(context.TODO(), s.Data.DelQuery, ctx, []byte(k)); err != nil {
 				break
 			}
 		}
@@ -380,7 +378,7 @@ func (s *store) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder boo
 		Msg("put peer")
 	args := []any{[]byte(ih), peer.ID[:], net.IP(peer.Addr().AsSlice()), peer.Port(), seeder, peer.Addr().Is6()}
 	if s.GCAware() {
-		args = append(args, tc.Now())
+		args = append(args, timecache.Now())
 	}
 	_, err := s.Exec(context.TODO(), s.Peer.AddQuery, args...)
 	return err
@@ -444,13 +442,10 @@ func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV
 		switch {
 		case idIndex >= ipIndex && idIndex >= portIndex:
 			maxIndex = idIndex
-			break
 		case ipIndex >= idIndex && ipIndex >= portIndex:
 			maxIndex = ipIndex
-			break
 		case portIndex >= idIndex && portIndex >= ipIndex:
 			maxIndex = portIndex
-			break
 		}
 
 		for rows.Next() && len(peers) < maxCount {
