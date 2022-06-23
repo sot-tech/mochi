@@ -43,8 +43,11 @@ Implementation expects next data types:
 	* peer creation date and time - `timestamp`
 * Table for arbitrary data (KV store):
 	* context - string (`varchar`, `character varying`)
-	* name - string (`varchar`, `character varying`)
+	* name - byte array (`bytea`)*
 	* value - byte array (`bytea`)
+
+(*) in KV table `name` present as byte array because of possibility
+to place hash as _raw_ string, which is not supported by PostgreSQL. 
 
 Sample script to create tables:
 

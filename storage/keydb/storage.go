@@ -60,6 +60,15 @@ func newStore(cfg r.Config) (*store, error) {
 		return nil, err
 	}
 
+	if cfg.PeerLifetime <= 0 {
+		logger.Warn().
+			Str("name", "peerLifetime").
+			Dur("provided", cfg.PeerLifetime).
+			Dur("default", storage.DefaultPeerLifetime).
+			Msg("falling back to default configuration")
+		cfg.PeerLifetime = storage.DefaultPeerLifetime
+	}
+
 	var rs r.Connection
 
 	if rs, err = cfg.Connect(); err != nil {

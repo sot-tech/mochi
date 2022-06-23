@@ -4,9 +4,7 @@ package memory
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -445,23 +443,12 @@ type dataStore struct {
 	sync.Map
 }
 
-func asKey(in any) any {
-	if in == nil {
-		panic("unable to use nil map key")
-	}
-	if reflect.TypeOf(in).Comparable() {
-		return in
-	}
-	// FIXME: dirty hack
-	return fmt.Sprint(in)
-}
-
 func (ds *dataStore) Put(ctx string, values ...storage.Entry) error {
 	if len(values) > 0 {
 		c, _ := ds.LoadOrStore(ctx, new(sync.Map))
 		m := c.(*sync.Map)
 		for _, p := range values {
-			m.Store(asKey(p.Key), p.Value)
+			m.Store(p.Key, p.Value)
 		}
 	}
 	return nil
@@ -470,17 +457,18 @@ func (ds *dataStore) Put(ctx string, values ...storage.Entry) error {
 func (ds *dataStore) Contains(ctx string, key string) (bool, error) {
 	var exist bool
 	if m, found := ds.Map.Load(ctx); found {
-		_, exist = m.(*sync.Map).Load(asKey(key))
+		_, exist = m.(*sync.Map).Load(key)
 	}
 	return exist, nil
 }
 
-func (ds *dataStore) Load(ctx string, key string) (any, error) {
-	var v any
+func (ds *dataStore) Load(ctx string, key string) (out []byte, _ error) {
 	if m, found := ds.Map.Load(ctx); found {
-		v, _ = m.(*sync.Map).Load(asKey(key))
+		if v, _ := m.(*sync.Map).Load(key); v != nil {
+			out = v.([]byte)
+		}
 	}
-	return v, nil
+	return
 }
 
 func (ds *dataStore) Delete(ctx string, keys ...string) error {
@@ -488,7 +476,7 @@ func (ds *dataStore) Delete(ctx string, keys ...string) error {
 		if m, found := ds.Map.Load(ctx); found {
 			m := m.(*sync.Map)
 			for _, k := range keys {
-				m.Delete(asKey(k))
+				m.Delete(k)
 			}
 		}
 	}

@@ -62,9 +62,9 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 			if err != nil {
 				return nil, fmt.Errorf("whitelist : %s : %w", hashString, err)
 			}
-			init = append(init, storage.Entry{Key: ih.RawString(), Value: DUMMY})
+			init = append(init, storage.Entry{Key: ih.RawString(), Value: []byte(DUMMY)})
 			if len(ih) == bittorrent.InfoHashV2Len {
-				init = append(init, storage.Entry{Key: ih.TruncateV1().RawString(), Value: DUMMY})
+				init = append(init, storage.Entry{Key: ih.TruncateV1().RawString(), Value: []byte(DUMMY)})
 			}
 		}
 		if err := l.Storage.Put(l.StorageCtx, init...); err != nil {

@@ -87,16 +87,17 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 					if len(name) == 0 {
 						name = list.DUMMY
 					}
+					bName := []byte(name)
 					logger.Err(d.Storage.Put(d.StorageCtx,
 						storage.Entry{
 							Key:   event.InfoHash.AsString(),
-							Value: name,
+							Value: bName,
 						}, storage.Entry{
 							Key:   v2hash.RawString(),
-							Value: name,
+							Value: bName,
 						}, storage.Entry{
 							Key:   v2hash.TruncateV1().RawString(),
-							Value: name,
+							Value: bName,
 						})).
 						Str("action", "add").
 						Str("file", event.TorrentFilePath).

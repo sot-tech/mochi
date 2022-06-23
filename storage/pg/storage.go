@@ -236,12 +236,7 @@ func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
 	var tx pgx.Tx
 	if tx, err = s.Begin(context.TODO()); err == nil {
 		for _, v := range values {
-			val := v.Value
-			switch tOut := val.(type) {
-			case string:
-				val = []byte(tOut)
-			}
-			if _, err = tx.Exec(context.TODO(), s.Data.AddQuery, ctx, []byte(v.Key), val); err != nil {
+			if _, err = tx.Exec(context.TODO(), s.Data.AddQuery, ctx, []byte(v.Key), v.Value); err != nil {
 				break
 			}
 		}
@@ -265,20 +260,10 @@ func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 	return
 }
 
-func (s *store) Load(ctx string, key string) (out any, err error) {
-	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, []byte(key)); err == nil {
-		defer rows.Close()
-		if rows.Next() {
-			var values []any
-			if values, err = rows.Values(); err == nil && len(values) > 0 {
-				out = values[0]
-				switch tOut := out.(type) {
-				case []byte:
-					out = string(tOut)
-				}
-			}
-		}
+func (s *store) Load(ctx string, key string) (out []byte, err error) {
+	row := s.QueryRow(context.TODO(), s.Data.GetQuery, ctx, []byte(key))
+	if err = row.Scan(&out); errors.Is(err, pgx.ErrNoRows) {
+		err = nil
 	}
 	return
 }

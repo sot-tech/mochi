@@ -200,7 +200,7 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 
 func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 	for _, c := range testData {
-		err := th.st.Put(kvStoreCtx, storage.Entry{Key: c.peer.String(), Value: c.ih.RawString()})
+		err := th.st.Put(kvStoreCtx, storage.Entry{Key: c.peer.String(), Value: []byte(c.ih.RawString())})
 		require.Nil(t, err)
 
 		// check if exist in ctx we put
@@ -242,7 +242,7 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 		keys = append(keys, key)
 		pairs = append(pairs, storage.Entry{
 			Key:   key,
-			Value: c.ih.RawString(),
+			Value: []byte(c.ih.RawString()),
 		})
 	}
 	err := th.st.Put(kvStoreCtx, pairs...)
@@ -260,7 +260,7 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 		out, _ := th.st.Load(kvStoreCtx, p.Key)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
-		require.Equal(t, p.Value, ih.RawString())
+		require.Equal(t, p.Value, []byte(ih.RawString()))
 	}
 
 	err = th.st.Delete(kvStoreCtx, keys...)

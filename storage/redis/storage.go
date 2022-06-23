@@ -158,7 +158,7 @@ func (cfg Config) Validate() (Config, error) {
 	if len(cfg.Addresses) == 0 {
 		validCfg.Addresses = []string{defaultRedisAddress}
 		logger.Warn().
-			Str("name", "Addresses").
+			Str("name", "addresses").
 			Strs("provided", cfg.Addresses).
 			Strs("default", validCfg.Addresses).
 			Msg("falling back to default configuration")
@@ -167,7 +167,7 @@ func (cfg Config) Validate() (Config, error) {
 	if cfg.ReadTimeout <= 0 {
 		validCfg.ReadTimeout = defaultReadTimeout
 		logger.Warn().
-			Str("name", "ReadTimeout").
+			Str("name", "readTimeout").
 			Dur("provided", cfg.ReadTimeout).
 			Dur("default", validCfg.ReadTimeout).
 			Msg("falling back to default configuration")
@@ -176,7 +176,7 @@ func (cfg Config) Validate() (Config, error) {
 	if cfg.WriteTimeout <= 0 {
 		validCfg.WriteTimeout = defaultWriteTimeout
 		logger.Warn().
-			Str("name", "WriteTimeout").
+			Str("name", "writeTimeout").
 			Dur("provided", cfg.WriteTimeout).
 			Dur("default", validCfg.WriteTimeout).
 			Msg("falling back to default configuration")
@@ -185,7 +185,7 @@ func (cfg Config) Validate() (Config, error) {
 	if cfg.ConnectTimeout <= 0 {
 		validCfg.ConnectTimeout = defaultConnectTimeout
 		logger.Warn().
-			Str("name", "ConnectTimeout").
+			Str("name", "connectTimeout").
 			Dur("provided", cfg.ConnectTimeout).
 			Dur("default", validCfg.ConnectTimeout).
 			Msg("falling back to default configuration")
@@ -594,8 +594,8 @@ func (ps *Connection) Contains(ctx string, key string) (bool, error) {
 }
 
 // Load - storage.DataStorage implementation
-func (ps *Connection) Load(ctx string, key string) (v any, err error) {
-	v, err = ps.HGet(context.TODO(), PrefixKey+ctx, key).Result()
+func (ps *Connection) Load(ctx string, key string) (v []byte, err error) {
+	v, err = ps.HGet(context.TODO(), PrefixKey+ctx, key).Bytes()
 	if err != nil && errors.Is(err, redis.Nil) {
 		v, err = nil, nil
 	}

@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	defaultPrometheusReportingInterval = time.Second * 1
-	defaultGarbageCollectionInterval   = time.Minute * 3
-	defaultPeerLifetime                = time.Minute * 30
+	// DefaultPrometheusReportingInterval default interval of statistics collection
+	DefaultPrometheusReportingInterval = time.Second * 1
+	// DefaultGarbageCollectionInterval default interval of stale peers deletions
+	DefaultGarbageCollectionInterval = time.Minute * 3
+	// DefaultPeerLifetime default peer lifetime
+	DefaultPeerLifetime = time.Minute * 30
 )
 
 var (
@@ -40,21 +43,21 @@ type Config struct {
 
 func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.GarbageCollectionInterval <= 0 {
-		gcInterval = defaultGarbageCollectionInterval
+		gcInterval = DefaultGarbageCollectionInterval
 		logger.Warn().
-			Str("name", "GarbageCollectionInterval").
+			Str("name", "garbageCollectionInterval").
 			Dur("provided", c.GarbageCollectionInterval).
-			Dur("default", defaultGarbageCollectionInterval).
+			Dur("default", DefaultGarbageCollectionInterval).
 			Msg("falling back to default configuration")
 	} else {
 		gcInterval = c.GarbageCollectionInterval
 	}
 	if c.PeerLifetime <= 0 {
-		peerTTL = defaultPeerLifetime
+		peerTTL = DefaultPeerLifetime
 		logger.Warn().
-			Str("name", "PeerLifetime").
+			Str("name", "peerLifetime").
 			Dur("provided", c.PeerLifetime).
-			Dur("default", defaultPeerLifetime).
+			Dur("default", DefaultPeerLifetime).
 			Msg("falling back to default configuration")
 	} else {
 		peerTTL = c.PeerLifetime
@@ -64,11 +67,11 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 
 func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 	if c.PrometheusReportingInterval < 0 {
-		statInterval = defaultPrometheusReportingInterval
+		statInterval = DefaultPrometheusReportingInterval
 		logger.Warn().
-			Str("name", "PrometheusReportingInterval").
+			Str("name", "prometheusReportingInterval").
 			Dur("provided", c.PrometheusReportingInterval).
-			Dur("default", defaultPrometheusReportingInterval).
+			Dur("default", DefaultPrometheusReportingInterval).
 			Msg("falling back to default configuration")
 	}
 	return
@@ -77,7 +80,7 @@ func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 // Entry - some key-value pair, used for BulkPut
 type Entry struct {
 	Key   string
-	Value any
+	Value []byte
 }
 
 // Builder is the function used to initialize a new type of PeerStorage.
@@ -105,7 +108,7 @@ type DataStorage interface {
 	Contains(ctx string, key string) (bool, error)
 
 	// Load used to get arbitrary data in specified context by its key
-	Load(ctx string, key string) (any, error)
+	Load(ctx string, key string) ([]byte, error)
 
 	// Delete used to delete arbitrary data in specified context by its keys
 	Delete(ctx string, keys ...string) error
