@@ -59,7 +59,7 @@ var cfg = Config{
 		GetQuery: "SELECT value FROM mo_kv WHERE context=$1 AND name=$2",
 		DelQuery: "DELETE FROM mo_kv WHERE context=$1 AND name=$2",
 	},
-	GCQuery:            "DELETE FROM mo_peers WHERE created > $1",
+	GCQuery:            "DELETE FROM mo_peers WHERE created <= $1",
 	InfoHashCountQuery: "SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers",
 }
 

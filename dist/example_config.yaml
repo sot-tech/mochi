@@ -234,7 +234,7 @@ mochi:
             # query for check if database is alive
             #ping_query: SELECT 1
             # query for garbage collection, expected parameter is timestamp
-            #gc_query: DELETE FROM mo_peers WHERE created > $1
+            #gc_query: DELETE FROM mo_peers WHERE created <= $1
             # The amount of time until a peer is considered stale.
             # To avoid churn, keep this slightly larger than `announce_interval`
             #peer_lifetime: 31m

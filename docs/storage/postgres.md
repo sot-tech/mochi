@@ -140,7 +140,7 @@ storage:
         # Query for check if database is alive (can be omitted)
         ping_query: SELECT 1
         # Query to delete stale peers (peers, which timestamp older than provided argument)
-        gc_query: DELETE FROM mo_peers WHERE created > $1
+        gc_query: DELETE FROM mo_peers WHERE created <= $1
         # The frequency which stale peers are removed.
         gc_interval: 3m
         # Query to get all info hash count (used for statistics).
