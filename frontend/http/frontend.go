@@ -6,11 +6,14 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"net"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/libp2p/go-reuseport"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
@@ -33,6 +36,7 @@ type Config struct {
 	EnableKeepAlive     bool          `cfg:"enable_keepalive"`
 	TLSCertPath         string        `cfg:"tls_cert_path"`
 	TLSKeyPath          string        `cfg:"tls_key_path"`
+	ReusePort           bool          `cfg:"reuse_port"`
 	AnnounceRoutes      []string      `cfg:"announce_routes"`
 	ScrapeRoutes        []string      `cfg:"scrape_routes"`
 	PingRoutes          []string      `cfg:"ping_routes"`
@@ -92,9 +96,11 @@ func (cfg Config) Validate() Config {
 
 // Frontend represents the state of an HTTP BitTorrent Frontend.
 type Frontend struct {
-	srv    *http.Server
-	tlsSrv *http.Server
-	tlsCfg *tls.Config
+	srv      *http.Server
+	srvMu    sync.Mutex
+	tlsSrv   *http.Server
+	tlsSrvMu sync.Mutex
+	tlsCfg   *tls.Config
 
 	logic frontend.TrackerLogic
 	Config
@@ -110,8 +116,10 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 	cfg := provided.Validate()
 
 	f := &Frontend{
-		logic:  logic,
-		Config: cfg,
+		logic:    logic,
+		Config:   cfg,
+		srvMu:    sync.Mutex{},
+		tlsSrvMu: sync.Mutex{},
 	}
 
 	if cfg.Addr == "" && cfg.HTTPSAddr == "" {
@@ -177,12 +185,17 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 func (f *Frontend) Stop() stop.Result {
 	stopGroup := stop.NewGroup()
 
+	f.srvMu.Lock()
 	if f.srv != nil {
 		stopGroup.AddFunc(f.makeStopFunc(f.srv))
 	}
+	f.srvMu.Unlock()
+
+	f.tlsSrvMu.Lock()
 	if f.tlsSrv != nil {
 		stopGroup.AddFunc(f.makeStopFunc(f.tlsSrv))
 	}
+	f.tlsSrvMu.Unlock()
 
 	return stopGroup.Stop()
 }
@@ -211,20 +224,47 @@ func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
 
 	var err error
 	if tls {
-		srv.Addr = f.HTTPSAddr
-		srv.TLSConfig = f.tlsCfg
-		f.tlsSrv = srv
-		err = srv.ListenAndServeTLS("", "")
+		if f.ReusePort {
+			var ln net.Listener
+			if ln, err = reuseport.Listen("tcp", f.HTTPSAddr); err == nil {
+				defer ln.Close()
+				srv.TLSConfig = f.tlsCfg
+				f.tlsSrvMu.Lock()
+				f.tlsSrv = srv
+				f.tlsSrvMu.Unlock()
+				err = srv.ServeTLS(ln, "", "")
+			}
+		} else {
+			srv.Addr = f.HTTPSAddr
+			srv.TLSConfig = f.tlsCfg
+			f.tlsSrvMu.Lock()
+			f.tlsSrv = srv
+			f.tlsSrvMu.Unlock()
+			err = srv.ListenAndServeTLS("", "")
+		}
 	} else {
-		srv.Addr = f.Addr
-		f.srv = srv
-		err = srv.ListenAndServe()
+		if f.ReusePort {
+			var ln net.Listener
+			if ln, err = reuseport.Listen("tcp", f.Addr); err == nil {
+				defer ln.Close()
+				f.srvMu.Lock()
+				f.srv = srv
+				f.srvMu.Unlock()
+				err = srv.Serve(ln)
+			}
+		} else {
+			srv.Addr = f.Addr
+			f.srvMu.Lock()
+			f.srv = srv
+			f.srvMu.Unlock()
+			err = srv.ListenAndServe()
+		}
 	}
 	// Start the HTTP server.
-	if !errors.Is(err, http.ErrServerClosed) {
-		return err
+	if errors.Is(err, http.ErrServerClosed) {
+		err = nil
 	}
-	return nil
+	return err
 }
 
 func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) context.Context {
@@ -308,7 +348,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
-func (f Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (f *Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var err error
 	if r.Method == http.MethodGet {
 		err = f.logic.Ping(context.TODO())

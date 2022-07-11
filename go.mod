@@ -5,7 +5,7 @@ go 1.18
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20220601181242-ac2da19efd60
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc
-	github.com/anacrolix/torrent v1.45.0
+	github.com/anacrolix/torrent v1.46.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/julienschmidt/httprouter v1.3.0
@@ -16,12 +16,13 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.0
+	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/anacrolix/dht/v2 v2.17.0 // indirect
-	github.com/anacrolix/log v0.13.1 // indirect
+	github.com/anacrolix/dht/v2 v2.18.0 // indirect
+	github.com/anacrolix/log v0.13.2-0.20220426014722-7b7d13a55d55 // indirect
 	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/v2 v2.7.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -49,7 +50,7 @@ require (
 	github.com/prometheus/common v0.35.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
-	golang.org/x/sys v0.0.0-20220622161953-175b2fd9d664 // indirect
+	golang.org/x/sys v0.0.0-20220708085239-5a0f0661e09d // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 )

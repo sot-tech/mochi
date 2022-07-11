@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-reuseport"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/frontend/udp/bytepool"
@@ -23,14 +25,17 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
-var logger = log.NewLogger("udp frontend")
-
-var allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+var (
+	logger                          = log.NewLogger("udp frontend")
+	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+	errUnexpectedConnType           = errors.New("unexpected connection type (not UDPConn)")
+)
 
 // Config represents all of the configurable options for a UDP BitTorrent
 // Tracker.
 type Config struct {
 	Addr                string
+	ReusePort           bool          `cfg:"reuse_port"`
 	PrivateKey          string        `cfg:"private_key"`
 	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
 	EnableRequestTiming bool          `cfg:"enable_request_timing"`
@@ -130,12 +135,22 @@ func (t *Frontend) Stop() stop.Result {
 }
 
 // listen resolves the address and binds the server socket.
-func (t *Frontend) listen() error {
-	udpAddr, err := net.ResolveUDPAddr("udp", t.Addr)
-	if err != nil {
-		return err
+func (t *Frontend) listen() (err error) {
+	if t.ReusePort {
+		var ln net.PacketConn
+		if ln, err = reuseport.ListenPacket("udp", t.Addr); err == nil {
+			var isOk bool
+			if t.socket, isOk = ln.(*net.UDPConn); !isOk {
+				err = errUnexpectedConnType
+			}
+		}
+	} else {
+		var udpAddr *net.UDPAddr
+		udpAddr, err = net.ResolveUDPAddr("udp", t.Addr)
+		if err == nil {
+			t.socket, err = net.ListenUDP("udp", udpAddr)
+		}
 	}
-	t.socket, err = net.ListenUDP("udp", udpAddr)
 	return err
 }
 
