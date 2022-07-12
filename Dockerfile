@@ -20,10 +20,10 @@ RUN adduser -D mochi
 
 # Expose a docker interface to our binary.
 # Tracker ports
-EXPOSE 6969:6969/tcp
-EXPOSE 6969:6969/udp
+EXPOSE 6969/tcp
+EXPOSE 6969/udp
 # Metrics port
-EXPOSE 6880:6880/udp
+EXPOSE 6880/udp
 
 # Drop root privileges
 USER mochi
