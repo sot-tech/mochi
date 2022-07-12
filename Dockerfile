@@ -19,7 +19,8 @@ COPY --from=build-env /go/src/github.com/sot-tech/mochi/dist/example_config.yaml
 RUN adduser -D mochi
 
 # Expose a docker interface to our binary.
-EXPOSE 6880 6969
+EXPOSE 6969/tcp
+EXPOSE 6969/udp
 
 # Drop root privileges
 USER mochi
