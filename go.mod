@@ -9,6 +9,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/julienschmidt/httprouter v1.3.0
+	github.com/libp2p/go-reuseport v0.2.0
 	github.com/mendsley/gojwk v0.0.0-20141217222730-4d5ec6e58103
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -16,7 +17,6 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.0
-	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
