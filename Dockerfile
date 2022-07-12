@@ -14,6 +14,7 @@ RUN CGO_ENABLED=0 go install ./cmd/mochi
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY --from=build-env /go/bin/mochi /mochi
+COPY --from=build-env /go/src/github.com/sot-tech/mochi/dist/example_config.yaml /etc/mochi.yaml
 
 RUN adduser -D mochi
 
