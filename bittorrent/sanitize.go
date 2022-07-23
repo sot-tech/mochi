@@ -15,13 +15,13 @@ var (
 
 // SanitizeAnnounce enforces a max and default NumWant and coerces the peer's
 // IP address into the proper format.
-func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) error {
+func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32, filterPrivate bool) error {
 	logger.Trace().Object("request", r).Msg("source announce")
 	if r.Port == 0 {
 		return ErrInvalidPort
 	}
 
-	if !r.Validate() {
+	if !r.Sanitize(filterPrivate) {
 		return ErrInvalidIP
 	}
 
@@ -37,13 +37,13 @@ func SanitizeAnnounce(r *AnnounceRequest, maxNumWant, defaultNumWant uint32) err
 
 // SanitizeScrape enforces a max number of infohashes for a single scrape
 // request and checks if addresses are valid.
-func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32) error {
+func SanitizeScrape(r *ScrapeRequest, maxScrapeInfoHashes uint32, filterPrivate bool) error {
 	logger.Trace().Object("request", r).Msg("source scrape")
 	if len(r.InfoHashes) > int(maxScrapeInfoHashes) {
 		r.InfoHashes = r.InfoHashes[:maxScrapeInfoHashes]
 	}
 
-	if !r.Validate() {
+	if !r.Sanitize(filterPrivate) {
 		return ErrInvalidIP
 	}
 

@@ -9,11 +9,17 @@ import (
 	"net/http/pprof"
 	"net/netip"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/stop"
+)
+
+const (
+	readTimeout  = 5 * time.Second
+	writeTimeout = readTimeout * 2
 )
 
 var (
@@ -68,8 +74,11 @@ func NewServer(addr string) *Server {
 
 	s := &Server{
 		srv: &http.Server{
-			Addr:    addr,
-			Handler: mux,
+			Addr:              addr,
+			Handler:           mux,
+			ReadTimeout:       readTimeout,
+			ReadHeaderTimeout: readTimeout,
+			WriteTimeout:      writeTimeout,
 		},
 	}
 

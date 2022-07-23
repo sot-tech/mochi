@@ -23,7 +23,7 @@ RUN adduser -D mochi
 EXPOSE 6969/tcp
 EXPOSE 6969/udp
 # Metrics port
-EXPOSE 6880/udp
+EXPOSE 6880/tcp
 
 # Drop root privileges
 USER mochi

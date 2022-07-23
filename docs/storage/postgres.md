@@ -116,7 +116,7 @@ storage:
             graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=$1 AND peer_id=$2 AND address=$3 AND port=$4 AND NOT is_seeder
             # Query to get count of peers.
             # Used both for statistics and for scrape (with clause suffix, see next).
-            # Only first returned row values used.
+            # Only first returned row value used.
             count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
             # Predicate part of `count_query` for get count of peers by info hash
             by_info_hash_clause: WHERE info_hash = $1

@@ -50,7 +50,7 @@ The typical control flow of handling announces, in more detail, is:
 #### Configuration
 
 The frontend must be configurable using a single, exported struct. The struct must have YAML annotations. The struct
-must implement `log.Fielder` to be logged on startup.
+must implement `zerolog.LogObjectMarshaler` to be logged on startup.
 
 #### Metrics
 
