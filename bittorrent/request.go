@@ -15,9 +15,12 @@ type RequestAddress struct {
 	Provided bool
 }
 
-// Validate checks if netip.Addr is valid and not unspecified (0.0.0.0)
-func (a RequestAddress) Validate() bool {
-	return a.IsValid() && !a.IsUnspecified()
+// Note: there is no IPv6 broadcast address
+var globalBroadcastIPv4 = netip.AddrFrom4([4]byte{255, 255, 255, 255})
+
+// IsValid checks if netip.Addr is valid, not unspecified and not multicast
+func (a RequestAddress) IsValid() bool {
+	return a.Addr.IsValid() && !(a.IsUnspecified() || a.IsMulticast() || a.Addr == globalBroadcastIPv4)
 }
 
 // MarshalZerologObject writes fields into zerolog event
@@ -50,28 +53,29 @@ func (aa RequestAddresses) Swap(i, j int) {
 // Add checks if provided RequestAddress is valid and adds unmapped
 // netip.Addr to array
 func (aa *RequestAddresses) Add(a RequestAddress) {
-	if a.Validate() {
+	if a.IsValid() {
 		a.Addr = a.Unmap()
 		*aa = append(*aa, a)
 	}
 }
 
-// Validate checks if array is not empty and at least one RequestAddress is valid,
-// then make them unique and sorts with Less rule
-func (aa *RequestAddresses) Validate() bool {
+// Sanitize checks if array is not empty and at least one RequestAddress is valid,
+// then make them unique and sorts with RequestAddresses.Less rule.
+// If ignorePrivate set to true, function will preserve only global unicast and
+// non-private (see netip.IsGlobalUnicast and netip.IsPrivate) addresses.
+// If there are no valid and global (if ignorePrivate checked) addresses in array,
+// function returns false and empty receiver.
+func (aa *RequestAddresses) Sanitize(ignorePrivate bool) bool {
 	if len(*aa) == 0 {
 		return false
 	}
 	uniqueAddresses := make(map[netip.Addr]bool, len(*aa))
 	for _, a := range *aa {
-		if a.Validate() {
+		if a.IsValid() && (!ignorePrivate || a.IsGlobalUnicast() && !a.IsPrivate()) {
 			if provided, found := uniqueAddresses[a.Addr]; !found || !provided && a.Provided {
 				uniqueAddresses[a.Addr] = a.Provided
 			}
 		}
-	}
-	if len(uniqueAddresses) == 0 {
-		return false
 	}
 	*aa = make(RequestAddresses, 0, len(uniqueAddresses))
 	for a, p := range uniqueAddresses {
@@ -80,7 +84,7 @@ func (aa *RequestAddresses) Validate() bool {
 	if len(*aa) > 1 {
 		sort.Sort(*aa)
 	}
-	return true
+	return len(uniqueAddresses) > 0
 }
 
 // GetFirst returns first address from array

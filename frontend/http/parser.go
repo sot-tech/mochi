@@ -110,7 +110,7 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	// Parse the IP address where the client is listening.
 	request.RequestAddresses = requestedIPs(r, qp, opts)
 
-	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
+	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant, opts.FilterPrivateIPs); err != nil {
 		request = nil
 	}
 
@@ -135,7 +135,7 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 		RequestAddresses: requestedIPs(r, qp, opts),
 	}
 
-	err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
+	err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes, opts.FilterPrivateIPs)
 
 	return request, err
 }
@@ -169,9 +169,8 @@ func requestedIPs(r *http.Request, p bittorrent.Params, opts ParseOptions) (addr
 }
 
 func parseRequestAddress(s string, provided bool) (ra bittorrent.RequestAddress) {
-	a, e := netip.ParseAddr(s)
-	if e == nil {
-		ra.Addr, ra.Provided = a, provided
+	if addr, err := netip.ParseAddr(s); err == nil {
+		ra.Addr, ra.Provided = addr, provided
 	}
 	return
 }

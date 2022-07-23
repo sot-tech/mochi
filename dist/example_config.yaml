@@ -73,9 +73,13 @@ mochi:
         ping_routes:
             - "/ping"
 
-        # When enabled, the IP address used to connect to the tracker will not
-        # override the value clients advertise as their IP address.
+        # When not enabled, tracker will use only address from which client connected to tracker.
+        # When enabled, the IP address that clients advertise as their IP address will
+        # be appended as announce candidate.
         allow_ip_spoofing: false
+
+        # When enabled, IPs from private, local and loopback subnets will be ignored
+        filter_private_ips: false
 
         # The HTTP Header containing the IP address of the client.
         # This is only necessary if using a reverse proxy.
@@ -110,9 +114,13 @@ mochi:
         # Disabling this should increase performance/decrease load.
         enable_request_timing: false
 
-        # When enabled, the IP address used to connect to the tracker will not
-        # override the value clients advertise as their IP address.
+        # When not enabled, tracker will use only address from which client connected to tracker.
+        # When enabled, the IP address that clients advertise as their IP address will
+        # be appended as announce candidate.
         allow_ip_spoofing: false
+
+        # When enabled, IPs from private, local and loopback subnets will be ignored
+        filter_private_ips: false
 
         # The maximum number of peers returned for an individual request.
         max_numwant: 100

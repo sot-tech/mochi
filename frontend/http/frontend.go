@@ -214,10 +214,11 @@ func (f *Frontend) makeStopFunc(stopSrv *http.Server) stop.Func {
 // requests until Stop() is called or an error is returned.
 func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
 	srv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  f.ReadTimeout,
-		WriteTimeout: f.WriteTimeout,
-		IdleTimeout:  f.IdleTimeout,
+		Handler:           handler,
+		ReadTimeout:       f.ReadTimeout,
+		ReadHeaderTimeout: f.ReadTimeout,
+		WriteTimeout:      f.WriteTimeout,
+		IdleTimeout:       f.IdleTimeout,
 	}
 
 	srv.SetKeepAlivesEnabled(f.EnableKeepAlive)

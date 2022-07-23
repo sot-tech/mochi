@@ -104,7 +104,7 @@ func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bitto
 		return nil, err
 	}
 
-	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant); err != nil {
+	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant, opts.FilterPrivateIPs); err != nil {
 		request = nil
 	}
 
@@ -207,7 +207,7 @@ func ParseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeReque
 			RequestAddresses: bittorrent.RequestAddresses{bittorrent.RequestAddress{Addr: r.IP}},
 		}
 
-		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes)
+		err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes, opts.FilterPrivateIPs)
 	}
 
 	return request, err

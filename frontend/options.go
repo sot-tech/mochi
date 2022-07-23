@@ -9,6 +9,7 @@ var logger = log.NewLogger("frontend configurator")
 // If AllowIPSpoofing is true, IPs provided via params will be used.
 type ParseOptions struct {
 	AllowIPSpoofing     bool   `cfg:"allow_ip_spoofing"`
+	FilterPrivateIPs    bool   `cfg:"filter_private_ips"`
 	MaxNumWant          uint32 `cfg:"max_numwant"`
 	DefaultNumWant      uint32 `cfg:"default_numwant"`
 	MaxScrapeInfoHashes uint32 `cfg:"max_scrape_infohashes"`
