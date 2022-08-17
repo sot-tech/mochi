@@ -3,23 +3,18 @@
 //
 // JWTs are validated against the standard claims in RFC7519 along with an
 // extra "infohash" claim that verifies the client has access to the Swarm.
-// RS256 keys are asychronously rotated from a provided JWK Set HTTP endpoint.
+// RS256 keys are asynchronously rotated from a provided JWK Set HTTP endpoint.
 package jwt
 
 import (
 	"context"
-	"crypto"
-	"encoding/hex"
-	"encoding/json"
+	"crypto/subtle"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
-	jc "github.com/SermoDigital/jose/crypto"
-	"github.com/SermoDigital/jose/jws"
-	"github.com/SermoDigital/jose/jwt"
-	"github.com/mendsley/gojwk"
+	"github.com/MicahParks/keyfunc"
+	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
@@ -44,11 +39,11 @@ var (
 	// ErrInvalidJWT is returned when a JWT fails to verify.
 	ErrInvalidJWT = bittorrent.ClientError("unapproved request: invalid jwt")
 
-	errInvalidInfoHashClaim = errors.New("claim \"infohash\" is invalid")
+	errInvalidInfoHashClaim = errors.New("token has invalid \"infohash\" claim")
 
-	errInvalidKid = errors.New("invalid kid")
+	errJWKsNotSet = errors.New("required parameters not provided: Issuer, Audience and/or JWKSetURL")
 
-	errUnknownKidSigner = errors.New("signed by unknown kid")
+	hmacAlgorithms = jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name, jwt.SigningMethodHS384.Name, jwt.SigningMethodHS512.Name})
 )
 
 // Config represents all the values required by this middleware to fetch JWKs
@@ -61,86 +56,53 @@ type Config struct {
 }
 
 type hook struct {
-	cfg        Config
-	publicKeys map[string]crypto.PublicKey
-	closing    chan struct{}
+	cfg  Config
+	jwks *keyfunc.JWKS
 }
 
-func build(options conf.MapConfig, _ storage.PeerStorage) (middleware.Hook, error) {
+type claims struct {
+	jwt.RegisteredClaims
+	InfoHash string `json:"infohash,omitempty"`
+}
+
+func build(options conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg Config
 
-	if err := options.Unmarshal(&cfg); err != nil {
+	if err = options.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("middleware %s: %w", Name, err)
 	}
 
 	logger.Debug().Object("options", options).Msg("creating new JWT middleware")
-	h := &hook{
-		cfg:        cfg,
-		publicKeys: map[string]crypto.PublicKey{},
-		closing:    make(chan struct{}),
-	}
 
-	logger.Debug().Msg("performing initial fetch of JWKs")
-	if err := h.updateKeys(); err != nil {
-		return nil, fmt.Errorf("failed to fetch initial JWK Set: %w", err)
-	}
-
-	go func() {
-		for {
-			select {
-			case <-h.closing:
-				return
-			case <-time.After(cfg.JWKUpdateInterval):
-				logger.Debug().Msg("performing fetch of JWKs")
-				_ = h.updateKeys()
+	if len(cfg.JWKSetURL) > 0 {
+		var jwks *keyfunc.JWKS
+		jwks, err = keyfunc.Get(cfg.JWKSetURL, keyfunc.Options{
+			Ctx: context.Background(),
+			RefreshErrorHandler: func(err error) {
+				logger.Error().Err(err).Msg("error occurred while updating JWKs")
+			},
+			RefreshInterval:   cfg.JWKUpdateInterval,
+			RefreshUnknownKID: true,
+		})
+		if err == nil {
+			h = &hook{
+				cfg:  cfg,
+				jwks: jwks,
 			}
 		}
-	}()
-
-	return h, nil
-}
-
-func (h *hook) updateKeys() error {
-	resp, err := http.Get(h.cfg.JWKSetURL)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to fetch JWK Set")
-		return err
-	}
-	defer resp.Body.Close()
-	var parsedJWKs gojwk.Key
-	err = json.NewDecoder(resp.Body).Decode(&parsedJWKs)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to decode JWK JSON")
-		return err
+	} else {
+		err = errJWKsNotSet
 	}
 
-	keys := map[string]crypto.PublicKey{}
-	for _, parsedJWK := range parsedJWKs.Keys {
-		publicKey, err := parsedJWK.DecodePublicKey()
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to decode JWK into public key")
-			return err
-		}
-		keys[parsedJWK.Kid] = publicKey
-	}
-	h.publicKeys = keys
-
-	logger.Debug().Msg("successfully fetched JWK Set")
-	return nil
+	return
 }
 
 func (h *hook) Stop() stop.Result {
 	logger.Debug().Msg("attempting to shutdown JWT middleware")
-	select {
-	case <-h.closing:
-		return stop.AlreadyStopped
-	default:
-	}
 	c := make(stop.Channel)
-	go func() {
-		close(h.closing)
-		c.Done()
-	}()
+	if h.jwks != nil {
+		go h.jwks.EndBackground()
+	}
 	return c.Result()
 }
 
@@ -154,7 +116,11 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 		return ctx, ErrMissingJWT
 	}
 
-	if err := validateJWT(req.InfoHash, []byte(jwtParam), h.cfg.Issuer, h.cfg.Audience, h.publicKeys); err != nil {
+	if errs := h.validateJWT(req.InfoHash, jwtParam); len(errs) > 0 {
+		logger.Info().
+			Errs("errors", errs).
+			Object("source", req.RequestPeer).
+			Msg("JWT validation failed")
 		return ctx, ErrInvalidJWT
 	}
 
@@ -166,70 +132,48 @@ func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ 
 	return ctx, nil
 }
 
-func validateJWT(ih bittorrent.InfoHash, jwtBytes []byte, cfgIss, cfgAud string, publicKeys map[string]crypto.PublicKey) error {
-	parsedJWT, err := jws.ParseJWT(jwtBytes)
+func (h *hook) validateJWT(ih bittorrent.InfoHash, rawJwt string) []error {
+	// KeyFunc will check KID, Parse will check ALG and signature
+	errs := make([]error, 0, 4)
+	token, err := jwt.ParseWithClaims(rawJwt, claims{}, h.jwks.Keyfunc, hmacAlgorithms)
 	if err != nil {
-		return err
+		return []error{err}
 	}
 
-	claims := parsedJWT.Claims()
-	if iss, ok := claims.Issuer(); !ok || iss != cfgIss {
+	if err = token.Claims.Valid(); err != nil {
+		errs = append(errs, err)
+	}
+
+	claims := token.Claims.(claims)
+
+	if !claims.VerifyIssuer(h.cfg.Issuer, true) {
 		logger.Debug().
-			Bool("exists", ok).
-			Str("claim", iss).
-			Str("config", cfgIss).
+			Str("provided", claims.Issuer).
+			Str("required", h.cfg.Issuer).
 			Msg("unequal or missing issuer when validating JWT")
-		return jwt.ErrInvalidISSClaim
+		errs = append(errs, jwt.ErrTokenInvalidIssuer)
 	}
 
-	if auds, ok := claims.Audience(); !ok || !in(cfgAud, auds) {
+	if !claims.VerifyAudience(h.cfg.Audience, true) {
 		logger.Debug().
-			Bool("exists", ok).
-			Strs("claim", auds).
-			Str("config", cfgAud).
+			Strs("provided", claims.Audience).
+			Str("required", h.cfg.Audience).
 			Msg("unequal or missing audience when validating JWT")
-		return jwt.ErrInvalidAUDClaim
+		errs = append(errs, jwt.ErrTokenInvalidAudience)
 	}
 
-	ihHex := hex.EncodeToString([]byte(ih))
-	if ihClaim, ok := claims.Get("infohash").(string); !ok || ihClaim != ihHex {
-		logger.Debug().
-			Bool("exists", ok).
-			Str("claim", ihClaim).
-			Str("request", ihHex).
-			Msg("unequal or missing infohash when validating JWT")
-		return errInvalidInfoHashClaim
-	}
-
-	parsedJWS := parsedJWT.(jws.JWS)
-	kid, ok := parsedJWS.Protected().Get("kid").(string)
-	if !ok {
-		logger.Debug().
-			Bool("exists", ok).
-			Str("claim", kid).
-			Msg("missing kid when validating JWT")
-		return errInvalidKid
-	}
-	publicKey, ok := publicKeys[kid]
-	if !ok {
-		logger.Debug().Str("claim", kid).Msg("missing public key forkid when validating JWT")
-		return errUnknownKidSigner
-	}
-
-	err = parsedJWS.Verify(publicKey, jc.SigningMethodRS256)
+	providedIh, err := bittorrent.NewInfoHash(claims.InfoHash)
 	if err != nil {
-		logger.Debug().Err(err).Msg("failed to verify signature of JWT")
-		return err
+		errs = append(errs, err)
+	}
+	if subtle.ConstantTimeCompare([]byte(providedIh), []byte(ih)) != 0 {
+		logger.Error().
+			Err(err).
+			Stringer("provided", providedIh).
+			Stringer("required", ih).
+			Msg("invalid or unequal info hash when validating JWT")
+		errs = append(errs, errInvalidInfoHashClaim)
 	}
 
-	return nil
-}
-
-func in(x string, xs []string) bool {
-	for _, y := range xs {
-		if x == y {
-			return true
-		}
-	}
-	return false
+	return errs
 }
