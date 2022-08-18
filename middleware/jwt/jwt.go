@@ -8,7 +8,6 @@ package jwt
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
@@ -43,7 +42,13 @@ var (
 
 	errJWKsNotSet = errors.New("required parameters not provided: Issuer, Audience and/or JWKSetURL")
 
-	hmacAlgorithms = jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name, jwt.SigningMethodHS384.Name, jwt.SigningMethodHS512.Name})
+	hmacAlgorithms = jwt.WithValidMethods([]string{
+		jwt.SigningMethodHS256.Alg(), jwt.SigningMethodHS384.Alg(), jwt.SigningMethodHS512.Alg(),
+		jwt.SigningMethodRS256.Alg(), jwt.SigningMethodRS384.Alg(), jwt.SigningMethodRS512.Alg(),
+		jwt.SigningMethodPS256.Alg(), jwt.SigningMethodPS384.Alg(), jwt.SigningMethodPS512.Alg(),
+		jwt.SigningMethodES256.Alg(), jwt.SigningMethodES384.Alg(), jwt.SigningMethodES512.Alg(),
+		jwt.SigningMethodEdDSA.Alg(),
+	})
 )
 
 // Config represents all the values required by this middleware to fetch JWKs
@@ -135,7 +140,8 @@ func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ 
 func (h *hook) validateJWT(ih bittorrent.InfoHash, rawJwt string) []error {
 	// KeyFunc will check KID, Parse will check ALG and signature
 	errs := make([]error, 0, 4)
-	token, err := jwt.ParseWithClaims(rawJwt, claims{}, h.jwks.Keyfunc, hmacAlgorithms)
+	claims := new(claims)
+	token, err := jwt.ParseWithClaims(rawJwt, claims, h.jwks.Keyfunc, hmacAlgorithms)
 	if err != nil {
 		return []error{err}
 	}
@@ -143,8 +149,6 @@ func (h *hook) validateJWT(ih bittorrent.InfoHash, rawJwt string) []error {
 	if err = token.Claims.Valid(); err != nil {
 		errs = append(errs, err)
 	}
-
-	claims := token.Claims.(claims)
 
 	if !claims.VerifyIssuer(h.cfg.Issuer, true) {
 		logger.Debug().
@@ -166,8 +170,8 @@ func (h *hook) validateJWT(ih bittorrent.InfoHash, rawJwt string) []error {
 	if err != nil {
 		errs = append(errs, err)
 	}
-	if subtle.ConstantTimeCompare([]byte(providedIh), []byte(ih)) != 0 {
-		logger.Error().
+	if providedIh != ih {
+		logger.Debug().
 			Err(err).
 			Stringer("provided", providedIh).
 			Stringer("required", ih).
