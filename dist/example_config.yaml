@@ -264,10 +264,13 @@ mochi:
     prehooks:
     #        -   name: jwt
     #            options:
+    #                header: "authorization"
     #                issuer: "https://issuer.com"
     #                audience: "https://some.issuer.com"
     #                jwk_set_url: "https://issuer.com/keys"
     #                jwk_set_update_interval: 5m
+    #                handle_announce: true
+    #                handle_scrape: false
     #
     #        -   name: client approval
     #            options:

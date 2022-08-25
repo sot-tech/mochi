@@ -101,7 +101,7 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	}))
 	defer s.Close()
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims{
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, announceClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "CN=test",
 			Subject:   "CN=test",
@@ -118,6 +118,7 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	require.Nil(t, err)
 	//goland:noinspection HttpUrlsUsage
 	cfg := conf.MapConfig{
+		"handle_announce":         true,
 		"issuer":                  "CN=test",
 		"audience":                "test",
 		"jwk_set_url":             "http://" + s.Listener.Addr().String(),
@@ -126,7 +127,7 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	h, err := build(cfg, nil)
 	require.Nil(t, err)
 	data := make(map[string]string)
-	data["jwt"] = tokenString
+	data[authorizationHeader] = bearerAuthPrefix + tokenString
 	_, err = h.HandleAnnounce(context.Background(), &bittorrent.AnnounceRequest{
 		InfoHash:    infoHash,
 		RequestPeer: bittorrent.RequestPeer{},
@@ -143,7 +144,7 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 
 	// now we wll use HMAC-SHA256 with invalid random key
 	// all errors should be nil except announce request
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, announceClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "CN=test",
 			Subject:   "CN=test",
@@ -162,6 +163,8 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 	require.Nil(t, err)
 	//goland:noinspection HttpUrlsUsage
 	cfg := conf.MapConfig{
+		"handle_announce":         true,
+		"header":                  "jwt",
 		"issuer":                  "CN=test",
 		"audience":                "test",
 		"jwk_set_url":             "http://" + s.Listener.Addr().String(),
@@ -177,4 +180,45 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 		Params:      &params{data: data},
 	}, nil)
 	require.NotNil(t, err)
+}
+
+func TestHook_HandleScrapeValid(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(jwksData)
+	}))
+	defer s.Close()
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, scrapeClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "CN=test",
+			Subject:   "CN=test",
+			Audience:  []string{"test"},
+			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+			ID:        strconv.FormatInt(rand.Int63(), 16),
+		},
+		InfoHashes: []string{infoHash.String()},
+	})
+
+	token.Header["kid"] = jwksData.Keys[0].KeyID
+	tokenString, err := token.SignedString(privKey)
+	require.Nil(t, err)
+	//goland:noinspection HttpUrlsUsage
+	cfg := conf.MapConfig{
+		"handle_scrape":           true,
+		"issuer":                  "CN=test",
+		"audience":                "test",
+		"jwk_set_url":             "http://" + s.Listener.Addr().String(),
+		"jwk_set_update_interval": time.Minute,
+	}
+	h, err := build(cfg, nil)
+	require.Nil(t, err)
+	data := make(map[string]string)
+	data[authorizationHeader] = bearerAuthPrefix + tokenString
+	_, err = h.HandleScrape(context.Background(), &bittorrent.ScrapeRequest{
+		InfoHashes:       bittorrent.InfoHashes{infoHash},
+		RequestAddresses: bittorrent.RequestAddresses{},
+		Params:           &params{data: data},
+	}, nil)
+	require.Nil(t, err)
 }
