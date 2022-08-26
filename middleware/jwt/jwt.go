@@ -42,7 +42,7 @@ var (
 	// ErrInvalidJWT is returned when a JWT fails to verify.
 	ErrInvalidJWT = bittorrent.ClientError("unapproved request: invalid jwt")
 
-	errJWKsNotSet = errors.New("required parameters not provided: Issuer, Audience and/or JWKSetURL")
+	errJWKsNotSet = errors.New("required parameters not provided: Issuer/Audience/JWKSetURL")
 
 	hmacAlgorithms = jwt.WithValidMethods([]string{
 		jwt.SigningMethodHS256.Alg(), jwt.SigningMethodHS384.Alg(), jwt.SigningMethodHS512.Alg(),
@@ -264,9 +264,6 @@ func (h *hook) getJWTString(params bittorrent.Params) (jwt string) {
 }
 
 func (h *hook) validateBaseJWT(jwtParam string, claims verifiableClaims) (errs []error) {
-	if strings.HasPrefix(strings.ToLower(jwtParam), bearerAuthPrefix) {
-		jwtParam = jwtParam[len(bearerAuthPrefix):]
-	}
 	if _, err := jwt.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc, hmacAlgorithms); err != nil {
 		errs = append(errs, err)
 	}
