@@ -123,18 +123,29 @@ func (h *hook) Stop() stop.Result {
 	return c.Result()
 }
 
-type compatibleClaims interface {
-	Valid() error
-	ToRegisteredClaims() jwt.RegisteredClaims
+type verifiableClaims interface {
+	jwt.Claims
+	VerifyIssuer(iss string, req bool) bool
+	GetIssuer() string
+	VerifyAudience(aud string, req bool) bool
+	GetAudience() []string
+}
+
+type registeredClaimsWrapper struct {
+	jwt.RegisteredClaims
+}
+
+func (rc registeredClaimsWrapper) GetIssuer() string {
+	return rc.Issuer
+}
+
+func (rc registeredClaimsWrapper) GetAudience() []string {
+	return rc.Audience
 }
 
 type announceClaims struct {
-	jwt.RegisteredClaims
+	registeredClaimsWrapper
 	InfoHash string `json:"infohash,omitempty"`
-}
-
-func (ac announceClaims) ToRegisteredClaims() jwt.RegisteredClaims {
-	return ac.RegisteredClaims
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
@@ -143,7 +154,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 	}
 	var err error
 
-	if jwtParam := h.getJWT(req.Params); len(jwtParam) == 0 {
+	if jwtParam := h.getJWTString(req.Params); len(jwtParam) == 0 {
 		err = ErrMissingJWT
 	} else {
 		claims := new(announceClaims)
@@ -159,15 +170,15 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 				logger.Info().
 					Err(err).
 					Object("source", req.RequestPeer).
-					Msg("InfoHash claim parse failed")
+					Msg("'infohash' claim parse failed")
 				err = ErrInvalidJWT
 			}
 			if req.InfoHash != claimIH {
 				logger.Info().
-					Stringer("provided", claimIH).
-					Stringer("required", req.InfoHash).
-					Object("source", req.RequestPeer).
-					Msg("InfoHash claim not equals to request InfoHash")
+					Stringer("claimInfoHash", claimIH).
+					Stringer("requestInfoHash", req.InfoHash).
+					Object("peer", req.RequestPeer).
+					Msg("unequal 'infohash' claim when validating JWT")
 				err = ErrInvalidJWT
 			}
 		}
@@ -177,12 +188,8 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 }
 
 type scrapeClaims struct {
-	jwt.RegisteredClaims
+	registeredClaimsWrapper
 	InfoHashes []string `json:"infohashes,omitempty"`
-}
-
-func (sc scrapeClaims) ToRegisteredClaims() jwt.RegisteredClaims {
-	return sc.RegisteredClaims
 }
 
 func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
@@ -192,7 +199,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 
 	var err error
 
-	if jwtParam := h.getJWT(req.Params); len(jwtParam) == 0 {
+	if jwtParam := h.getJWTString(req.Params); len(jwtParam) == 0 {
 		err = ErrMissingJWT
 	} else {
 		claims := new(scrapeClaims)
@@ -210,8 +217,8 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 				} else {
 					logger.Info().
 						Err(err).
-						Array("source", req.RequestAddresses).
-						Msg("InfoHash claim parse failed")
+						Array("addresses", req.RequestAddresses).
+						Msg("'infohashes' claim parse failed")
 				}
 			}
 			eq := len(req.InfoHashes) == len(claimIHs)
@@ -232,10 +239,10 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 			}
 			if !eq {
 				logger.Info().
-					Array("provided", claimIHs).
-					Array("required", req.InfoHashes).
-					Array("source", req.RequestAddresses).
-					Msg("InfoHashes claim not equals to request InfoHashes")
+					Array("claimInfoHashes", claimIHs).
+					Array("requestInfoHashes", req.InfoHashes).
+					Array("addresses", req.RequestAddresses).
+					Msg("unequal 'infohashes' claim when validating JWT")
 				err = ErrInvalidJWT
 			}
 		}
@@ -244,7 +251,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 	return ctx, err
 }
 
-func (h *hook) getJWT(params bittorrent.Params) (jwt string) {
+func (h *hook) getJWTString(params bittorrent.Params) (jwt string) {
 	if params != nil {
 		var found bool
 		if jwt, found = params.String(h.cfg.Header); found {
@@ -256,7 +263,7 @@ func (h *hook) getJWT(params bittorrent.Params) (jwt string) {
 	return
 }
 
-func (h *hook) validateBaseJWT(jwtParam string, claims compatibleClaims) (errs []error) {
+func (h *hook) validateBaseJWT(jwtParam string, claims verifiableClaims) (errs []error) {
 	if strings.HasPrefix(strings.ToLower(jwtParam), bearerAuthPrefix) {
 		jwtParam = jwtParam[len(bearerAuthPrefix):]
 	}
@@ -266,25 +273,17 @@ func (h *hook) validateBaseJWT(jwtParam string, claims compatibleClaims) (errs [
 	if err := claims.Valid(); err != nil {
 		errs = append(errs, err)
 	}
-	if errs0 := h.validateRegisteredClaims(claims); len(errs0) > 0 {
-		errs = append(errs, errs0...)
-	}
-	return
-}
 
-func (h *hook) validateRegisteredClaims(cl compatibleClaims) (errs []error) {
-	rc := cl.ToRegisteredClaims()
-	if !rc.VerifyIssuer(h.cfg.Issuer, true) {
+	if !claims.VerifyIssuer(h.cfg.Issuer, true) {
 		logger.Debug().
-			Str("provided", rc.Issuer).
+			Str("provided", claims.GetIssuer()).
 			Str("required", h.cfg.Issuer).
 			Msg("unequal or missing issuer when validating JWT")
 		errs = append(errs, jwt.ErrTokenInvalidIssuer)
 	}
-
-	if !rc.VerifyAudience(h.cfg.Audience, true) {
+	if !claims.VerifyAudience(h.cfg.Audience, true) {
 		logger.Debug().
-			Strs("provided", rc.Audience).
+			Strs("provided", claims.GetAudience()).
 			Str("required", h.cfg.Audience).
 			Msg("unequal or missing audience when validating JWT")
 		errs = append(errs, jwt.ErrTokenInvalidAudience)

@@ -53,12 +53,10 @@ type JWKSKeys struct {
 	Keys []JWKSKey `json:"keys"`
 }
 
-type params struct {
-	data map[string]string
-}
+type params map[string]string
 
 func (p params) String(key string) (out string, found bool) {
-	out, found = p.data[key]
+	out, found = p[key]
 	return
 }
 
@@ -70,9 +68,7 @@ func (params) RawQuery() (s string) {
 	return
 }
 
-func (params) MarshalZerologObject(*zerolog.Event) {
-	return
-}
+func (params) MarshalZerologObject(*zerolog.Event) {}
 
 func init() {
 	_ = log.ConfigureLogger("", "info", false, false)
@@ -102,13 +98,15 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	defer s.Close()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, announceClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+		registeredClaimsWrapper: registeredClaimsWrapper{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Issuer:    "CN=test",
+				Subject:   "CN=test",
+				Audience:  []string{"test"},
+				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+				ID:        strconv.FormatInt(rand.Int63(), 16),
+			},
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -126,12 +124,12 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	}
 	h, err := build(cfg, nil)
 	require.Nil(t, err)
-	data := make(map[string]string)
+	data := make(params)
 	data[authorizationHeader] = bearerAuthPrefix + tokenString
 	_, err = h.HandleAnnounce(context.Background(), &bittorrent.AnnounceRequest{
 		InfoHash:    infoHash,
 		RequestPeer: bittorrent.RequestPeer{},
-		Params:      &params{data: data},
+		Params:      data,
 	}, nil)
 	require.Nil(t, err)
 }
@@ -145,13 +143,15 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 	// now we wll use HMAC-SHA256 with invalid random key
 	// all errors should be nil except announce request
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, announceClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+		registeredClaimsWrapper: registeredClaimsWrapper{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Issuer:    "CN=test",
+				Subject:   "CN=test",
+				Audience:  []string{"test"},
+				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+				ID:        strconv.FormatInt(rand.Int63(), 16),
+			},
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -172,12 +172,12 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 	}
 	h, err := build(cfg, nil)
 	require.Nil(t, err)
-	data := make(map[string]string)
+	data := make(params)
 	data["jwt"] = tokenString
 	_, err = h.HandleAnnounce(context.Background(), &bittorrent.AnnounceRequest{
 		InfoHash:    infoHash,
 		RequestPeer: bittorrent.RequestPeer{},
-		Params:      &params{data: data},
+		Params:      data,
 	}, nil)
 	require.NotNil(t, err)
 }
@@ -188,16 +188,27 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 	}))
 	defer s.Close()
 
+	ihs := make(bittorrent.InfoHashes, rand.Intn(10)+1)
+	ihss := make([]string, len(ihs))
+	for i := range ihs {
+		bb := []byte(infoHash)
+		bb[i] = byte(i)
+		ihs[i] = bittorrent.InfoHash(bb)
+		ihss[i] = ihs[i].String()
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, scrapeClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+		registeredClaimsWrapper: registeredClaimsWrapper{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Issuer:    "CN=test",
+				Subject:   "CN=test",
+				Audience:  []string{"test"},
+				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+				ID:        strconv.FormatInt(rand.Int63(), 16),
+			},
 		},
-		InfoHashes: []string{infoHash.String()},
+		InfoHashes: ihss,
 	})
 
 	token.Header["kid"] = jwksData.Keys[0].KeyID
@@ -213,12 +224,12 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 	}
 	h, err := build(cfg, nil)
 	require.Nil(t, err)
-	data := make(map[string]string)
+	data := make(params)
 	data[authorizationHeader] = bearerAuthPrefix + tokenString
 	_, err = h.HandleScrape(context.Background(), &bittorrent.ScrapeRequest{
-		InfoHashes:       bittorrent.InfoHashes{infoHash},
+		InfoHashes:       ihs,
 		RequestAddresses: bittorrent.RequestAddresses{},
-		Params:           &params{data: data},
+		Params:           data,
 	}, nil)
 	require.Nil(t, err)
 }
