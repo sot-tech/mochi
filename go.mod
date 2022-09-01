@@ -7,7 +7,7 @@ require (
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc
 	github.com/anacrolix/torrent v1.46.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/jackc/pgx/v4 v4.16.1
+	github.com/jackc/pgx/v4 v4.17.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/libp2p/go-reuseport v0.2.0
 	github.com/mendsley/gojwk v0.0.0-20141217222730-4d5ec6e58103
@@ -34,13 +34,13 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.12.1 // indirect
+	github.com/jackc/pgconn v1.13.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
+	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/pgtype v1.11.0 // indirect
-	github.com/jackc/puddle v1.2.1 // indirect
+	github.com/jackc/pgtype v1.12.0 // indirect
+	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
