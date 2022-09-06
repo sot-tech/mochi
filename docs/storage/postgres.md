@@ -47,7 +47,7 @@ Implementation expects next data types:
 	* value - byte array (`bytea`)
 
 (*) in KV table `name` present as byte array because of possibility
-to place hash as _raw_ string, which is not supported by PostgreSQL. 
+to place hash as _raw_ string, which is not supported by PostgreSQL.
 
 Sample script to create tables:
 

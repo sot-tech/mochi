@@ -1,3 +1,5 @@
+// Package main contains End-to-End MoChi check implementation.
+// not used in production
 package main
 
 import (

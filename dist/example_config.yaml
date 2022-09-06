@@ -154,58 +154,58 @@ mochi:
             # are collected and posted to Prometheus.
             prometheus_reporting_interval: 1s
 
-    # This block defines configuration used for redis storage.
-    #storage:
-        #name: redis
-        #config:
-            # The frequency which stale peers are removed.
-            # This balances between
-            # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
-            # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
-            #gc_interval: 3m
+              # This block defines configuration used for redis storage.
+              #storage:
+              #name: redis
+              #config:
+              # The frequency which stale peers are removed.
+              # This balances between
+              # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+              # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+              #gc_interval: 3m
 
-            # The interval at which metrics about the number of infohashes and peers
-            # are collected and posted to Prometheus.
-            #prometheus_reporting_interval: 1s
+              # The interval at which metrics about the number of infohashes and peers
+              # are collected and posted to Prometheus.
+              #prometheus_reporting_interval: 1s
 
-            # The amount of time until a peer is considered stale.
-            # To avoid churn, keep this slightly larger than `announce_interval`
-            #peer_lifetime: 31m
+              # The amount of time until a peer is considered stale.
+              # To avoid churn, keep this slightly larger than `announce_interval`
+              #peer_lifetime: 31m
 
-            # The addresses of redis storage.
-            # If neither sentinel not cluster switched,
-            # only first address used
-            #addresses: ["127.0.0.1:6379"]
+              # The addresses of redis storage.
+              # If neither sentinel not cluster switched,
+              # only first address used
+              #addresses: ["127.0.0.1:6379"]
 
-            # Database to be selected after connecting to the server.
-            #db: 0
+              # Database to be selected after connecting to the server.
+              #db: 0
 
-            # Maximum number of socket connections, default is 10 per CPU
-            #pool_size: 10
+              # Maximum number of socket connections, default is 10 per CPU
+              #pool_size: 10
 
-            # Use the specified login/username to authenticate the current connection
-            #login: ""
+              # Use the specified login/username to authenticate the current connection
+              #login: ""
 
-            # Optional password
-            #password: ""
+              # Optional password
+              #password: ""
 
-            # Connect to sentinel nodes
-            #sentinel: false
+              # Connect to sentinel nodes
+              #sentinel: false
 
-            # The master name
-            #sentinel_master: ""
+              # The master name
+              #sentinel_master: ""
 
-            # Connect to the redis cluster
-            #cluster: false
+              # Connect to the redis cluster
+              #cluster: false
 
-            # The timeout for reading a command reply from redis.
-            #read_timeout: 15s
+              # The timeout for reading a command reply from redis.
+              #read_timeout: 15s
 
-            # The timeout for writing a command to redis.
-            #write_timeout: 15s
+              # The timeout for writing a command to redis.
+              #write_timeout: 15s
 
-            # Dial timeout for establishing new connections.
-            #connect_timeout: 15s
+              # Dial timeout for establishing new connections.
+              #connect_timeout: 15s
 
               # This block defines configuration used for PostgreSQL storage.
               # example `mo_peers` table structure:
@@ -242,7 +242,7 @@ mochi:
               #data:
               # expected parameters: 1 - context (varchar), 2 - name (bytea), 3 - value (bytea)
               #add_query: INSERT INTO mo_kv VALUES($1, $2, $3) ON CONFLICT (context, name) DO NOTHING
-              #del_query: DELETE FROM mo_kv WHERE context=$1 AND name=$2
+            #del_query: DELETE FROM mo_kv WHERE context=$1 AND name=$2
             #get_query: SELECT value FROM mo_kv WHERE context=$1 AND name=$2
             # query for check if database is alive
             #ping_query: SELECT 1

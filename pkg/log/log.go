@@ -32,7 +32,8 @@ func init() {
 
 // ConfigureLogger initializes root and all child loggers.
 // NOTE: this function MUST be called before any child log call
-//  otherwise any goroutine, which uses logger will wait logger initialization
+//
+//	otherwise any goroutine, which uses logger will wait logger initialization
 func ConfigureLogger(output, level string, formatted, colored bool) (err error) {
 	lvl := zerolog.WarnLevel
 	output = strings.ToLower(output)
@@ -298,7 +299,8 @@ func Close() {
 
 // NewLogger creates child logger with specified component name
 // NOTE: root logger MUST be initialized with ConfigureLogger
-//  before any logger call
+//
+//	before any logger call
 func NewLogger(component string) *Logger {
 	return &Logger{comp: component}
 }

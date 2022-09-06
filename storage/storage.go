@@ -124,12 +124,12 @@ type DataStorage interface {
 // Implementations of the PeerStorage interface must do the following in addition
 // to implementing the methods of the interface in the way documented:
 //
-// - Implement a garbage-collection strategy that ensures stale data is removed.
+//   - Implement a garbage-collection strategy that ensures stale data is removed.
 //     For example, a timestamp on each InfoHash/Peer combination can be used
 //     to track the last activity for that Peer. The entire database can then
 //     be scanned periodically and too old Peers removed. The intervals and
 //     durations involved should be configurable.
-// - IPv4 and IPv6 swarms may be isolated from each other.
+//   - IPv4 and IPv6 swarms may be isolated from each other.
 //
 // Implementations can be tested against this interface using the tests in
 // storage_test.go and the benchmarks in storage_bench.go.

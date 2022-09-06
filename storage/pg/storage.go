@@ -1,3 +1,6 @@
+// Package pg implements PostgreSQL-like storage interface.
+// This implementation does not use ORM and relies on database structure
+// and queries provided in configuration.
 package pg
 
 import (
