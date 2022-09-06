@@ -1,5 +1,8 @@
 ---
 run:
+    # mochi in not written with generics (a.t.m),
+    # so we can check with 1.17
+    go: "1.17"
     timeout: "5m"
 output:
     sort-results: true
@@ -17,7 +20,6 @@ linters:
     enable:
         - "bidichk"
         - "bodyclose"
-        - "deadcode"
         - "errcheck"
         - "errname"
         - "errorlint"
@@ -27,7 +29,6 @@ linters:
         - "gosec"
         - "gosimple"
         - "govet"
-        - "ifshort"
         - "importas"
         - "ineffassign"
         - "makezero"
@@ -36,13 +37,11 @@ linters:
         - "revive"
         - "rowserrcheck"
         - "staticcheck"
-        - "structcheck"
         - "stylecheck"
         - "tenv"
         - "typecheck"
         - "unconvert"
         - "unused"
-        - "varcheck"
         - "wastedassign"
         - "whitespace"
 issues:

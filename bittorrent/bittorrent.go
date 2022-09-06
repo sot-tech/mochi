@@ -8,11 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 

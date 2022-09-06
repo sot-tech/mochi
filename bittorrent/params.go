@@ -180,15 +180,15 @@ func parseQuery(query string) (q *QueryParams, err error) {
 
 // String returns a string parsed from a query. Every key can be returned as a
 // string because they are encoded in the URL as strings.
-func (qp *QueryParams) String(key string) (string, bool) {
-	value, ok := qp.params[key]
+func (qp QueryParams) String(key string) (string, bool) {
+	value, ok := qp.params[strings.ToLower(key)]
 	return value, ok
 }
 
 // Uint returns an uint parsed from a query. After being called, it is safe to
 // cast the uint64 to your desired length.
-func (qp *QueryParams) Uint(key string, bitSize int) (uint64, error) {
-	str, exists := qp.params[key]
+func (qp QueryParams) Uint(key string, bitSize int) (uint64, error) {
+	str, exists := qp.params[strings.ToLower(key)]
 	if !exists {
 		return 0, ErrKeyNotFound
 	}
@@ -197,17 +197,17 @@ func (qp *QueryParams) Uint(key string, bitSize int) (uint64, error) {
 }
 
 // InfoHashes returns a list of requested infohashes.
-func (qp *QueryParams) InfoHashes() []InfoHash {
+func (qp QueryParams) InfoHashes() []InfoHash {
 	return qp.infoHashes
 }
 
 // RawPath returns the raw path from the parsed URL.
-func (qp *QueryParams) RawPath() string {
+func (qp QueryParams) RawPath() string {
 	return qp.path
 }
 
 // RawQuery returns the raw query from the parsed URL.
-func (qp *QueryParams) RawQuery() string {
+func (qp QueryParams) RawQuery() string {
 	return qp.query
 }
 

@@ -1,3 +1,4 @@
+// Package main contains entry point logic of MoChi server
 package main
 
 import (
