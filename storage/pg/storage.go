@@ -505,7 +505,7 @@ func (s *store) countPeers(ih bittorrent.InfoHash) (seeders int, leechers int) {
 		if rows.Next() {
 			si, li := -1, -1
 			for i, field := range rows.FieldDescriptions() {
-				name := strings.ToUpper(string(field.Name))
+				name := strings.ToUpper(field.Name)
 				switch name {
 				case s.Peer.CountSeedersColumn:
 					si = i
