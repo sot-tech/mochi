@@ -5,7 +5,7 @@ go 1.18
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20220830191835-c1b067f33eca
 	github.com/MicahParks/keyfunc v1.4.0
-	github.com/anacrolix/torrent v1.46.0
+	github.com/anacrolix/torrent v1.47.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/jackc/pgx/v4 v4.17.2
@@ -20,8 +20,8 @@ require (
 )
 
 require (
-	github.com/anacrolix/dht/v2 v2.18.1 // indirect
-	github.com/anacrolix/log v0.13.2-0.20220426014722-7b7d13a55d55 // indirect
+	github.com/anacrolix/dht/v2 v2.19.0 // indirect
+	github.com/anacrolix/log v0.13.2-0.20220711050817-613cb738ef30 // indirect
 	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/v2 v2.7.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
