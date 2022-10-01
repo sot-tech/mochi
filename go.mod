@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20220830191835-c1b067f33eca
-	github.com/MicahParks/keyfunc v1.2.2
+	github.com/MicahParks/keyfunc v1.4.0
 	github.com/anacrolix/torrent v1.47.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v4 v4.4.2
