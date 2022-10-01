@@ -13,9 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/log/zerologadapter"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -65,13 +64,7 @@ func newStore(cfg Config) (storage.PeerStorage, error) {
 		return nil, err
 	}
 
-	pgConf, err := pgxpool.ParseConfig(cfg.ConnectionString)
-	if err != nil {
-		return nil, err
-	}
-
-	pgConf.ConnConfig.Logger = zerologadapter.NewLogger(logger.Logger)
-	con, err := pgxpool.Connect(context.Background(), cfg.ConnectionString)
+	con, err := pgxpool.New(context.Background(), cfg.ConnectionString)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +252,7 @@ func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, ctx, []byte(key)); err == nil {
 		defer rows.Close()
 		contains = rows.Next()
+		err = rows.Err()
 	}
 	return
 }
@@ -408,11 +402,12 @@ func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) er
 
 func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
 	var rows pgx.Rows
+	// TODO: see https://github.com/jackc/pgx/issues/387#issuecomment-1107666716
 	if rows, err = s.Query(context.TODO(), s.Announce.Query, []byte(ih), seeders, isV6, maxCount); err == nil {
 		defer rows.Close()
 		idIndex, ipIndex, portIndex := -1, -1, -1
 		for i, field := range rows.FieldDescriptions() {
-			name := strings.ToUpper(string(field.Name))
+			name := strings.ToUpper(field.Name)
 			switch name {
 			case s.Announce.PeerIDColumn:
 				idIndex = i
