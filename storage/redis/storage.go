@@ -228,7 +228,6 @@ func (cfg Config) Connect() (con Connection, err error) {
 		_ = rs.Close()
 		rs = nil
 	}
-	cfg.Login, cfg.Password = "", ""
 	return Connection{rs}, err
 }
 

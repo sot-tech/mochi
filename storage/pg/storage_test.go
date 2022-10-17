@@ -29,7 +29,7 @@ CREATE INDEX mo_peers_announce_idx ON mo_peers(info_hash, is_seeder, is_v6);
 DROP TABLE IF EXISTS mo_downloads;
 CREATE TABLE mo_downloads (
 	info_hash bytea PRIMARY KEY NOT NULL,
-	downloads int NOT NULL DEFAULT 0
+	downloads int NOT NULL DEFAULT 1
 );
 
 DROP TABLE IF EXISTS mo_kv;
@@ -62,7 +62,7 @@ var cfg = Config{
 	},
 	Downloads: downloadQueryConf{
 		GetQuery:       "SELECT downloads FROM mo_downloads where info_hash=@info_hash",
-		IncrementQuery: "UPDATE mo_downloads SET downloads = downloads + 1 WHERE info_hash=@info_hash",
+		IncrementQuery: "INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1",
 	},
 	Data: dataQueryConf{
 		AddQuery: "INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING",
