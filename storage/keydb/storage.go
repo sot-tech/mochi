@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -98,16 +97,11 @@ type store struct {
 	peerTTL uint
 }
 
-// MarshalZerologObject writes configuration into zerolog event
-func (s store) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("type", Name).Object("config", s.Config)
-}
-
-func (s store) setPeerTTL(infoHashKey, peerID string) error {
+func (s *store) setPeerTTL(infoHashKey, peerID string) error {
 	return s.Process(context.TODO(), redis.NewCmd(context.TODO(), expireMemberCmd, infoHashKey, peerID, s.peerTTL))
 }
 
-func (s store) addPeer(infoHashKey, peerID string) (err error) {
+func (s *store) addPeer(infoHashKey, peerID string) (err error) {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
@@ -118,7 +112,7 @@ func (s store) addPeer(infoHashKey, peerID string) (err error) {
 	return
 }
 
-func (s store) delPeer(infoHashKey, peerID string) error {
+func (s *store) delPeer(infoHashKey, peerID string) error {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
@@ -132,23 +126,23 @@ func (s store) delPeer(infoHashKey, peerID string) error {
 	return err
 }
 
-func (s store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (s *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	return s.addPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (s *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	return s.delPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (s *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	return s.addPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (s *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	return s.delPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
+func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
@@ -163,12 +157,15 @@ func (s store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (er
 		} else {
 			err = s.addPeer(ihSeederKey, peerID)
 		}
+		if err == nil {
+			err = s.HIncrBy(context.TODO(), r.CountDownloadsKey, infoHash, 1).Err()
+		}
 	}
 	return err
 }
 
 // AnnouncePeers is the same function as redis.AnnouncePeers
-func (s store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
+func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Bool("forSeeder", forSeeder).
@@ -182,25 +179,24 @@ func (s store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int
 }
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
-func (s store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+func (s *store) ScrapeSwarm(ih bittorrent.InfoHash) (uint32, uint32, uint32) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-	leechers, seeders = s.CountPeers(ih, s.SCard)
-	return
+	return s.ScrapeIH(ih, s.SCard)
 }
 
-func (store) GCAware() bool {
+func (*store) GCAware() bool {
 	return false
 }
 
-func (store) ScheduleGC(_, _ time.Duration) {}
+func (*store) ScheduleGC(_, _ time.Duration) {}
 
-func (store) StatisticsAware() bool {
+func (*store) StatisticsAware() bool {
 	return false
 }
 
-func (store) ScheduleStatisticsCollection(_ time.Duration) {}
+func (*store) ScheduleStatisticsCollection(_ time.Duration) {}
 
 func (s *store) Stop() stop.Result {
 	c := make(stop.Channel)

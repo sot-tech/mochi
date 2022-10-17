@@ -1,6 +1,6 @@
 // Package redis implements the storage interface.
 // BitTorrent tracker keeping peer data in redis with hash.
-// There two categories of hash:
+// There three categories of hash:
 //
 //   - CHI_{L,S}{4,6}_<HASH> (hash type)
 //     To save peers that hold the infohash, used for fast searching,
@@ -9,6 +9,9 @@
 //   - CHI_I (set type)
 //     To save all the infohashes, used for garbage collection,
 //     metrics aggregation and leecher graduation
+//
+//   - CHI_D (hash type)
+//     To record the number of torrent downloads.
 //
 // Two keys are used to record the count of seeders and leechers.
 //
@@ -28,7 +31,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -63,6 +65,8 @@ const (
 	CountSeederKey = "CHI_C_S"
 	// CountLeecherKey redis key for leecher count
 	CountLeecherKey = "CHI_C_L"
+	// CountDownloadsKey redis key for snatches (downloads) count
+	CountDownloadsKey = "CHI_D"
 )
 
 var (
@@ -119,20 +123,6 @@ type Config struct {
 	ReadTimeout    time.Duration `cfg:"read_timeout"`
 	WriteTimeout   time.Duration `cfg:"write_timeout"`
 	ConnectTimeout time.Duration `cfg:"connect_timeout"`
-}
-
-// MarshalZerologObject writes configuration fields into zerolog event
-func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
-	e.Strs("addresses", cfg.Addresses).
-		Int("db", cfg.DB).
-		Int("poolSize", cfg.PoolSize).
-		Bool("sentinel", cfg.Sentinel).
-		Str("sentinelMaster", cfg.SentinelMaster).
-		Bool("cluster", cfg.Cluster).
-		Dur("readTimeout", cfg.ReadTimeout).
-		Dur("writeTimeout", cfg.WriteTimeout).
-		Dur("connectTimeout", cfg.ConnectTimeout).
-		Dur("peerLifetime", cfg.PeerLifetime)
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -239,12 +229,7 @@ func (cfg Config) Connect() (con Connection, err error) {
 		rs = nil
 	}
 	cfg.Login, cfg.Password = "", ""
-	return Connection{rs, cfg}, err
-}
-
-// MarshalZerologObject writes configuration into zerolog event
-func (ps *store) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("type", Name).Object("config", ps.Config)
+	return Connection{rs}, err
 }
 
 func (ps *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
@@ -301,7 +286,6 @@ func (ps *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 // Connection is wrapper for redis.UniversalClient
 type Connection struct {
 	redis.UniversalClient
-	Config
 }
 
 type store struct {
@@ -454,6 +438,9 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 		if err == nil {
 			err = tx.SAdd(context.TODO(), IHKey, ihSeederKey).Err()
 		}
+		if err == nil {
+			err = tx.HIncrBy(context.TODO(), CountDownloadsKey, infoHash, 1).Err()
+		}
 		return err
 	})
 }
@@ -537,26 +524,28 @@ func (ps *Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uin
 	return uint32(count)
 }
 
-// CountPeers calls provided countFn and returns seeders and leechers count for specified info hash
-func (ps *Connection) CountPeers(ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount uint32) {
+// ScrapeIH calls provided countFn and returns seeders, leechers and downloads count for specified info hash
+func (ps *Connection) ScrapeIH(ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount, downloadsCount uint32) {
 	infoHash := ih.RawString()
 
 	leechersCount = ps.countPeers(InfoHashKey(infoHash, false, false), countFn) +
 		ps.countPeers(InfoHashKey(infoHash, false, true), countFn)
 	seedersCount = ps.countPeers(InfoHashKey(infoHash, true, false), countFn) +
 		ps.countPeers(InfoHashKey(infoHash, true, true), countFn)
+	d, err := ps.HGet(context.TODO(), CountDownloadsKey, infoHash).Uint64()
+	if err = AsNil(err); err != nil {
+		logger.Error().Err(err).Str("infoHash", infoHash).Msg("downloads count calculation failure")
+	}
+	downloadsCount = uint32(d)
 
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (uint32, uint32, uint32) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-
-	leechers, seeders = ps.CountPeers(ih, ps.HLen)
-
-	return
+	return ps.ScrapeIH(ih, ps.HLen)
 }
 
 const argNumErrorMsg = "ERR wrong number of arguments"
@@ -621,7 +610,7 @@ func (ps *Connection) Delete(ctx string, keys ...string) (err error) {
 }
 
 // Preservable - storage.DataStorage implementation
-func (Connection) Preservable() bool {
+func (*Connection) Preservable() bool {
 	return true
 }
 

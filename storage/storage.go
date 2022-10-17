@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -216,10 +214,6 @@ type PeerStorage interface {
 	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
 	// For more details see the documentation in the stop package.
 	stop.Stopper
-
-	// LogObjectMarshaler returns a loggable version of the data used to configure and
-	// operate a particular PeerStorage.
-	zerolog.LogObjectMarshaler
 }
 
 // RegisterBuilder makes a Builder available by the provided name.

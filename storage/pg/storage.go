@@ -15,7 +15,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -107,37 +106,21 @@ type dataQueryConf struct {
 	DelQuery string `cfg:"del_query"`
 }
 
+type downloadQueryConf struct {
+	GetQuery       string
+	IncrementQuery string
+}
+
 // Config holds the configuration of a redis PeerStorage.
 type Config struct {
 	ConnectionString   string `cfg:"connection_string"`
 	PingQuery          string `cfg:"ping_query"`
 	Peer               peerQueryConf
 	Announce           announceQueryConf
+	Downloads          downloadQueryConf
 	Data               dataQueryConf
 	GCQuery            string `cfg:"gc_query"`
 	InfoHashCountQuery string `cfg:"info_hash_count_query"`
-}
-
-// MarshalZerologObject writes configuration fields into zerolog event
-func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("connectionString", "<hidden>").
-		Str("pingQuery", cfg.PingQuery).
-		Str("peer.addQuery", cfg.Peer.AddQuery).
-		Str("peer.delQuery", cfg.Peer.DelQuery).
-		Str("peer.graduateQuery", cfg.Peer.GraduateQuery).
-		Str("peer.countQuery", cfg.Peer.CountQuery).
-		Str("peer.countSeedersColumn", cfg.Peer.CountSeedersColumn).
-		Str("peer.countLeechersColumn", cfg.Peer.CountLeechersColumn).
-		Str("peer.byInfoHashClause", cfg.Peer.ByInfoHashClause).
-		Str("announce.query", cfg.Announce.Query).
-		Str("announce.peerIDColumn", cfg.Announce.PeerIDColumn).
-		Str("announce.addressColumn", cfg.Announce.AddressColumn).
-		Str("announce.portColumn", cfg.Announce.PortColumn).
-		Str("data.addQuery", cfg.Data.AddQuery).
-		Str("data.getQuery", cfg.Data.GetQuery).
-		Str("data.delQuery", cfg.Data.DelQuery).
-		Str("gcQuery", cfg.GCQuery).
-		Str("infoHashCountQuery", cfg.InfoHashCountQuery)
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -295,8 +278,7 @@ func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 }
 
 func (s *store) Load(ctx string, key string) (out []byte, err error) {
-	row := s.QueryRow(context.TODO(), s.Data.GetQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(key)})
-	if err = row.Scan(&out); errors.Is(err, pgx.ErrNoRows) {
+	if err = s.QueryRow(context.TODO(), s.Data.GetQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(key)}).Scan(&out); errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	return
@@ -364,10 +346,9 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 			case <-t.C:
 				if metrics.Enabled() {
 					before := time.Now()
-					sc, lc := s.countPeers(bittorrent.NoneInfoHash)
+					sc, lc := s.countPeers(nil)
 					var hc int
-					row := s.QueryRow(context.Background(), s.InfoHashCountQuery)
-					if err := row.Scan(&hc); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					if err := s.QueryRow(context.Background(), s.InfoHashCountQuery).Scan(&hc); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 						logger.Error().Err(err).Msg("error occurred while get info hash count")
 					}
 
@@ -433,18 +414,21 @@ func (s *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) erro
 	return s.delPeer(ih, peer, false)
 }
 
-func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
+func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
 		Msg("graduate leecher")
-	_, err = s.Exec(context.TODO(), s.Peer.GraduateQuery, pgx.NamedArgs{
-		pInfoHash: []byte(ih),
+	var batch pgx.Batch
+	ihb := []byte(ih)
+	batch.Queue(s.Peer.GraduateQuery, pgx.NamedArgs{
+		pInfoHash: ihb,
 		pPeerID:   peer.ID[:],
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 	})
-	return
+	batch.Queue(s.Downloads.IncrementQuery, pgx.NamedArgs{pInfoHash: ihb})
+	return s.txBatch(context.TODO(), &batch)
 }
 
 func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
@@ -469,7 +453,11 @@ func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV
 			}
 		}
 		if idIndex < 0 || ipIndex < 0 || portIndex < 0 {
-			err = fmt.Errorf(errRequiredColumnsNotFoundMsg, []string{s.Announce.PeerIDColumn, s.Announce.AddressColumn, s.Announce.PortColumn})
+			err = fmt.Errorf(errRequiredColumnsNotFoundMsg, []string{
+				s.Announce.PeerIDColumn,
+				s.Announce.AddressColumn,
+				s.Announce.PortColumn,
+			})
 			return
 		}
 		var maxIndex int
@@ -543,13 +531,13 @@ func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant in
 	return
 }
 
-func (s *store) countPeers(ih bittorrent.InfoHash) (seeders int, leechers int) {
+func (s *store) countPeers(ih []byte) (seeders uint32, leechers uint32) {
 	var rows pgx.Rows
 	var err error
-	if ih == bittorrent.NoneInfoHash {
+	if len(ih) == 0 {
 		rows, err = s.Query(context.TODO(), s.Peer.CountQuery)
 	} else {
-		rows, err = s.Query(context.TODO(), s.Peer.CountQuery+" "+s.Peer.ByInfoHashClause, pgx.NamedArgs{pInfoHash: []byte(ih)})
+		rows, err = s.Query(context.TODO(), s.Peer.CountQuery+" "+s.Peer.ByInfoHashClause, pgx.NamedArgs{pInfoHash: ih})
 	}
 	if err == nil {
 		defer rows.Close()
@@ -581,7 +569,7 @@ func (s *store) countPeers(ih bittorrent.InfoHash) (seeders int, leechers int) {
 		}
 	}
 	if err != nil {
-		logger.Error().Err(err).Stringer("infoHash", ih).Msg("unable to get peers count")
+		logger.Error().Err(err).Hex("infoHash", ih).Msg("unable to get peers count")
 	}
 	return
 }
@@ -590,8 +578,14 @@ func (s *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders ui
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-	sc, lc := s.countPeers(ih)
-	seeders, leechers = uint32(sc), uint32(lc)
+	ihb := []byte(ih)
+	seeders, leechers = s.countPeers(ihb)
+	if len(s.Downloads.GetQuery) > 0 {
+		if err := s.QueryRow(context.TODO(), s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			logger.Error().Stringer("infoHash", ih).Err(err).Msg("error occurred while get info downloads count")
+		}
+	}
+
 	return
 }
 
@@ -615,8 +609,4 @@ func (s *store) Stop() stop.Result {
 		c.Done()
 	}()
 	return c.Result()
-}
-
-func (s *store) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("type", Name).Object("config", s.Config)
 }

@@ -39,12 +39,12 @@ func (r *Server) Run(configFilePath string) error {
 		log.Info().Msg("metrics disabled because of empty address")
 	}
 
-	log.Info().Str("name", cfg.Storage.Name).Msg("starting storage")
+	log.Debug().Str("name", cfg.Storage.Name).Object("config", cfg.Storage.Config).Msg("starting storage")
 	r.storage, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
-	log.Info().Object("config", r.storage).Msg("started storage")
+	log.Info().Str("name", cfg.Storage.Name).Msg("started storage")
 
 	preHooks, err := middleware.NewHooks(cfg.PreHooks, r.storage)
 	if err != nil {

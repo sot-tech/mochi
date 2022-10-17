@@ -26,6 +26,12 @@ CREATE TABLE mo_peers (
 CREATE INDEX mo_peers_created_idx ON mo_peers(created);
 CREATE INDEX mo_peers_announce_idx ON mo_peers(info_hash, is_seeder, is_v6);
 
+DROP TABLE IF EXISTS mo_downloads;
+CREATE TABLE mo_downloads (
+	info_hash bytea PRIMARY KEY NOT NULL,
+	downloads int NOT NULL DEFAULT 0
+);
+
 DROP TABLE IF EXISTS mo_kv;
 CREATE TABLE mo_kv (
 	context varchar NOT NULL,
@@ -41,12 +47,12 @@ var cfg = Config{
 	PingQuery:        "SELECT 1",
 	Peer: peerQueryConf{
 		AddQuery:            "INSERT INTO mo_peers VALUES(@info_hash, @peer_id, @address, @port, @is_seeder, @is_v6, @created) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder",
-		DelQuery:            "DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND is_seeder=$5",
+		DelQuery:            "DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=@peer_id AND address=@address AND port=@port AND is_seeder=@is_seeder",
 		GraduateQuery:       "UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND NOT is_seeder",
 		CountQuery:          "SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers",
 		CountSeedersColumn:  "seeders",
 		CountLeechersColumn: "leechers",
-		ByInfoHashClause:    "WHERE info_hash = $1",
+		ByInfoHashClause:    "WHERE info_hash = @info_hash",
 	},
 	Announce: announceQueryConf{
 		Query:         "SELECT peer_id, address, port FROM mo_peers WHERE info_hash=@info_hash AND is_seeder=@is_seeder AND is_v6=@is_v6 LIMIT @count",
@@ -54,10 +60,14 @@ var cfg = Config{
 		AddressColumn: "address",
 		PortColumn:    "port",
 	},
+	Downloads: downloadQueryConf{
+		GetQuery:       "SELECT downloads FROM mo_downloads where info_hash=@info_hash",
+		IncrementQuery: "UPDATE mo_downloads SET downloads = downloads + 1 WHERE info_hash=@info_hash",
+	},
 	Data: dataQueryConf{
 		AddQuery: "INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING",
 		GetQuery: "SELECT value FROM mo_kv WHERE context=@context AND name=@key",
-		DelQuery: "DELETE FROM mo_kv WHERE context=@context AND name IN @key",
+		DelQuery: "DELETE FROM mo_kv WHERE context=@context AND name = ANY(@key)",
 	},
 	GCQuery:            "DELETE FROM mo_peers WHERE created <= @created",
 	InfoHashCountQuery: "SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers",
