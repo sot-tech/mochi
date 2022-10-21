@@ -56,7 +56,7 @@ var (
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterBuilder(Name, builder)
+	storage.RegisterDriver(Name, builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
@@ -107,8 +107,8 @@ type dataQueryConf struct {
 }
 
 type downloadQueryConf struct {
-	GetQuery       string
-	IncrementQuery string
+	GetQuery       string `cfg:"get_query"`
+	IncrementQuery string `cfg:"inc_query"`
 }
 
 // Config holds the configuration of a redis PeerStorage.
@@ -223,20 +223,6 @@ type store struct {
 	closed chan any
 }
 
-func (s *store) tx(ctx context.Context, query string, args pgx.NamedArgs) (err error) {
-	var tx pgx.Tx
-	if tx, err = s.Begin(ctx); err == nil {
-		if _, err = tx.Exec(ctx, query, args); err == nil {
-			err = tx.Commit(ctx)
-		} else {
-			if txErr := tx.Rollback(ctx); txErr != nil {
-				err = fmt.Errorf(errRollBackMsg, txErr, err)
-			}
-		}
-	}
-	return
-}
-
 func (s *store) txBatch(ctx context.Context, batch *pgx.Batch) (err error) {
 	var tx pgx.Tx
 	if tx, err = s.Begin(ctx); err == nil {
@@ -256,7 +242,7 @@ func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
 	case 0:
 		// ignore
 	case 1:
-		err = s.tx(context.TODO(), s.Data.AddQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(values[0].Key), pValue: values[0].Value})
+		_, err = s.Exec(context.TODO(), s.Data.AddQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(values[0].Key), pValue: values[0].Value})
 	default:
 		var batch pgx.Batch
 		for _, v := range values {
@@ -569,7 +555,7 @@ func (s *store) countPeers(ih []byte) (seeders uint32, leechers uint32) {
 		}
 	}
 	if err != nil {
-		logger.Error().Err(err).Hex("infoHash", ih).Msg("unable to get peers count")
+		logger.Error().Err(err).Bytes("infoHash", ih).Msg("unable to get peers count")
 	}
 	return
 }

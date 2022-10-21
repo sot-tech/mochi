@@ -18,6 +18,7 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/frontend/udp/bytepool"
+	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
@@ -25,11 +26,17 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
+const Name = "http"
+
 var (
-	logger                          = log.NewLogger("udp frontend")
+	logger                          = log.NewLogger(Name)
 	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 	errUnexpectedConnType           = errors.New("unexpected connection type (not UDPConn)")
 )
+
+func init() {
+	frontend.RegisterBuilder(Name, newFrontend)
+}
 
 // Config represents all of the configurable options for a UDP BitTorrent
 // Tracker.
@@ -69,28 +76,26 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// Frontend holds the state of a UDP BitTorrent Frontend.
-type Frontend struct {
+// udpFE holds the state of a UDP BitTorrent Frontend.
+type udpFE struct {
 	socket  *net.UDPConn
 	closing chan struct{}
 	wg      sync.WaitGroup
 
 	genPool *sync.Pool
 
-	logic frontend.TrackerLogic
+	logic *middleware.Logic
 	Config
 }
 
-// NewFrontend creates a new instance of an UDP Frontend that asynchronously
-// serves requests.
-func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
+func newFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
 	var provided Config
 	if err := c.Unmarshal(&provided); err != nil {
 		return nil, err
 	}
 	cfg := provided.Validate()
 
-	f := &Frontend{
+	f := &udpFE{
 		closing: make(chan struct{}),
 		logic:   logic,
 		Config:  cfg,
@@ -116,7 +121,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 }
 
 // Stop provides a thread-safe way to shut down a currently running Frontend.
-func (t *Frontend) Stop() stop.Result {
+func (t *udpFE) Stop() stop.Result {
 	select {
 	case <-t.closing:
 		return stop.AlreadyStopped
@@ -135,7 +140,7 @@ func (t *Frontend) Stop() stop.Result {
 }
 
 // listen resolves the address and binds the server socket.
-func (t *Frontend) listen() (err error) {
+func (t *udpFE) listen() (err error) {
 	if t.ReusePort {
 		var ln net.PacketConn
 		if ln, err = reuseport.ListenPacket("udp", t.Addr); err == nil {
@@ -156,12 +161,12 @@ func (t *Frontend) listen() (err error) {
 
 // serve blocks while listening and serving UDP BitTorrent requests
 // until Stop() is called or an error is returned.
-func (t *Frontend) serve() error {
+func (t *udpFE) serve() error {
 	pool := bytepool.New(2048)
 	defer t.wg.Done()
 
 	for {
-		// Check to see if we need to shutdown.
+		// Check to see if we need shutdown.
 		select {
 		case <-t.closing:
 			log.Debug().Msg("serve received shutdown signal")
@@ -229,7 +234,7 @@ func (w ResponseWriter) Write(b []byte) (int, error) {
 }
 
 // handleRequest parses and responds to a UDP Request.
-func (t *Frontend) handleRequest(r Request, w ResponseWriter) (actionName string, err error) {
+func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, err error) {
 	if len(r.Packet) < 16 {
 		// Malformed, no client packets are less than 16 bytes.
 		// We explicitly return nothing in case this is a DoS attempt.

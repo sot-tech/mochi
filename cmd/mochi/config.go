@@ -9,7 +9,11 @@ import (
 
 	"github.com/sot-tech/mochi/pkg/conf"
 
-	// Imports to register middleware drivers.
+	// Imports to register frontends
+	_ "github.com/sot-tech/mochi/frontend/http"
+	_ "github.com/sot-tech/mochi/frontend/udp"
+
+	// Imports to register middleware hooks.
 	_ "github.com/sot-tech/mochi/middleware/clientapproval"
 	_ "github.com/sot-tech/mochi/middleware/jwt"
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval"
@@ -29,29 +33,20 @@ type Config struct {
 	// We can make Conf extensible enough that you can program a new response
 	// generator at the cost of making it possible for users to create config that
 	// won't compose a functional tracker.
-	AnnounceInterval    time.Duration  `yaml:"announce_interval"`
-	MinAnnounceInterval time.Duration  `yaml:"min_announce_interval"`
-	MetricsAddr         string         `yaml:"metrics_addr"`
-	HTTPConfig          conf.MapConfig `yaml:"http"`
-	UDPConfig           conf.MapConfig `yaml:"udp"`
-	Storage             struct {
-		Name   string         `yaml:"name"`
-		Config conf.MapConfig `yaml:"config"`
-	} `yaml:"storage"`
-	PreHooks  []conf.MapConfig `yaml:"prehooks"`
-	PostHooks []conf.MapConfig `yaml:"posthooks"`
+	AnnounceInterval    time.Duration         `yaml:"announce_interval"`
+	MinAnnounceInterval time.Duration         `yaml:"min_announce_interval"`
+	MetricsAddr         string                `yaml:"metrics_addr"`
+	Frontends           []conf.NamedMapConfig `yaml:"frontends"`
+	Storage             conf.NamedMapConfig   `yaml:"storage"`
+	PreHooks            []conf.NamedMapConfig `yaml:"prehooks"`
+	PostHooks           []conf.NamedMapConfig `yaml:"posthooks"`
 }
 
-// ConfigFile represents a namespaced YAML configation file.
-type ConfigFile struct {
-	Conf Config `yaml:"mochi"`
-}
-
-// ParseConfigFile returns a new ConfigFile given the path to a YAML
+// ParseConfigFile returns a new Config given the path to a YAML
 // configuration file.
 //
 // It supports relative and absolute paths and environment variables.
-func ParseConfigFile(path string) (*ConfigFile, error) {
+func ParseConfigFile(path string) (*Config, error) {
 	if path == "" {
 		return nil, errors.New("no config path specified")
 	}
@@ -59,7 +54,7 @@ func ParseConfigFile(path string) (*ConfigFile, error) {
 	f, err := os.Open(os.ExpandEnv(path))
 	if err == nil {
 		defer f.Close()
-		cfgFile := new(ConfigFile)
+		cfgFile := new(Config)
 		err = yaml.NewDecoder(f).Decode(cfgFile)
 		return cfgFile, err
 	}

@@ -3,7 +3,7 @@ module github.com/sot-tech/mochi
 go 1.18
 
 require (
-	code.cloudfoundry.org/go-diodes v0.0.0-20220927211948-2985a72b297c
+	code.cloudfoundry.org/go-diodes v0.0.0-20221017175818-728392b37655
 	github.com/MicahParks/keyfunc v1.5.1
 	github.com/anacrolix/torrent v1.47.0
 	github.com/go-redis/redis/v8 v8.11.5
@@ -20,7 +20,7 @@ require (
 )
 
 require (
-	github.com/anacrolix/dht/v2 v2.19.0 // indirect
+	github.com/anacrolix/dht/v2 v2.19.1 // indirect
 	github.com/anacrolix/log v0.13.2-0.20220711050817-613cb738ef30 // indirect
 	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/v2 v2.7.1 // indirect
@@ -40,11 +40,11 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
+	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a // indirect
-	golang.org/x/sys v0.0.0-20221013171732-95e765b1cc43 // indirect
-	golang.org/x/text v0.3.8 // indirect
+	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/text v0.4.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )

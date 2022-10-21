@@ -1,303 +1,311 @@
 # @formatter:off
-mochi:
-    # The interval communicated with BitTorrent clients informing them how
-    # frequently they should announce in between client events.
-    announce_interval: 30m
+# The interval communicated with BitTorrent clients informing them how
+# frequently they should announce in between client events.
+announce_interval: 30m
 
-    # The interval communicated with BitTorrent clients informing them of the
-    # minimal duration between announces.
-    min_announce_interval: 15m
+# The interval communicated with BitTorrent clients informing them of the
+# minimal duration between announces.
+min_announce_interval: 15m
 
-    # The network interface that will bind to an HTTP endpoint that can be
-    # scraped by programs collecting metrics.
-    #
-    # /metrics serves metrics in the Prometheus format
-    # /debug/pprof/{cmdline,profile,symbol,trace} serves profiles in the pprof format
-    metrics_addr: "0.0.0.0:6880"
+# The network interface that will bind to an HTTP endpoint that can be
+# scraped by programs collecting metrics.
+#
+# /metrics serves metrics in the Prometheus format
+# /debug/pprof/{cmdline,profile,symbol,trace} serves profiles in the pprof format
+metrics_addr: "0.0.0.0:6880"
 
+frontends:
     # This block defines configuration for the tracker's HTTP interface.
     # If you do not wish to run this, delete this section.
-    http:
-        # The network interface that will bind to an HTTP server for serving
-        # BitTorrent traffic. Remove this to disable the non-TLS listener.
-        addr: "0.0.0.0:6969"
-
-        # The network interface that will bind to an HTTPS server for serving
-        # BitTorrent traffic. If set, tls_cert_path and tls_key_path are required.
-        https_addr: ""
-
-        # The path to the required files to listen via HTTPS.
-        tls_cert_path: ""
-        tls_key_path: ""
-        # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same HTTP(S) port.
-        reuse_port: true
-
-        # The timeout durations for HTTP requests.
-        read_timeout: 5s
-        write_timeout: 5s
-
-        # When true, persistent connections will be allowed. Generally this is not
-        # useful for a public tracker, but helps performance in some cases (use of
-        # a reverse proxy, or when there are few clients issuing many requests).
-        enable_keepalive: false
-        idle_timeout: 30s
-
-        # Whether to time requests.
-        # Disabling this should increase performance/decrease load.
-        enable_request_timing: false
-
-        # An array of routes to listen on for announce requests. This is an option
-        # to support trackers that do not listen for /announce or need to listen
-        # on multiple routes.
-        #
-        # This supports named parameters and catch-all parameters as described at
-        # https://github.com/julienschmidt/httprouter#named-parameters
-        announce_routes:
-            - "/announce"
-            # - "/announce.php"
-
-        # An array of routes to listen on for scrape requests. This is an option
-        # to support trackers that do not listen for /scrape or need to listen
-        # on multiple routes.
-        #
-        # This supports named parameters and catch-all parameters as described at
-        # https://github.com/julienschmidt/httprouter#named-parameters
-        scrape_routes:
-            - "/scrape"
-            # - "/scrape.php"
-
-        # An array of routes to listen ping requests.
-        # Used just to ensure if server is operational. Returns nothing,
-        # just HTTP 200 without body. Listens both GET and HEAD HTTP methods.
-        # HEAD method just checks http server, GET checks all hooks,
-        # which support ping
-        ping_routes:
-            - "/ping"
-
-        # When not enabled, tracker will use only address from which client connected to tracker.
-        # When enabled, the IP address that clients advertise as their IP address will
-        # be appended as announce candidate.
-        allow_ip_spoofing: false
-
-        # When enabled, IPs from private, local and loopback subnets will be ignored
-        filter_private_ips: false
-
-        # The HTTP Header containing the IP address of the client.
-        # This is only necessary if using a reverse proxy.
-        real_ip_header: "x-real-ip"
-
-        # The maximum number of peers returned for an individual request.
-        max_numwant: 100
-
-        # The default number of peers returned for an individual request.
-        default_numwant: 50
-
-        # The maximum number of infohashes that can be scraped in one request.
-        max_scrape_infohashes: 50
-
-    # This block defines configuration for the tracker's UDP interface.
-    # If you do not wish to run this, delete this section.
-    udp:
-        # The network interface that will bind to a UDP server for serving
-        # BitTorrent traffic.
-        addr: "0.0.0.0:6969"
-
-        # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same UDP port.
-        reuse_port: true
-
-        # The leeway for a timestamp on a connection ID.
-        max_clock_skew: 10s
-
-        # The key used to encrypt connection IDs.
-        private_key: "paste a random string here that will be used to hmac connection IDs"
-
-        # Whether to time requests.
-        # Disabling this should increase performance/decrease load.
-        enable_request_timing: false
-
-        # When not enabled, tracker will use only address from which client connected to tracker.
-        # When enabled, the IP address that clients advertise as their IP address will
-        # be appended as announce candidate.
-        allow_ip_spoofing: false
-
-        # When enabled, IPs from private, local and loopback subnets will be ignored
-        filter_private_ips: false
-
-        # The maximum number of peers returned for an individual request.
-        max_numwant: 100
-
-        # The default number of peers returned for an individual request.
-        default_numwant: 50
-
-        # The maximum number of infohashes that can be scraped in one request.
-        max_scrape_infohashes: 50
-
-
-    # This block defines configuration used for the storage of peer data.
-    storage:
-        name: memory
+    -   name: http
         config:
-            # The frequency which stale peers are removed.
-            # This balances between
-            # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
-            # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
-            gc_interval: 3m
+            # The network interface that will bind to an HTTP server for serving
+            # BitTorrent traffic. Remove this to disable the non-TLS listener.
+            addr: "0.0.0.0:6969"
 
-            # The amount of time until a peer is considered stale.
-            # To avoid churn, keep this slightly larger than `announce_interval`
-            peer_lifetime: 31m
+            # The network interface that will bind to an HTTPS server for serving
+            # BitTorrent traffic. If set, tls_cert_path and tls_key_path are required.
+            https_addr: ""
 
-            # The number of partitions data will be divided into in order to provide a
-            # higher degree of parallelism.
-            shard_count: 1024
+            # The path to the required files to listen via HTTPS.
+            tls_cert_path: ""
+            tls_key_path: ""
+            # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same HTTP(S) port.
+            reuse_port: true
 
-            # The interval at which metrics about the number of infohashes and peers
-            # are collected and posted to Prometheus.
-            prometheus_reporting_interval: 1s
+            # The timeout durations for HTTP requests.
+            read_timeout: 5s
+            write_timeout: 5s
 
-    # This block defines configuration used for redis storage.
-    #storage:
-        #name: redis
-        #config:
-            # The frequency which stale peers are removed.
-            # This balances between
-            # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
-            # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
-            #gc_interval: 3m
+            # When true, persistent connections will be allowed. Generally this is not
+            # useful for a public tracker, but helps performance in some cases (use of
+            # a reverse proxy, or when there are few clients issuing many requests).
+            enable_keepalive: false
+            idle_timeout: 30s
 
-            # The interval at which metrics about the number of infohashes and peers
-            # are collected and posted to Prometheus.
-            #prometheus_reporting_interval: 1s
+            # Whether to time requests.
+            # Disabling this should increase performance/decrease load.
+            enable_request_timing: false
 
-            # The amount of time until a peer is considered stale.
-            # To avoid churn, keep this slightly larger than `announce_interval`
-            #peer_lifetime: 31m
+            # An array of routes to listen on for announce requests. This is an option
+            # to support trackers that do not listen for /announce or need to listen
+            # on multiple routes.
+            #
+            # This supports named parameters and catch-all parameters as described at
+            # https://github.com/julienschmidt/httprouter#named-parameters
+            announce_routes:
+                - "/announce"
+                # - "/announce.php"
 
-            # The addresses of redis storage.
-            # If neither sentinel not cluster switched,
-            # only first address used
-            #addresses: ["127.0.0.1:6379"]
+            # An array of routes to listen on for scrape requests. This is an option
+            # to support trackers that do not listen for /scrape or need to listen
+            # on multiple routes.
+            #
+            # This supports named parameters and catch-all parameters as described at
+            # https://github.com/julienschmidt/httprouter#named-parameters
+            scrape_routes:
+                - "/scrape"
+                # - "/scrape.php"
 
-            # Database to be selected after connecting to the server.
-            #db: 0
+            # An array of routes to listen ping requests.
+            # Used just to ensure if server is operational. Returns nothing,
+            # just HTTP 200 without body. Listens both GET and HEAD HTTP methods.
+            # HEAD method just checks http server, GET checks all hooks,
+            # which support ping
+            ping_routes:
+                - "/ping"
 
-            # Maximum number of socket connections, default is 10 per CPU
-            #pool_size: 10
+            # When not enabled, tracker will use only address from which client connected to tracker.
+            # When enabled, the IP address that clients advertise as their IP address will
+            # be appended as announce candidate.
+            allow_ip_spoofing: false
 
-            # Use the specified login/username to authenticate the current connection
-            #login: ""
+            # When enabled, IPs from private, local and loopback subnets will be ignored
+            filter_private_ips: false
 
-            # Optional password
-            #password: ""
+            # The HTTP Header containing the IP address of the client.
+            # This is only necessary if using a reverse proxy.
+            real_ip_header: "x-real-ip"
 
-            # Connect to sentinel nodes
-            #sentinel: false
+            # The maximum number of peers returned for an individual request.
+            max_numwant: 100
 
-            # The master name
-            #sentinel_master: ""
+            # The default number of peers returned for an individual request.
+            default_numwant: 50
 
-            # Connect to the redis cluster
-            #cluster: false
+            # The maximum number of infohashes that can be scraped in one request.
+            max_scrape_infohashes: 50
 
-            # The timeout for reading a command reply from redis.
-            #read_timeout: 15s
+        # This block defines configuration for the tracker's UDP interface.
+        # If you do not wish to run this, delete this section.
+    -   name: udp
+        config:
+            # The network interface that will bind to a UDP server for serving
+            # BitTorrent traffic.
+            addr: "0.0.0.0:6969"
 
-            # The timeout for writing a command to redis.
-            #write_timeout: 15s
+            # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same UDP port.
+            reuse_port: true
 
-            # Dial timeout for establishing new connections.
-            #connect_timeout: 15s
+            # The leeway for a timestamp on a connection ID.
+            max_clock_skew: 10s
 
-    # This block defines configuration used for PostgreSQL storage.
-    # example `mo_peers` table structure:
-    # - info_hash bytea
-    # - peer_id bytea
-    # - address inet or bytea
-    # - port int4
-    # - is_seeder bool
-    # - is_v6 bool
-    # - created timestamp
-    #storage:
-        #name: pg
-        #config:
-            # connection string to pg storage. may be URL (postgres://...) or DSN (host=... port=...)
-            #connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
-            # query and parameters for announce operation
-            #announce:
-                #query: SELECT peer_id, address, port FROM mo_peers WHERE info_hash=$1 AND is_seeder=$2 AND is_v6=$3 LIMIT $4
-                #peer_id_column: peer_id
-                #address_column: address
-                #port_column: port
-            #peer:
-                # expected parameters: 1 - info hash (bytea), 2 - peer id (bytea), 3 - ip address (bytea/inet)
-                # 4 - port (int), 5 - is seeder (bool), 6 - is IPv6 (bool), 7 - create date and time (timestamp)
-                #add_query: INSERT INTO mo_peers VALUES($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
-                #del_query: DELETE FROM mo_peers WHERE info_hash=$1 AND peer_id=$2 AND address=$3 AND port=$4 AND is_seeder=$5
-                #graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=$1 AND peer_id=$2 AND address=$3 AND port=$4 AND NOT is_seeder
-                #count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
-                # predicate part of `count_query` for get count of peers by info hash
-                #by_info_hash_clause: WHERE info_hash = $1
-                #count_seeders_column: seeders
-                #count_leechers_column: leechers
-            # queries for KV-store
-            #data:
-                # expected parameters: 1 - context (varchar), 2 - name (bytea), 3 - value (bytea)
-                #add_query: INSERT INTO mo_kv VALUES($1, $2, $3) ON CONFLICT (context, name) DO NOTHING
-                #del_query: DELETE FROM mo_kv WHERE context=$1 AND name=$2
-                #get_query: SELECT value FROM mo_kv WHERE context=$1 AND name=$2
-            # query for check if database is alive
-            #ping_query: SELECT 1
-            # query for garbage collection, expected parameter is timestamp
-            #gc_query: DELETE FROM mo_peers WHERE created <= $1
-            # The amount of time until a peer is considered stale.
-            # To avoid churn, keep this slightly larger than `announce_interval`
-            #peer_lifetime: 31m
-            # The frequency which stale peers are removed.
-            #gc_interval: 3m
-            # query for info hash statistics
-            #info_hash_count_query: SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers
-            # The interval at which metrics about the number of info hashes and peers
-            # are collected and posted to Prometheus.
-            #prometheus_reporting_interval: 1s
+            # The key used to encrypt connection IDs.
+            private_key: "paste a random string here that will be used to hmac connection IDs"
 
-    # This block defines configuration used for middleware executed before a
-    # response has been returned to a BitTorrent client.
-    prehooks:
-    #        -   name: jwt
-    #            options:
-    #                header: "authorization"
-    #                issuer: "https://issuer.com"
-    #                audience: "https://some.issuer.com"
-    #                jwk_set_url: "https://issuer.com/keys"
-    #                jwk_set_update_interval: 5m
-    #                handle_announce: true
-    #                handle_scrape: false
-    #
-    #        -   name: client approval
-    #            options:
-    #                whitelist:
-    #                    - "OP1011"
-    #                blacklist:
-    #                    - "OP1012"
-    #
-    #        -   name: interval variation
-    #            options:
-    #                modify_response_probability: 0.2
-    #                max_increase_delta: 60
-    #                modify_min_interval: true
-    #
-    # This block defines configuration used for torrent approval, it requires to be given
-    # hashes for whitelist or for blacklist. Hashes are hexadecimal-encoaded.
-    #        -   name: torrent approval
-    #            options:
-    #                initial_source: list
-    # Save data provided by source in storage above
-    #                preserve: false
-    #                configuration:
-    #                    hash_list:
-    #                        - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"
-    # true - whitelist mode, false - blacklist
-    #                    invert: false
-    # Name of storage context where store hash list
-    #                    storage_ctx: APPROVED_HASH
-    posthooks:
+            # Whether to time requests.
+            # Disabling this should increase performance/decrease load.
+            enable_request_timing: false
+
+            # When not enabled, tracker will use only address from which client connected to tracker.
+            # When enabled, the IP address that clients advertise as their IP address will
+            # be appended as announce candidate.
+            allow_ip_spoofing: false
+
+            # When enabled, IPs from private, local and loopback subnets will be ignored
+            filter_private_ips: false
+
+            # The maximum number of peers returned for an individual request.
+            max_numwant: 100
+
+            # The default number of peers returned for an individual request.
+            default_numwant: 50
+
+            # The maximum number of infohashes that can be scraped in one request.
+            max_scrape_infohashes: 50
+
+
+# This block defines configuration used for the storage of peer data.
+storage:
+    name: memory
+    config:
+        # The frequency which stale peers are removed.
+        # This balances between
+        # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+        # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+        gc_interval: 3m
+
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        peer_lifetime: 31m
+
+        # The number of partitions data will be divided into in order to provide a
+        # higher degree of parallelism.
+        shard_count: 1024
+
+        # The interval at which metrics about the number of infohashes and peers
+        # are collected and posted to Prometheus.
+        prometheus_reporting_interval: 1s
+
+# This block defines configuration used for redis storage.
+#storage:
+    #name: redis
+    #config:
+        # The frequency which stale peers are removed.
+        # This balances between
+        # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+        # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+        #gc_interval: 3m
+
+        # The interval at which metrics about the number of infohashes and peers
+        # are collected and posted to Prometheus.
+        #prometheus_reporting_interval: 1s
+
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        #peer_lifetime: 31m
+
+        # The addresses of redis storage.
+        # If neither sentinel not cluster switched,
+        # only first address used
+        #addresses: ["127.0.0.1:6379"]
+
+        # Database to be selected after connecting to the server.
+        #db: 0
+
+        # Maximum number of socket connections, default is 10 per CPU
+        #pool_size: 10
+
+        # Use the specified login/username to authenticate the current connection
+        #login: ""
+
+        # Optional password
+        #password: ""
+
+        # Connect to sentinel nodes
+        #sentinel: false
+
+        # The master name
+        #sentinel_master: ""
+
+        # Connect to the redis cluster
+        #cluster: false
+
+        # The timeout for reading a command reply from redis.
+        #read_timeout: 15s
+
+        # The timeout for writing a command to redis.
+        #write_timeout: 15s
+
+        # Dial timeout for establishing new connections.
+        #connect_timeout: 15s
+
+# This block defines configuration used for PostgreSQL storage.
+# example peers table structure:
+# - info_hash bytea
+# - peer_id bytea
+# - address inet or bytea
+# - port int4
+# - is_seeder bool
+# - is_v6 bool
+# - created timestamp
+# example downloads table structure:
+# - info_hash bytea
+# - downloads int
+#storage:
+    #name: pg
+    #config:
+        # connection string to pg storage. may be URL (postgres://...) or DSN (host=... port=...)
+        #connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
+        # query and parameters for announce operation
+        #announce:
+            #query: SELECT peer_id, address, port FROM mo_peers WHERE info_hash=@info_hash AND is_seeder=@is_seeder AND is_v6=@is_v6 LIMIT @count
+            #peer_id_column: peer_id
+            #address_column: address
+            #port_column: port
+        # queries to get/increment 'snached' (downloaded) count
+        #downloads:
+            #get_query: SELECT downloads FROM mo_downloads where info_hash=@info_hash
+            #inc_query: INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1
+        # queries and parameters for add/delete/count peers operations
+        #peer:
+            #add_query: INSERT INTO mo_peers VALUES(@info_hash, @peer_id, @address, @port, @is_seeder, @is_v6, @created) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
+            #del_query: DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=@peer_id AND address=@address AND port=@port AND is_seeder=@is_seeder
+            #graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND NOT is_seeder
+            #count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
+            # predicate part of `count_query` to get count of peers by info hash
+            #by_info_hash_clause: WHERE info_hash = @info_hash
+            #count_seeders_column: seeders
+            #count_leechers_column: leechers
+        # queries for KV-store
+        #data:
+            #add_query: INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING
+            # NOTE: in del_query @key parameter is array, NOT single value
+            #del_query: DELETE FROM mo_kv WHERE context=@context AND name = ANY(@key)
+            #get_query: SELECT value FROM mo_kv WHERE context=@context AND name=@key
+        # query for check if database is alive
+        #ping_query: SELECT 1
+        # query for garbage collection, expected parameter is timestamp
+        #gc_query: DELETE FROM mo_peers WHERE created <= @created
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        #peer_lifetime: 31m
+        # The frequency which stale peers are removed.
+        #gc_interval: 3m
+        # query for info hash statistics
+        #info_hash_count_query: SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers
+        # The interval at which metrics about the number of info hashes and peers
+        # are collected and posted to Prometheus.
+        #prometheus_reporting_interval: 1s
+
+# This block defines configuration used for middleware executed before a
+# response has been returned to a BitTorrent client.
+prehooks:
+#        -   name: jwt
+#            config:
+#                header: "authorization"
+#                issuer: "https://issuer.com"
+#                audience: "https://some.issuer.com"
+#                jwk_set_url: "https://issuer.com/keys"
+#                jwk_set_update_interval: 5m
+#                handle_announce: true
+#                handle_scrape: false
+#
+#        -   name: client approval
+#            config:
+#                whitelist:
+#                    - "OP1011"
+#                blacklist:
+#                    - "OP1012"
+#
+#        -   name: interval variation
+#            config:
+#                modify_response_probability: 0.2
+#                max_increase_delta: 60
+#                modify_min_interval: true
+#
+# This block defines configuration used for torrent approval, it requires to be given
+# hashes for whitelist or for blacklist. Hashes are hexadecimal-encoaded.
+#        -   name: torrent approval
+#            config:
+#                initial_source: list
+# Save data provided by source in storage above
+#                preserve: false
+#                configuration:
+#                    hash_list:
+#                        - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"
+# true - whitelist mode, false - blacklist
+#                    invert: false
+# Name of storage context where store hash list
+#                    storage_ctx: APPROVED_HASH
+posthooks:

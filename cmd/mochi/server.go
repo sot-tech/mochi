@@ -4,8 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/sot-tech/mochi/frontend/http"
-	"github.com/sot-tech/mochi/frontend/udp"
+	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
@@ -24,11 +23,10 @@ type Server struct {
 // It is optional to provide an instance of the peer store to avoid the
 // creation of a new one.
 func (r *Server) Run(configFilePath string) error {
-	configFile, err := ParseConfigFile(configFilePath)
+	cfg, err := ParseConfigFile(configFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
-	cfg := configFile.Conf
 
 	r.sg = stop.NewGroup()
 
@@ -39,51 +37,35 @@ func (r *Server) Run(configFilePath string) error {
 		log.Info().Msg("metrics disabled because of empty address")
 	}
 
-	log.Debug().Str("name", cfg.Storage.Name).Object("config", cfg.Storage.Config).Msg("starting storage")
-	r.storage, err = storage.NewStorage(cfg.Storage.Name, cfg.Storage.Config)
+	r.storage, err = storage.NewStorage(cfg.Storage)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
-	log.Info().Str("name", cfg.Storage.Name).Msg("started storage")
 
 	preHooks, err := middleware.NewHooks(cfg.PreHooks, r.storage)
 	if err != nil {
-		return fmt.Errorf("failed to validate hook config: %w", err)
+		return fmt.Errorf("failed to configure pre-hooks: %w", err)
 	}
 	postHooks, err := middleware.NewHooks(cfg.PostHooks, r.storage)
 	if err != nil {
-		return fmt.Errorf("failed to validate hook config: %w", err)
+		return fmt.Errorf("failed to configure post-hooks: %w", err)
 	}
 
-	r.logic = middleware.NewLogic(cfg.AnnounceInterval, cfg.MinAnnounceInterval, r.storage, preHooks, postHooks)
-
-	var started bool
-	if len(cfg.HTTPConfig) > 0 {
-		log.Info().Object("config", cfg.HTTPConfig).Msg("starting HTTP frontend")
-		httpFE, err := http.NewFrontend(r.logic, cfg.HTTPConfig)
-		if err == nil {
-			r.sg.Add(httpFE)
-			started = true
+	if len(cfg.Frontends) > 0 {
+		var fs []frontend.Frontend
+		r.logic = middleware.NewLogic(cfg.AnnounceInterval, cfg.MinAnnounceInterval, r.storage, preHooks, postHooks)
+		if fs, err = frontend.NewFrontends(cfg.Frontends, r.logic); err == nil {
+			for _, f := range fs {
+				r.sg.Add(f)
+			}
 		} else {
-			return err
+			err = fmt.Errorf("failed to configure frontends: %w", err)
 		}
+	} else {
+		err = errors.New("no frontends configured")
 	}
 
-	if len(cfg.UDPConfig) > 0 {
-		log.Info().Object("config", cfg.UDPConfig).Msg("starting UDP frontend")
-		udpFE, err := udp.NewFrontend(r.logic, cfg.UDPConfig)
-		if err == nil {
-			r.sg.Add(udpFE)
-			started = true
-		} else {
-			return err
-		}
-	}
-	if !started {
-		return errors.New("no frontends configured")
-	}
-
-	return nil
+	return err
 }
 
 // Dispose shuts down an instance of Server.

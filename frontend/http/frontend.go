@@ -17,16 +17,22 @@ import (
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
-var logger = log.NewLogger("http frontend")
+const Name = "http"
 
-// Config represents all of the configurable options for an HTTP BitTorrent
-// Frontend.
+var logger = log.NewLogger(Name)
+
+func init() {
+	frontend.RegisterBuilder(Name, newFrontend)
+}
+
+// Config represents all configurable options for an HTTP BitTorrent Frontend
 type Config struct {
 	Addr                string
 	HTTPSAddr           string        `cfg:"https_addr"`
@@ -94,28 +100,25 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// Frontend represents the state of an HTTP BitTorrent Frontend.
-type Frontend struct {
+type httpFE struct {
 	srv      *http.Server
 	srvMu    sync.Mutex
 	tlsSrv   *http.Server
 	tlsSrvMu sync.Mutex
 	tlsCfg   *tls.Config
 
-	logic frontend.TrackerLogic
+	logic *middleware.Logic
 	Config
 }
 
-// NewFrontend creates a new instance of an HTTP Frontend that asynchronously
-// serves requests.
-func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
+func newFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
 	var provided Config
 	if err := c.Unmarshal(&provided); err != nil {
 		return nil, err
 	}
 	cfg := provided.Validate()
 
-	f := &Frontend{
+	f := &httpFE{
 		logic:    logic,
 		Config:   cfg,
 		srvMu:    sync.Mutex{},
@@ -182,7 +185,7 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 }
 
 // Stop provides a thread-safe way to shut down a currently running Frontend.
-func (f *Frontend) Stop() stop.Result {
+func (f *httpFE) Stop() stop.Result {
 	stopGroup := stop.NewGroup()
 
 	f.srvMu.Lock()
@@ -200,7 +203,7 @@ func (f *Frontend) Stop() stop.Result {
 	return stopGroup.Stop()
 }
 
-func (f *Frontend) makeStopFunc(stopSrv *http.Server) stop.Func {
+func (f *httpFE) makeStopFunc(stopSrv *http.Server) stop.Func {
 	return func() stop.Result {
 		c := make(stop.Channel)
 		go func() {
@@ -212,7 +215,7 @@ func (f *Frontend) makeStopFunc(stopSrv *http.Server) stop.Func {
 
 // serveHTTP blocks while listening and serving non-TLS HTTP BitTorrent
 // requests until Stop() is called or an error is returned.
-func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
+func (f *httpFE) serveHTTP(handler http.Handler, tls bool) error {
 	srv := &http.Server{
 		Handler:           handler,
 		ReadTimeout:       f.ReadTimeout,
@@ -277,7 +280,7 @@ func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) conte
 }
 
 // announceRoute parses and responds to an Announce.
-func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
@@ -314,7 +317,7 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 }
 
 // scrapeRoute parses and responds to a Scrape.
-func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
@@ -349,7 +352,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
-func (f *Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (f *httpFE) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var err error
 	if r.Method == http.MethodGet {
 		err = f.logic.Ping(context.TODO())

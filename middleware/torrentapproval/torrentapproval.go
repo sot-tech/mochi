@@ -38,18 +38,18 @@ type baseConfig struct {
 	Configuration conf.MapConfig
 }
 
-func build(options conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, err error) {
+func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg baseConfig
-	if err = options.Unmarshal(&cfg); err != nil {
+	if err = config.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("middleware %s: %w", Name, err)
 	}
 
 	if len(cfg.Source) == 0 {
-		return nil, fmt.Errorf("invalid options for middleware %s: source not provided", Name)
+		return nil, fmt.Errorf("invalid config for middleware %s: source not provided", Name)
 	}
 
 	if cfg.Configuration == nil {
-		return nil, fmt.Errorf("invalid options for middleware %s: options not provided", Name)
+		return nil, fmt.Errorf("invalid config for middleware %s: config not provided", Name)
 	}
 
 	var ds storage.DataStorage = st

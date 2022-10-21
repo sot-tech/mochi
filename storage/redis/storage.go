@@ -77,7 +77,7 @@ var (
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterBuilder(Name, builder)
+	storage.RegisterDriver(Name, builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {

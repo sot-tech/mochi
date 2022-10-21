@@ -1,9 +1,5 @@
 package frontend
 
-import "github.com/sot-tech/mochi/pkg/log"
-
-var logger = log.NewLogger("frontend configurator")
-
 // ParseOptions is the configuration used to parse an Announce Request.
 //
 // If AllowIPSpoofing is true, IPs provided via params will be used.

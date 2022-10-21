@@ -51,3 +51,12 @@ func (m MapConfig) Unmarshal(into any) (err error) {
 	}
 	return
 }
+
+type NamedMapConfig struct {
+	Name   string
+	Config MapConfig
+}
+
+func (nm NamedMapConfig) MarshalZerologObject(e *zerolog.Event) {
+	e.Str("name", nm.Name).Dict("config", zerolog.Dict().EmbedObject(nm.Config))
+}

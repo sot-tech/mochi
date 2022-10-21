@@ -70,12 +70,10 @@ type hook struct {
 	jwks *keyfunc.JWKS
 }
 
-func build(options conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
+func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg Config
 
-	logger.Debug().Object("options", options).Msg("creating new JWT middleware")
-
-	if err = options.Unmarshal(&cfg); err != nil {
+	if err = config.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("middleware %s: %w", Name, err)
 	}
 

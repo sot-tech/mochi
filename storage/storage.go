@@ -3,7 +3,7 @@
 package storage
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -23,9 +23,9 @@ const (
 )
 
 var (
-	logger   = log.NewLogger("storage configurator")
-	driversM sync.RWMutex
-	drivers  = make(map[string]Builder)
+	logger    = log.NewLogger("storage")
+	driversMU sync.RWMutex
+	drivers   = make(map[string]Driver)
 )
 
 // Config holds configuration for periodic execution tasks, which may or may not implement
@@ -81,19 +81,14 @@ type Entry struct {
 	Value []byte
 }
 
-// Builder is the function used to initialize a new type of PeerStorage.
-type Builder func(cfg conf.MapConfig) (PeerStorage, error)
+// Driver is the function used to initialize a new PeerStorage
+// with provided configuration.
+type Driver func(conf.MapConfig) (PeerStorage, error)
 
-var (
-	// ErrResourceDoesNotExist is the error returned by all delete methods and the
-	// AnnouncePeers method of the PeerStorage interface if the requested resource
-	// does not exist.
-	ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
-
-	// ErrDriverDoesNotExist is the error returned by NewStorage when a peer
-	// store driver with that name does not exist.
-	ErrDriverDoesNotExist = errors.New("peer store driver with that name does not exist")
-)
+// ErrResourceDoesNotExist is the error returned by all delete methods and the
+// AnnouncePeers method of the PeerStorage interface if the requested resource
+// does not exist.
+var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 
 // DataStorage is the interface, used for implementing store for arbitrary data
 type DataStorage interface {
@@ -216,80 +211,81 @@ type PeerStorage interface {
 	stop.Stopper
 }
 
-// RegisterBuilder makes a Builder available by the provided name.
+// RegisterDriver makes a Driver available by the provided name.
 //
 // If called twice with the same name, the name is blank, or if the provided
 // Driver is nil, this function panics.
-func RegisterBuilder(name string, b Builder) {
+func RegisterDriver(name string, d Driver) {
 	if name == "" {
-		panic("storage: could not register a Builder with an empty name")
+		panic("storage: could not register a Driver with an empty name")
 	}
-	if b == nil {
-		panic("storage: could not register a nil Builder")
+	if d == nil {
+		panic("storage: could not register a nil Driver")
 	}
 
-	driversM.Lock()
-	defer driversM.Unlock()
+	driversMU.Lock()
+	defer driversMU.Unlock()
 
 	if _, dup := drivers[name]; dup {
-		panic("storage: RegisterBuilder called twice for " + name)
+		panic("storage: RegisterDriver called twice for " + name)
 	}
 
-	drivers[name] = b
+	drivers[name] = d
 }
 
 // NewStorage attempts to initialize a new PeerStorage instance from
-// the list of registered Drivers.
-//
-// If a builder does not exist, returns ErrDriverDoesNotExist.
-func NewStorage(name string, cfg conf.MapConfig) (ps PeerStorage, err error) {
-	driversM.RLock()
-	defer driversM.RUnlock()
+// the list of registered drivers.
+func NewStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
+	driversMU.RLock()
+	defer driversMU.RUnlock()
+	logger.Debug().Object("cfg", cfg).Msg("staring storage")
 
-	var b Builder
-	b, ok := drivers[name]
+	var b Driver
+	b, ok := drivers[cfg.Name]
 	if !ok {
-		return nil, ErrDriverDoesNotExist
+		return nil, fmt.Errorf("storage with name '%s' does not exists", cfg.Name)
 	}
 
 	c := new(Config)
-	if err = cfg.Unmarshal(c); err != nil {
+	if err = cfg.Config.Unmarshal(c); err != nil {
 		return
 	}
 
-	if ps, err = b(cfg); err != nil {
+	if ps, err = b(cfg.Config); err != nil {
 		return
 	}
 
 	if gc := ps.GCAware(); gc {
 		gcInterval, peerTTL := c.sanitizeGCConfig()
 		logger.Info().
-			Str("type", name).
+			Str("name", cfg.Name).
 			Dur("gcInterval", gcInterval).
 			Dur("peerTTL", peerTTL).
 			Msg("scheduling GC")
 		ps.ScheduleGC(gcInterval, peerTTL)
 	} else {
 		logger.Debug().
-			Str("type", name).
+			Str("name", cfg.Name).
 			Msg("storage does not support GC")
 	}
 
 	if st := ps.StatisticsAware(); st {
 		if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
 			logger.Info().
-				Str("type", name).
+				Str("name", cfg.Name).
 				Dur("statInterval", statInterval).
 				Msg("scheduling statistics collection")
 			ps.ScheduleStatisticsCollection(statInterval)
 		} else {
-			logger.Info().Str("type", name).Msg("statistics collection disabled because of zero reporting interval")
+			logger.Info().Str("name", cfg.Name).Msg("statistics collection disabled because of zero reporting interval")
 		}
 	} else {
 		logger.Debug().
-			Str("type", name).
+			Str("name", cfg.Name).
 			Msg("storage does not support statistics collection")
 	}
+
+	logger.Info().Str("name", cfg.Name).Msg("storage started")
 
 	return
 }

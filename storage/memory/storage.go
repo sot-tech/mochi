@@ -29,7 +29,7 @@ var logger = log.NewLogger(Name)
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterBuilder(Name, builder)
+	storage.RegisterDriver(Name, builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
