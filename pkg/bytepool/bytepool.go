@@ -8,8 +8,8 @@ type BytePool struct {
 	sync.Pool
 }
 
-// New allocates a new BytePool with slices of equal length and capacity.
-func New(length int) *BytePool {
+// NewBytePool allocates a new BytePool with slices of equal length and capacity.
+func NewBytePool(length int) *BytePool {
 	var bp BytePool
 	bp.Pool.New = func() any {
 		// This avoids allocations for the slice metadata, see:

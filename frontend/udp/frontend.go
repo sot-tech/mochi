@@ -17,8 +17,8 @@ import (
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
-	"github.com/sot-tech/mochi/frontend/udp/bytepool"
 	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/bytepool"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
@@ -41,11 +41,9 @@ func init() {
 // Config represents all of the configurable options for a UDP BitTorrent
 // Tracker.
 type Config struct {
-	Addr                string
-	ReusePort           bool          `cfg:"reuse_port"`
-	PrivateKey          string        `cfg:"private_key"`
-	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
-	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	frontend.ListenOptions
+	PrivateKey   string        `cfg:"private_key"`
+	MaxClockSkew time.Duration `cfg:"max_clock_skew"`
 	frontend.ParseOptions
 }
 
@@ -113,7 +111,7 @@ func newFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	f.wg.Add(1)
 	go func() {
 		if err := f.serve(); err != nil {
-			logger.Fatal().Err(err).Str("proto", "udp").Msg("failed while serving")
+			logger.Fatal().Err(err).Msg("failed while serving")
 		}
 	}()
 
@@ -162,7 +160,7 @@ func (t *udpFE) listen() (err error) {
 // serve blocks while listening and serving UDP BitTorrent requests
 // until Stop() is called or an error is returned.
 func (t *udpFE) serve() error {
-	pool := bytepool.New(2048)
+	pool := bytepool.NewBytePool(2048)
 	defer t.wg.Done()
 
 	for {

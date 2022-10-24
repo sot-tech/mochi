@@ -1,15 +1,14 @@
 package udp
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
 	"net/netip"
-	"sync"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+	"github.com/sot-tech/mochi/pkg/bytepool"
 )
 
 const (
@@ -48,6 +47,8 @@ var (
 	errUnknownOptionType = bittorrent.ClientError("unknown option type")
 	errInvalidInfoHash   = bittorrent.ClientError("invalid info hash")
 	errInvalidPeerID     = bittorrent.ClientError("invalid info hash")
+
+	reqRespBufferPool = bytepool.NewBufferPool()
 )
 
 // ParseAnnounce parses an AnnounceRequest from a UDP request.
@@ -111,23 +112,6 @@ func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bitto
 	return request, err
 }
 
-type buffer struct {
-	bytes.Buffer
-}
-
-var bufferFree = sync.Pool{
-	New: func() any { return new(buffer) },
-}
-
-func newBuffer() *buffer {
-	return bufferFree.Get().(*buffer)
-}
-
-func (b *buffer) free() {
-	b.Reset()
-	bufferFree.Put(b)
-}
-
 // handleOptionalParameters parses the optional parameters as described in BEP
 // 41 and updates an announce with the values parsed.
 func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
@@ -135,8 +119,8 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 		return bittorrent.ParseURLData("")
 	}
 
-	buf := newBuffer()
-	defer buf.free()
+	buf := reqRespBufferPool.Get()
+	defer reqRespBufferPool.Put(buf)
 
 	for i := 0; i < len(packet); {
 		option := packet[i]

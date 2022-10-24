@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -88,6 +89,7 @@ func (l *Logic) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest)
 			return nil, nil, err
 		}
 	}
+	sort.Sort(&resp.Files)
 
 	logger.Debug().Object("response", resp).Msg("generated scrape response")
 	return ctx, resp, nil
