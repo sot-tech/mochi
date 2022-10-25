@@ -44,6 +44,7 @@ func RegisterBuilder(name string, b Builder) {
 	builders[name] = b
 }
 
+// Frontend dummy interface for bittorrent frontends
 type Frontend interface {
 	stop.Stopper
 }

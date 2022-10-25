@@ -14,7 +14,8 @@ const (
 )
 
 var (
-	errAddressNotProvided     = errors.New("address not provided")
+	// ErrAddressNotProvided returned if listen address not provided in configuration
+	ErrAddressNotProvided     = errors.New("address not provided")
 	errUnexpectedListenerType = errors.New("unexpected listener type")
 )
 
@@ -27,15 +28,17 @@ type ListenOptions struct {
 	EnableRequestTiming bool          `cfg:"enable_request_timing"`
 }
 
+// Validate checks if listen address provided and sets default
+// timeout options if needed
 func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
 	validOptions = lo
 	if len(lo.Addr) == 0 {
-		err = errAddressNotProvided
+		err = ErrAddressNotProvided
 	} else {
 		if lo.ReadTimeout <= 0 {
 			validOptions.ReadTimeout = defaultReadTimeout
 			logger.Warn().
-				Str("name", "http.ReadTimeout").
+				Str("name", "ReadTimeout").
 				Dur("provided", lo.ReadTimeout).
 				Dur("default", validOptions.ReadTimeout).
 				Msg("falling back to default configuration")
@@ -44,7 +47,7 @@ func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
 		if lo.WriteTimeout <= 0 {
 			validOptions.WriteTimeout = defaultWriteTimeout
 			logger.Warn().
-				Str("name", "http.WriteTimeout").
+				Str("name", "WriteTimeout").
 				Dur("provided", lo.WriteTimeout).
 				Dur("default", validOptions.WriteTimeout).
 				Msg("falling back to default configuration")
@@ -53,6 +56,9 @@ func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
 	return
 }
 
+// ListenTCP listens at the given TCP Addr
+// with SO_REUSEPORT and SO_REUSEADDR options enabled if
+// ReusePort set to true
 func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
 	if lo.ReusePort {
 		var ln net.Listener
@@ -71,6 +77,9 @@ func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
 	return
 }
 
+// ListenUDP listens at the given UDP Addr
+// with SO_REUSEPORT and SO_REUSEADDR options enabled if
+// ReusePort set to true
 func (lo ListenOptions) ListenUDP() (conn *net.UDPConn, err error) {
 	if lo.ReusePort {
 		var ln net.PacketConn

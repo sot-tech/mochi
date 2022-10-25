@@ -21,16 +21,14 @@ import (
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
-const Name = "http"
-
 var (
-	logger               = log.NewLogger(Name)
+	logger               = log.NewLogger("frontend/http")
 	errTLSNotProvided    = errors.New("tls certificate/key not provided")
 	errRoutesNotProvided = errors.New("routes not provided")
 )
 
 func init() {
-	frontend.RegisterBuilder(Name, newFrontend)
+	frontend.RegisterBuilder("http", NewFrontend)
 }
 
 // Config represents all configurable options for an HTTP BitTorrent Frontend
@@ -51,9 +49,8 @@ const defaultIdleTimeout = 30 * time.Second
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
 func (cfg Config) Validate() (validCfg Config, err error) {
+	validCfg = cfg
 	if validCfg.ListenOptions, err = cfg.ListenOptions.Validate(); err != nil {
 		return
 	}
@@ -66,7 +63,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 		if cfg.EnableKeepAlive {
 			// If keepalive is disabled, this configuration isn't used anyway.
 			logger.Warn().
-				Str("name", "http.IdleTimeout").
+				Str("name", "IdleTimeout").
 				Dur("provided", cfg.IdleTimeout).
 				Dur("default", validCfg.IdleTimeout).
 				Msg("falling back to default configuration")
@@ -83,7 +80,8 @@ type httpFE struct {
 	ParseOptions
 }
 
-func newFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend, err error) {
+// NewFrontend builds and starts http bittorrent frontend from provided configuration
+func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend, err error) {
 	var cfg Config
 	if err = c.Unmarshal(&cfg); err != nil {
 		return
@@ -137,7 +135,9 @@ func newFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend
 
 	go func() {
 		ln, err := cfg.ListenTCP()
-		defer logger.Err(ln.Close()).Msg("closing listener")
+		defer func() {
+			logger.Err(ln.Close()).Msg("closing listener")
+		}()
 		if err == nil {
 			if f.srv.TLSConfig == nil {
 				err = f.srv.Serve(ln)
@@ -145,9 +145,7 @@ func newFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend
 				err = f.srv.ServeTLS(ln, "", "")
 			}
 		}
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		} else {
+		if !errors.Is(err, http.ErrServerClosed) {
 			logger.Fatal().Err(err).Msg("server failed")
 		}
 	}()

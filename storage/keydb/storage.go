@@ -24,14 +24,10 @@ import (
 	r "github.com/sot-tech/mochi/storage/redis"
 )
 
-// Name is name of this storage
-const (
-	Name            = "keydb"
-	expireMemberCmd = "EXPIREMEMBER"
-)
+const expireMemberCmd = "EXPIREMEMBER"
 
 var (
-	logger = log.NewLogger(Name)
+	logger = log.NewLogger("storage/keydb")
 	// errNotKeyDB returned from initializer if connected does not support KeyDB
 	// specific command (EXPIREMEMBER)
 	errNotKeyDB = errors.New("provided instance seems not KeyDB")
@@ -39,7 +35,7 @@ var (
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver("keydb", builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {

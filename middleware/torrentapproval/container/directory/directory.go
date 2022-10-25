@@ -20,13 +20,10 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-// Name of this container for registry
-const Name = "directory"
-
-var logger = log.NewLogger("torrent approval directory")
+var logger = log.NewLogger("middleware/torrent approval/directory")
 
 func init() {
-	container.Register(Name, build)
+	container.Register("directory", build)
 }
 
 // Config - implementation of directory container configuration.

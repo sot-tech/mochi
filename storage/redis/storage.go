@@ -42,8 +42,6 @@ import (
 )
 
 const (
-	// Name is the name by which this peer store is registered with Conf.
-	Name = "redis"
 	// Default config constants.
 	defaultRedisAddress   = "127.0.0.1:6379"
 	defaultReadTimeout    = time.Second * 15
@@ -70,14 +68,14 @@ const (
 )
 
 var (
-	logger = log.NewLogger(Name)
+	logger = log.NewLogger("storage/redis")
 	// errSentinelAndClusterChecked returned from initializer if both Config.Sentinel and Config.Cluster provided
 	errSentinelAndClusterChecked = errors.New("unable to use both cluster and sentinel mode")
 )
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver("redis", builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {

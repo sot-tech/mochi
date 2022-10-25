@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-reuseport"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
 	"github.com/sot-tech/mochi/middleware"
@@ -26,19 +24,16 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
-const Name = "http"
-
 var (
-	logger                          = log.NewLogger(Name)
+	logger                          = log.NewLogger("frontend/udp")
 	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
-	errUnexpectedConnType           = errors.New("unexpected connection type (not UDPConn)")
 )
 
 func init() {
-	frontend.RegisterBuilder(Name, newFrontend)
+	frontend.RegisterBuilder("udp", NewFrontend)
 }
 
-// Config represents all of the configurable options for a UDP BitTorrent
+// Config represents all the configurable options for a UDP BitTorrent
 // Tracker.
 type Config struct {
 	frontend.ListenOptions
@@ -49,10 +44,13 @@ type Config struct {
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
-	validcfg := cfg
+func (cfg Config) Validate() (validCfg Config, err error) {
+	if len(cfg.Addr) == 0 {
+		err = frontend.ErrAddressNotProvided
+		return
+	}
+
+	validCfg = cfg
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
@@ -60,43 +58,49 @@ func (cfg Config) Validate() Config {
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
 		}
-		validcfg.PrivateKey = string(pkeyRunes)
+		validCfg.PrivateKey = string(pkeyRunes)
 
 		logger.Warn().
-			Str("name", "UDP.PrivateKey").
+			Str("name", "PrivateKey").
 			Str("provided", "").
-			Str("key", validcfg.PrivateKey).
+			Str("key", validCfg.PrivateKey).
 			Msg("falling back to default configuration")
 	}
 
-	validcfg.ParseOptions = cfg.ParseOptions.Validate()
+	validCfg.ParseOptions = cfg.ParseOptions.Validate()
 
-	return validcfg
+	return
 }
 
 // udpFE holds the state of a UDP BitTorrent Frontend.
 type udpFE struct {
-	socket  *net.UDPConn
-	closing chan struct{}
-	wg      sync.WaitGroup
-
-	genPool *sync.Pool
-
-	logic *middleware.Logic
-	Config
+	socket         *net.UDPConn
+	closing        chan any
+	wg             sync.WaitGroup
+	genPool        *sync.Pool
+	logic          *middleware.Logic
+	maxClockSkew   time.Duration
+	collectTimings bool
+	frontend.ParseOptions
 }
 
-func newFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
-	var provided Config
-	if err := c.Unmarshal(&provided); err != nil {
+// NewFrontend builds and starts udp bittorrent frontend from provided configuration
+func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
+	var err error
+	var cfg Config
+	if err = c.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	cfg := provided.Validate()
+	if cfg, err = cfg.Validate(); err != nil {
+		return nil, err
+	}
 
 	f := &udpFE{
-		closing: make(chan struct{}),
-		logic:   logic,
-		Config:  cfg,
+		closing:        make(chan any),
+		logic:          logic,
+		maxClockSkew:   cfg.MaxClockSkew,
+		collectTimings: cfg.EnableRequestTiming,
+		ParseOptions:   cfg.ParseOptions,
 		genPool: &sync.Pool{
 			New: func() any {
 				return NewConnectionIDGenerator(cfg.PrivateKey)
@@ -104,18 +108,16 @@ func newFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		},
 	}
 
-	if err := f.listen(); err != nil {
-		return nil, err
+	if f.socket, err = cfg.ListenUDP(); err == nil {
+		f.wg.Add(1)
+		go func() {
+			if err := f.serve(); err != nil {
+				logger.Fatal().Err(err).Msg("server failed")
+			}
+		}()
 	}
 
-	f.wg.Add(1)
-	go func() {
-		if err := f.serve(); err != nil {
-			logger.Fatal().Err(err).Msg("failed while serving")
-		}
-	}()
-
-	return f, nil
+	return f, err
 }
 
 // Stop provides a thread-safe way to shut down a currently running Frontend.
@@ -129,32 +131,16 @@ func (t *udpFE) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
 		close(t.closing)
-		_ = t.socket.SetReadDeadline(time.Now())
-		t.wg.Wait()
-		c.Done(t.socket.Close())
+		var err error
+		if t.socket != nil {
+			_ = t.socket.SetReadDeadline(time.Now())
+			t.wg.Wait()
+			err = t.socket.Close()
+		}
+		c.Done(err)
 	}()
 
 	return c.Result()
-}
-
-// listen resolves the address and binds the server socket.
-func (t *udpFE) listen() (err error) {
-	if t.ReusePort {
-		var ln net.PacketConn
-		if ln, err = reuseport.ListenPacket("udp", t.Addr); err == nil {
-			var isOk bool
-			if t.socket, isOk = ln.(*net.UDPConn); !isOk {
-				err = errUnexpectedConnType
-			}
-		}
-	} else {
-		var udpAddr *net.UDPAddr
-		udpAddr, err = net.ResolveUDPAddr("udp", t.Addr)
-		if err == nil {
-			t.socket, err = net.ListenUDP("udp", udpAddr)
-		}
-	}
-	return err
 }
 
 // serve blocks while listening and serving UDP BitTorrent requests
@@ -199,14 +185,14 @@ func (t *udpFE) serve() error {
 			// Handle the request.
 			addr := addrPort.Addr().Unmap()
 			var start time.Time
-			if t.EnableRequestTiming && metrics.Enabled() {
+			if t.collectTimings && metrics.Enabled() {
 				start = time.Now()
 			}
 			action, err := t.handleRequest(
 				Request{(*buffer)[:n], addr},
 				ResponseWriter{t.socket, addrPort},
 			)
-			if t.EnableRequestTiming && metrics.Enabled() {
+			if t.collectTimings && metrics.Enabled() {
 				recordResponseDuration(action, addr, err, time.Since(start))
 			}
 		}()
@@ -251,7 +237,7 @@ func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, e
 
 	// If this isn't requesting a new connection ID and the connection ID is
 	// invalid, then fail.
-	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), t.MaxClockSkew) {
+	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), t.maxClockSkew) {
 		err = errBadConnectionID
 		WriteError(w, txID, err)
 		return

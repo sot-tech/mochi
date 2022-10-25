@@ -3,11 +3,10 @@ package http
 import (
 	"bytes"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/anacrolix/torrent/bencode"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/bytepool"
@@ -36,7 +35,6 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	if resp.Interval > 0 {
 		resp.Interval /= time.Second
 	}
-
 	if resp.Interval > 0 {
 		resp.MinInterval /= time.Second
 	}
@@ -54,18 +52,9 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	// Add the peers to the dictionary in the compact format.
 	if resp.Compact {
 		// Add the IPv4 peers to the dictionary.
-		bb.WriteString("5:peersl")
-		for _, peer := range resp.IPv4Peers {
-			compactAddress(bb, peer)
-		}
-		bb.WriteByte('e')
-
+		compactAddresses(bb, resp.IPv4Peers, false)
 		// Add the IPv6 peers to the dictionary.
-		bb.WriteString("6:peers6l")
-		for _, peer := range resp.IPv6Peers {
-			compactAddress(bb, peer)
-		}
-		bb.WriteByte('e')
+		compactAddresses(bb, resp.IPv6Peers, true)
 	} else {
 		// Add the peers to the dictionary.
 		bb.WriteString("5:peersl")
@@ -83,14 +72,23 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	return err
 }
 
-func compactAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
-	addr, port := peer.Addr().AsSlice(), peer.Port()
-	bb.WriteString(strconv.Itoa(len(addr) + 2))
-	bb.WriteByte(':')
-	bb.Write(addr)
-	bb.WriteByte(byte(port >> 8))
-	bb.WriteByte(byte(port))
-	return
+func compactAddresses(bb *bytes.Buffer, peers bittorrent.Peers, v6 bool) {
+	l := len(peers)
+	if l > 0 {
+		key, al := "5:peers", net.IPv4len
+		if v6 {
+			key, al = "6:peers6", net.IPv6len
+		}
+		bb.WriteString(key)
+		bb.WriteString(strconv.Itoa((al + 2) * l))
+		bb.WriteByte(':')
+		for _, peer := range peers {
+			bb.Write(peer.Addr().AsSlice())
+			port := peer.Port()
+			bb.WriteByte(byte(port >> 8))
+			bb.WriteByte(byte(port))
+		}
+	}
 }
 
 func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
@@ -100,7 +98,7 @@ func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
 	bb.WriteByte(':')
 	bb.WriteString(addr)
 	bb.WriteString("7:peer id20:")
-	bb.WriteString(peer.ID.RawString())
+	bb.Write(peer.ID[:])
 	bb.WriteString("4:porti")
 	bb.WriteString(strconv.FormatUint(uint64(peer.Port()), 10))
 	bb.WriteString("ee")
@@ -109,16 +107,22 @@ func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
 // WriteScrapeResponse communicates the results of a Scrape to a BitTorrent
 // client over HTTP.
 func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse) error {
-	filesDict := make(map[bittorrent.InfoHash]any, len(resp.Files))
+	bb := respBufferPool.Get()
+	defer respBufferPool.Put(bb)
+	bb.WriteString("d5:filesd")
 	for _, scrape := range resp.Files {
-		filesDict[scrape.InfoHash] = map[string]any{
-			"complete":   scrape.Complete,
-			"downloaded": scrape.Snatches,
-			"incomplete": scrape.Incomplete,
-		}
+		bb.WriteString(strconv.Itoa(len(scrape.InfoHash)))
+		bb.WriteByte(':')
+		bb.Write([]byte(scrape.InfoHash))
+		bb.WriteString("d8:completei")
+		bb.WriteString(strconv.FormatUint(uint64(scrape.Complete), 10))
+		bb.WriteString("e10:downloadedi")
+		bb.WriteString(strconv.FormatUint(uint64(scrape.Snatches), 10))
+		bb.WriteString("e10:incompletei")
+		bb.WriteString(strconv.FormatUint(uint64(scrape.Incomplete), 10))
+		bb.WriteString("ee")
 	}
-
-	return bencode.NewEncoder(w).Encode(map[string]any{
-		"files": filesDict,
-	})
+	bb.WriteString("ee")
+	_, err := bb.WriteTo(w)
+	return err
 }

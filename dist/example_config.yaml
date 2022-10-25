@@ -23,13 +23,14 @@ frontends:
             # BitTorrent traffic. Remove this to disable the non-TLS listener.
             addr: "0.0.0.0:6969"
 
-            # The network interface that will bind to an HTTPS server for serving
+            # Mark this frontend as HTTPS server for serving
             # BitTorrent traffic. If set, tls_cert_path and tls_key_path are required.
-            https_addr: ""
+            tls: false
 
             # The path to the required files to listen via HTTPS.
             tls_cert_path: ""
             tls_key_path: ""
+
             # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same HTTP(S) port.
             reuse_port: true
 
@@ -157,119 +158,9 @@ storage:
         # are collected and posted to Prometheus.
         prometheus_reporting_interval: 1s
 
-# This block defines configuration used for redis storage.
-#storage:
-    #name: redis
-    #config:
-        # The frequency which stale peers are removed.
-        # This balances between
-        # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
-        # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
-        #gc_interval: 3m
-
-        # The interval at which metrics about the number of infohashes and peers
-        # are collected and posted to Prometheus.
-        #prometheus_reporting_interval: 1s
-
-        # The amount of time until a peer is considered stale.
-        # To avoid churn, keep this slightly larger than `announce_interval`
-        #peer_lifetime: 31m
-
-        # The addresses of redis storage.
-        # If neither sentinel not cluster switched,
-        # only first address used
-        #addresses: ["127.0.0.1:6379"]
-
-        # Database to be selected after connecting to the server.
-        #db: 0
-
-        # Maximum number of socket connections, default is 10 per CPU
-        #pool_size: 10
-
-        # Use the specified login/username to authenticate the current connection
-        #login: ""
-
-        # Optional password
-        #password: ""
-
-        # Connect to sentinel nodes
-        #sentinel: false
-
-        # The master name
-        #sentinel_master: ""
-
-        # Connect to the redis cluster
-        #cluster: false
-
-        # The timeout for reading a command reply from redis.
-        #read_timeout: 15s
-
-        # The timeout for writing a command to redis.
-        #write_timeout: 15s
-
-        # Dial timeout for establishing new connections.
-        #connect_timeout: 15s
-
-# This block defines configuration used for PostgreSQL storage.
-# example peers table structure:
-# - info_hash bytea
-# - peer_id bytea
-# - address inet or bytea
-# - port int4
-# - is_seeder bool
-# - is_v6 bool
-# - created timestamp
-# example downloads table structure:
-# - info_hash bytea
-# - downloads int
-#storage:
-    #name: pg
-    #config:
-        # connection string to pg storage. may be URL (postgres://...) or DSN (host=... port=...)
-        #connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
-        # query and parameters for announce operation
-        #announce:
-            #query: SELECT peer_id, address, port FROM mo_peers WHERE info_hash=@info_hash AND is_seeder=@is_seeder AND is_v6=@is_v6 LIMIT @count
-            #peer_id_column: peer_id
-            #address_column: address
-            #port_column: port
-        # queries to get/increment 'snached' (downloaded) count
-        #downloads:
-            #get_query: SELECT downloads FROM mo_downloads where info_hash=@info_hash
-            #inc_query: INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1
-        # queries and parameters for add/delete/count peers operations
-        #peer:
-            #add_query: INSERT INTO mo_peers VALUES(@info_hash, @peer_id, @address, @port, @is_seeder, @is_v6, @created) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
-            #del_query: DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=@peer_id AND address=@address AND port=@port AND is_seeder=@is_seeder
-            #graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND NOT is_seeder
-            #count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
-            # predicate part of `count_query` to get count of peers by info hash
-            #by_info_hash_clause: WHERE info_hash = @info_hash
-            #count_seeders_column: seeders
-            #count_leechers_column: leechers
-        # queries for KV-store
-        #data:
-            #add_query: INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING
-            # NOTE: in del_query @key parameter is array, NOT single value
-            #del_query: DELETE FROM mo_kv WHERE context=@context AND name = ANY(@key)
-            #get_query: SELECT value FROM mo_kv WHERE context=@context AND name=@key
-        # query for check if database is alive
-        #ping_query: SELECT 1
-        # query for garbage collection, expected parameter is timestamp
-        #gc_query: DELETE FROM mo_peers WHERE created <= @created
-        # The amount of time until a peer is considered stale.
-        # To avoid churn, keep this slightly larger than `announce_interval`
-        #peer_lifetime: 31m
-        # The frequency which stale peers are removed.
-        #gc_interval: 3m
-        # query for info hash statistics
-        #info_hash_count_query: SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers
-        # The interval at which metrics about the number of info hashes and peers
-        # are collected and posted to Prometheus.
-        #prometheus_reporting_interval: 1s
-
 # This block defines configuration used for middleware executed before a
 # response has been returned to a BitTorrent client.
+posthooks: []
 prehooks:
 #        -   name: jwt
 #            config:
@@ -308,4 +199,3 @@ prehooks:
 #                    invert: false
 # Name of storage context where store hash list
 #                    storage_ctx: APPROVED_HASH
-posthooks:

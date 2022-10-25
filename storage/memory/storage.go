@@ -19,17 +19,13 @@ import (
 )
 
 // Default config constants.
-const (
-	// Name is the name by which this peer store is registered with Conf.
-	Name              = "memory"
-	defaultShardCount = 1024
-)
+const defaultShardCount = 1024
 
-var logger = log.NewLogger(Name)
+var logger = log.NewLogger("storage/memory")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver("memory", builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {

@@ -26,9 +26,6 @@ import (
 )
 
 const (
-	// Name is the name by which this peer store is registered with Conf.
-	Name = "pg"
-
 	defaultPingQuery = "SELECT 0"
 
 	errRequiredParameterNotSetMsg = "required parameter not provided: %s"
@@ -49,14 +46,13 @@ const (
 )
 
 var (
-	logger = log.NewLogger(Name)
-
+	logger                         = log.NewLogger("storage/pg")
 	errConnectionStringNotProvided = errors.New("database connection string not provided")
 )
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver("pg", builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
