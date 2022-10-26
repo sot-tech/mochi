@@ -61,7 +61,7 @@ storage:
     name: pg
     config:
         # connection string to pg storage. may be URL (postgres://...) or DSN (host=... port=...)
-        #connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
+        connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
         # query and parameters for announce operation
         announce:
             query: SELECT peer_id, address, port FROM mo_peers WHERE info_hash=@info_hash AND is_seeder=@is_seeder AND is_v6=@is_v6 LIMIT @count
