@@ -69,6 +69,8 @@ Here is an example:
   - <peer 2 key>: <modification time in unix nanos>
 - CHI_L4_<HASH2>
   - <peer 3 key>: <modification time in unix nanos>
+- CHI_D (hash type)
+  - <HASH1>: <number of downloads>
 ...
 ```
 

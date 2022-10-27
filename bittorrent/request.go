@@ -35,19 +35,19 @@ func (a RequestAddress) MarshalZerologObject(e *zerolog.Event) {
 // connection information about peer
 type RequestAddresses []RequestAddress
 
-func (aa RequestAddresses) Len() int {
-	return len(aa)
+func (aa *RequestAddresses) Len() int {
+	return len(*aa)
 }
 
 // Less returns true only if i-th RequestAddress is marked as
 // RequestAddress.Provided and j-th is not (provided address has
 // higher priority)
-func (aa RequestAddresses) Less(i, j int) bool {
-	return aa[i].Provided && !aa[j].Provided
+func (aa *RequestAddresses) Less(i, j int) bool {
+	return (*aa)[i].Provided && !(*aa)[j].Provided
 }
 
-func (aa RequestAddresses) Swap(i, j int) {
-	aa[i], aa[j] = aa[j], aa[i]
+func (aa *RequestAddresses) Swap(i, j int) {
+	(*aa)[i], (*aa)[j] = (*aa)[j], (*aa)[i]
 }
 
 // Add checks if provided RequestAddress is valid and adds unmapped
@@ -82,25 +82,27 @@ func (aa *RequestAddresses) Sanitize(ignorePrivate bool) bool {
 		*aa = append(*aa, RequestAddress{a, p})
 	}
 	if len(*aa) > 1 {
-		sort.Sort(*aa)
+		sort.Sort(aa)
 	}
 	return len(uniqueAddresses) > 0
 }
 
 // GetFirst returns first address from array
 // or empty netip.Addr if array is empty
-func (aa RequestAddresses) GetFirst() netip.Addr {
+func (aa *RequestAddresses) GetFirst() netip.Addr {
 	var a netip.Addr
-	if len(aa) > 0 {
-		a = aa[0].Addr
+	if len(*aa) > 0 {
+		a = (*aa)[0].Addr
 	}
 	return a
 }
 
 // MarshalZerologArray writes array elements to zerolog event
-func (aa RequestAddresses) MarshalZerologArray(a *zerolog.Array) {
-	for _, addr := range aa {
-		a.Object(addr)
+func (aa *RequestAddresses) MarshalZerologArray(a *zerolog.Array) {
+	if aa != nil {
+		for _, addr := range *aa {
+			a.Object(addr)
+		}
 	}
 }
 
@@ -137,7 +139,7 @@ func (rp RequestPeer) Peers() (peers Peers) {
 // MarshalZerologObject writes fields into zerolog event
 func (rp RequestPeer) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("id", rp.ID).
-		Array("addresses", rp.RequestAddresses).
+		Array("addresses", &rp.RequestAddresses).
 		Uint16("port", rp.Port)
 }
 
@@ -216,18 +218,48 @@ type ScrapeRequest struct {
 
 // MarshalZerologObject writes fields into zerolog event
 func (r ScrapeRequest) MarshalZerologObject(e *zerolog.Event) {
-	e.Array("addresses", r.RequestAddresses).
+	e.Array("addresses", &r.RequestAddresses).
 		Array("infoHashes", r.InfoHashes).
 		Object("params", r.Params)
+}
+
+// Scrape represents the state of a swarm that is returned in a scrape response.
+type Scrape struct {
+	InfoHash   InfoHash
+	Snatches   uint32
+	Complete   uint32
+	Incomplete uint32
+}
+
+// MarshalZerologObject writes fields into zerolog event
+func (s Scrape) MarshalZerologObject(e *zerolog.Event) {
+	e.Stringer("infoHash", s.InfoHash).
+		Uint32("snatches", s.Snatches).
+		Uint32("complete", s.Complete).
+		Uint32("incomplete", s.Incomplete)
 }
 
 // Scrapes wrapper of array of Scrape-s
 type Scrapes []Scrape
 
+func (s *Scrapes) Len() int {
+	return len(*s)
+}
+
+func (s *Scrapes) Less(i, j int) bool {
+	return (*s)[i].InfoHash < (*s)[j].InfoHash
+}
+
+func (s *Scrapes) Swap(i, j int) {
+	(*s)[i], (*s)[j] = (*s)[j], (*s)[i]
+}
+
 // MarshalZerologArray writes array elements to zerolog event
-func (s Scrapes) MarshalZerologArray(a *zerolog.Array) {
-	for _, scrape := range s {
-		a.Object(scrape)
+func (s *Scrapes) MarshalZerologArray(a *zerolog.Array) {
+	if s != nil {
+		for _, scrape := range *s {
+			a.Object(scrape)
+		}
 	}
 }
 
@@ -241,5 +273,5 @@ type ScrapeResponse struct {
 
 // MarshalZerologObject writes fields into zerolog event
 func (sr ScrapeResponse) MarshalZerologObject(e *zerolog.Event) {
-	e.Array("scrapes", sr.Files)
+	e.Array("scrapes", &sr.Files)
 }

@@ -19,7 +19,7 @@ type Hook interface {
 }
 
 // Pinger is an optional interface that may be implemented by a pre Hook
-// to check if it is operational. Used in frontend.TrackerLogic.
+// to check if it is operational. Used in frontend.Logic.
 //
 // It may be useful in cases when Hook performs foreign requests to
 // some external resources (i.e. storage) and `ping` request should

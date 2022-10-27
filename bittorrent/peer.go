@@ -117,22 +117,6 @@ func (i InfoHash) RawString() string {
 	return string(i)
 }
 
-// Scrape represents the state of a swarm that is returned in a scrape response.
-type Scrape struct {
-	InfoHash   InfoHash
-	Snatches   uint32
-	Complete   uint32
-	Incomplete uint32
-}
-
-// MarshalZerologObject writes fields into zerolog event
-func (s Scrape) MarshalZerologObject(e *zerolog.Event) {
-	e.Stringer("infoHash", s.InfoHash).
-		Uint32("snatches", s.Snatches).
-		Uint32("complete", s.Complete).
-		Uint32("incomplete", s.Incomplete)
-}
-
 // Peer represents the connection details of a peer that is returned in an
 // announce response.
 type Peer struct {

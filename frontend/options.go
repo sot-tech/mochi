@@ -1,8 +1,102 @@
 package frontend
 
-import "github.com/sot-tech/mochi/pkg/log"
+import (
+	"errors"
+	"net"
+	"time"
 
-var logger = log.NewLogger("frontend configurator")
+	"github.com/libp2p/go-reuseport"
+)
+
+const (
+	defaultReadTimeout  = 2 * time.Second
+	defaultWriteTimeout = 2 * time.Second
+)
+
+var (
+	// ErrAddressNotProvided returned if listen address not provided in configuration
+	ErrAddressNotProvided     = errors.New("address not provided")
+	errUnexpectedListenerType = errors.New("unexpected listener type")
+)
+
+// ListenOptions is the base configuration which may be used in net listeners
+type ListenOptions struct {
+	Addr                string
+	ReusePort           bool          `cfg:"reuse_port"`
+	ReadTimeout         time.Duration `cfg:"read_timeout"`
+	WriteTimeout        time.Duration `cfg:"write_timeout"`
+	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+}
+
+// Validate checks if listen address provided and sets default
+// timeout options if needed
+func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
+	validOptions = lo
+	if len(lo.Addr) == 0 {
+		err = ErrAddressNotProvided
+	} else {
+		if lo.ReadTimeout <= 0 {
+			validOptions.ReadTimeout = defaultReadTimeout
+			logger.Warn().
+				Str("name", "ReadTimeout").
+				Dur("provided", lo.ReadTimeout).
+				Dur("default", validOptions.ReadTimeout).
+				Msg("falling back to default configuration")
+		}
+
+		if lo.WriteTimeout <= 0 {
+			validOptions.WriteTimeout = defaultWriteTimeout
+			logger.Warn().
+				Str("name", "WriteTimeout").
+				Dur("provided", lo.WriteTimeout).
+				Dur("default", validOptions.WriteTimeout).
+				Msg("falling back to default configuration")
+		}
+	}
+	return
+}
+
+// ListenTCP listens at the given TCP Addr
+// with SO_REUSEPORT and SO_REUSEADDR options enabled if
+// ReusePort set to true
+func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
+	if lo.ReusePort {
+		var ln net.Listener
+		if ln, err = reuseport.Listen("tcp", lo.Addr); err == nil {
+			var ok bool
+			if conn, ok = ln.(*net.TCPListener); !ok {
+				err = errUnexpectedListenerType
+			}
+		}
+	} else {
+		var addr *net.TCPAddr
+		if addr, err = net.ResolveTCPAddr("tcp", lo.Addr); err == nil {
+			conn, err = net.ListenTCP("tcp", addr)
+		}
+	}
+	return
+}
+
+// ListenUDP listens at the given UDP Addr
+// with SO_REUSEPORT and SO_REUSEADDR options enabled if
+// ReusePort set to true
+func (lo ListenOptions) ListenUDP() (conn *net.UDPConn, err error) {
+	if lo.ReusePort {
+		var ln net.PacketConn
+		if ln, err = reuseport.ListenPacket("udp", lo.Addr); err == nil {
+			var ok bool
+			if conn, ok = ln.(*net.UDPConn); !ok {
+				err = errUnexpectedListenerType
+			}
+		}
+	} else {
+		var addr *net.UDPAddr
+		if addr, err = net.ResolveUDPAddr("udp", lo.Addr); err == nil {
+			conn, err = net.ListenUDP("udp", addr)
+		}
+	}
+	return
+}
 
 // ParseOptions is the configuration used to parse an Announce Request.
 //

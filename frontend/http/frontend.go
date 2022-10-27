@@ -6,266 +6,159 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"net"
 	"net/http"
 	"net/netip"
-	"sync"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/libp2p/go-reuseport"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
 	"github.com/sot-tech/mochi/pkg/stop"
 )
 
-var logger = log.NewLogger("http frontend")
+var (
+	logger               = log.NewLogger("frontend/http")
+	errTLSNotProvided    = errors.New("tls certificate/key not provided")
+	errRoutesNotProvided = errors.New("routes not provided")
+)
 
-// Config represents all of the configurable options for an HTTP BitTorrent
-// Frontend.
+func init() {
+	frontend.RegisterBuilder("http", NewFrontend)
+}
+
+// Config represents all configurable options for an HTTP BitTorrent Frontend
 type Config struct {
-	Addr                string
-	HTTPSAddr           string        `cfg:"https_addr"`
-	ReadTimeout         time.Duration `cfg:"read_timeout"`
-	WriteTimeout        time.Duration `cfg:"write_timeout"`
-	IdleTimeout         time.Duration `cfg:"idle_timeout"`
-	EnableKeepAlive     bool          `cfg:"enable_keepalive"`
-	TLSCertPath         string        `cfg:"tls_cert_path"`
-	TLSKeyPath          string        `cfg:"tls_key_path"`
-	ReusePort           bool          `cfg:"reuse_port"`
-	AnnounceRoutes      []string      `cfg:"announce_routes"`
-	ScrapeRoutes        []string      `cfg:"scrape_routes"`
-	PingRoutes          []string      `cfg:"ping_routes"`
-	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	frontend.ListenOptions
+	IdleTimeout     time.Duration `cfg:"idle_timeout"`
+	EnableKeepAlive bool          `cfg:"enable_keepalive"`
+	UseTLS          bool          `cfg:"tls"`
+	TLSCertPath     string        `cfg:"tls_cert_path"`
+	TLSKeyPath      string        `cfg:"tls_key_path"`
+	AnnounceRoutes  []string      `cfg:"announce_routes"`
+	ScrapeRoutes    []string      `cfg:"scrape_routes"`
+	PingRoutes      []string      `cfg:"ping_routes"`
 	ParseOptions
 }
 
-// Default config constants.
-const (
-	defaultReadTimeout  = 2 * time.Second
-	defaultWriteTimeout = 2 * time.Second
-	defaultIdleTimeout  = 30 * time.Second
-)
+const defaultIdleTimeout = 30 * time.Second
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
-	validcfg := cfg
-
-	if cfg.ReadTimeout <= 0 {
-		validcfg.ReadTimeout = defaultReadTimeout
-		logger.Warn().
-			Str("name", "http.ReadTimeout").
-			Dur("provided", cfg.ReadTimeout).
-			Dur("default", validcfg.ReadTimeout).
-			Msg("falling back to default configuration")
+func (cfg Config) Validate() (validCfg Config, err error) {
+	validCfg = cfg
+	if validCfg.ListenOptions, err = cfg.ListenOptions.Validate(); err != nil {
+		return
 	}
-
-	if cfg.WriteTimeout <= 0 {
-		validcfg.WriteTimeout = defaultWriteTimeout
-		logger.Warn().
-			Str("name", "http.WriteTimeout").
-			Dur("provided", cfg.WriteTimeout).
-			Dur("default", validcfg.WriteTimeout).
-			Msg("falling back to default configuration")
+	if cfg.UseTLS && (len(cfg.TLSCertPath) == 0 || len(cfg.TLSKeyPath) == 0) {
+		err = errTLSNotProvided
+		return
 	}
-
 	if cfg.IdleTimeout <= 0 {
-		validcfg.IdleTimeout = defaultIdleTimeout
-
+		validCfg.IdleTimeout = defaultIdleTimeout
 		if cfg.EnableKeepAlive {
 			// If keepalive is disabled, this configuration isn't used anyway.
 			logger.Warn().
-				Str("name", "http.IdleTimeout").
+				Str("name", "IdleTimeout").
 				Dur("provided", cfg.IdleTimeout).
-				Dur("default", validcfg.IdleTimeout).
+				Dur("default", validCfg.IdleTimeout).
 				Msg("falling back to default configuration")
 		}
 	}
-
-	validcfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate()
-
-	return validcfg
+	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate()
+	return
 }
 
-// Frontend represents the state of an HTTP BitTorrent Frontend.
-type Frontend struct {
-	srv      *http.Server
-	srvMu    sync.Mutex
-	tlsSrv   *http.Server
-	tlsSrvMu sync.Mutex
-	tlsCfg   *tls.Config
-
-	logic frontend.TrackerLogic
-	Config
+type httpFE struct {
+	srv            *http.Server
+	logic          *middleware.Logic
+	collectTimings bool
+	ParseOptions
 }
 
-// NewFrontend creates a new instance of an HTTP Frontend that asynchronously
-// serves requests.
-func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
-	var provided Config
-	if err := c.Unmarshal(&provided); err != nil {
-		return nil, err
+// NewFrontend builds and starts http bittorrent frontend from provided configuration
+func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend, err error) {
+	var cfg Config
+	if err = c.Unmarshal(&cfg); err != nil {
+		return
 	}
-	cfg := provided.Validate()
-
-	f := &Frontend{
-		logic:    logic,
-		Config:   cfg,
-		srvMu:    sync.Mutex{},
-		tlsSrvMu: sync.Mutex{},
+	if cfg, err = cfg.Validate(); err != nil {
+		return
 	}
-
-	if cfg.Addr == "" && cfg.HTTPSAddr == "" {
-		return nil, errors.New("must specify addr or https_addr or both")
-	}
-
 	if len(cfg.AnnounceRoutes) < 1 || len(cfg.ScrapeRoutes) < 1 {
-		return nil, errors.New("must specify routes")
+		err = errRoutesNotProvided
+		return
+	}
+
+	f := &httpFE{
+		logic: logic,
+		srv: &http.Server{
+			ReadTimeout:       cfg.ReadTimeout,
+			ReadHeaderTimeout: cfg.ReadTimeout,
+			WriteTimeout:      cfg.WriteTimeout,
+			IdleTimeout:       cfg.IdleTimeout,
+		},
+		collectTimings: cfg.EnableRequestTiming,
+		ParseOptions:   cfg.ParseOptions,
 	}
 
 	// If TLS is enabled, create a key pair.
-	if cfg.TLSCertPath != "" && cfg.TLSKeyPath != "" {
-		var err error
-		f.tlsCfg = &tls.Config{
-			Certificates: make([]tls.Certificate, 1),
+	if cfg.UseTLS {
+		var cert tls.Certificate
+		if cert, err = tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath); err != nil {
+			return
+		}
+		f.srv.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
 			MinVersion:   tls.VersionTLS12,
 		}
-		f.tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if (cfg.HTTPSAddr == "") != (f.tlsCfg == nil) {
-		return nil, errors.New("must specify both https_addr, tls_cert_path and tls_key_path")
 	}
 
 	router := httprouter.New()
-	for _, route := range f.AnnounceRoutes {
+	for _, route := range cfg.AnnounceRoutes {
 		router.GET(route, f.announceRoute)
 	}
-	for _, route := range f.ScrapeRoutes {
+	for _, route := range cfg.ScrapeRoutes {
 		router.GET(route, f.scrapeRoute)
 	}
+	for _, route := range cfg.PingRoutes {
+		router.GET(route, f.ping)
+		router.HEAD(route, f.ping)
+	}
+	f.srv.Handler = router
 
-	if len(f.PingRoutes) > 0 {
-		for _, route := range f.PingRoutes {
-			router.GET(route, f.ping)
-			router.HEAD(route, f.ping)
+	f.srv.SetKeepAlivesEnabled(cfg.EnableKeepAlive)
+
+	go func() {
+		ln, err := cfg.ListenTCP()
+		if err == nil {
+			if f.srv.TLSConfig == nil {
+				err = f.srv.Serve(ln)
+			} else {
+				err = f.srv.ServeTLS(ln, "", "")
+			}
 		}
-	}
-
-	if cfg.Addr != "" {
-		go func() {
-			if err := f.serveHTTP(router, false); err != nil {
-				logger.Fatal().Err(err).Str("proto", "http").Msg("failed while serving")
-			}
-		}()
-	}
-
-	if cfg.HTTPSAddr != "" {
-		go func() {
-			if err := f.serveHTTP(router, true); err != nil {
-				logger.Fatal().Err(err).Str("proto", "https").Msg("failed while serving")
-			}
-		}()
-	}
+		if !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal().Err(err).Msg("server failed")
+		}
+	}()
 
 	return f, nil
 }
 
 // Stop provides a thread-safe way to shut down a currently running Frontend.
-func (f *Frontend) Stop() stop.Result {
-	stopGroup := stop.NewGroup()
-
-	f.srvMu.Lock()
+func (f *httpFE) Stop() stop.Result {
+	c := make(stop.Channel)
 	if f.srv != nil {
-		stopGroup.AddFunc(f.makeStopFunc(f.srv))
-	}
-	f.srvMu.Unlock()
-
-	f.tlsSrvMu.Lock()
-	if f.tlsSrv != nil {
-		stopGroup.AddFunc(f.makeStopFunc(f.tlsSrv))
-	}
-	f.tlsSrvMu.Unlock()
-
-	return stopGroup.Stop()
-}
-
-func (f *Frontend) makeStopFunc(stopSrv *http.Server) stop.Func {
-	return func() stop.Result {
-		c := make(stop.Channel)
 		go func() {
-			c.Done(stopSrv.Shutdown(context.Background()))
+			c.Done(f.srv.Shutdown(context.Background()))
 		}()
-		return c.Result()
 	}
-}
-
-// serveHTTP blocks while listening and serving non-TLS HTTP BitTorrent
-// requests until Stop() is called or an error is returned.
-func (f *Frontend) serveHTTP(handler http.Handler, tls bool) error {
-	srv := &http.Server{
-		Handler:           handler,
-		ReadTimeout:       f.ReadTimeout,
-		ReadHeaderTimeout: f.ReadTimeout,
-		WriteTimeout:      f.WriteTimeout,
-		IdleTimeout:       f.IdleTimeout,
-	}
-
-	srv.SetKeepAlivesEnabled(f.EnableKeepAlive)
-
-	var err error
-	if tls {
-		if f.ReusePort {
-			var ln net.Listener
-			if ln, err = reuseport.Listen("tcp", f.HTTPSAddr); err == nil {
-				defer ln.Close()
-				srv.TLSConfig = f.tlsCfg
-				f.tlsSrvMu.Lock()
-				f.tlsSrv = srv
-				f.tlsSrvMu.Unlock()
-				err = srv.ServeTLS(ln, "", "")
-			}
-		} else {
-			srv.Addr = f.HTTPSAddr
-			srv.TLSConfig = f.tlsCfg
-			f.tlsSrvMu.Lock()
-			f.tlsSrv = srv
-			f.tlsSrvMu.Unlock()
-			err = srv.ListenAndServeTLS("", "")
-		}
-	} else {
-		if f.ReusePort {
-			var ln net.Listener
-			if ln, err = reuseport.Listen("tcp", f.Addr); err == nil {
-				defer ln.Close()
-				f.srvMu.Lock()
-				f.srv = srv
-				f.srvMu.Unlock()
-				err = srv.Serve(ln)
-			}
-		} else {
-			srv.Addr = f.Addr
-			f.srvMu.Lock()
-			f.srv = srv
-			f.srvMu.Unlock()
-			err = srv.ListenAndServe()
-		}
-	}
-	// Start the HTTP server.
-	if errors.Is(err, http.ErrServerClosed) {
-		err = nil
-	}
-	return err
+	return c.Result()
 }
 
 func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) context.Context {
@@ -277,12 +170,12 @@ func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) conte
 }
 
 // announceRoute parses and responds to an Announce.
-func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
 	var req *bittorrent.AnnounceRequest
-	if f.EnableRequestTiming && metrics.Enabled() {
+	if f.collectTimings && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
 			recordResponseDuration("announce", addr, err, time.Since(start))
@@ -314,11 +207,11 @@ func (f *Frontend) announceRoute(w http.ResponseWriter, r *http.Request, ps http
 }
 
 // scrapeRoute parses and responds to a Scrape.
-func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
-	if f.EnableRequestTiming && metrics.Enabled() {
+	if f.collectTimings && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
 			recordResponseDuration("scrape", addr, err, time.Since(start))
@@ -349,7 +242,7 @@ func (f *Frontend) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
-func (f *Frontend) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (f *httpFE) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var err error
 	if r.Method == http.MethodGet {
 		err = f.logic.Ping(context.TODO())

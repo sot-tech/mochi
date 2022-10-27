@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	logger = log.NewLogger("request sanitizer")
+	logger = log.NewLogger("bittorrent/sanitize")
 	// ErrInvalidIP indicates an invalid IP for an Announce.
 	ErrInvalidIP = ClientError("invalid IP")
 

@@ -1,0 +1,103 @@
+# @formatter:off
+# Note: see `example_config.yaml` for `frontends` and `*hooks` config description
+
+
+announce_interval: 30m
+min_announce_interval: 15m
+metrics_addr: ""
+
+frontends:
+    -   name: http
+        config:
+            addr: "0.0.0.0:6969"
+            tls: false
+            tls_cert_path: ""
+            tls_key_path: ""
+            reuse_port: true
+            read_timeout: 5s
+            write_timeout: 5s
+            enable_keepalive: false
+            idle_timeout: 30s
+            enable_request_timing: false
+            announce_routes:
+                - "/announce"
+            scrape_routes:
+                - "/scrape"
+            ping_routes:
+                - "/ping"
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            real_ip_header: "x-real-ip"
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+    -   name: udp
+        config:
+            addr: "0.0.0.0:6969"
+            reuse_port: true
+            max_clock_skew: 10s
+            private_key: "paste a random string here that will be used to hmac connection IDs"
+            enable_request_timing: false
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+# This block defines configuration used for redis storage.
+storage:
+    # If used keydb fork, set `keydb` name
+    name: redis
+    config:
+        # The frequency which stale peers are removed.
+        # This balances between
+        # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+        # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+        gc_interval: 3m
+
+        # The interval at which metrics about the number of infohashes and peers
+        # are collected and posted to Prometheus.
+        prometheus_reporting_interval: 1s
+
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        peer_lifetime: 31m
+
+        # The addresses of redis storage.
+        # If neither sentinel not cluster switched,
+        # only first address used
+        addresses: ["127.0.0.1:6379"]
+
+        # Database to be selected after connecting to the server.
+        db: 0
+
+        # Maximum number of socket connections, default is 10 per CPU
+        pool_size: 10
+
+        # Use the specified login/username to authenticate the current connection
+        login: ""
+
+        # Optional password
+        password: ""
+
+        # Connect to sentinel nodes
+        sentinel: false
+
+        # The master name
+        sentinel_master: ""
+
+        # Connect to the redis cluster
+        cluster: false
+
+        # The timeout for reading a command reply from redis.
+        read_timeout: 15s
+
+        # The timeout for writing a command to redis.
+        write_timeout: 15s
+
+        # Dial timeout for establishing new connections.
+        connect_timeout: 15s
+
+posthooks: []
+prehooks: []

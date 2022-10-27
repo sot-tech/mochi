@@ -23,19 +23,17 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-// Name is the name by which this middleware is registered with Conf.
 const (
-	Name                = "jwt"
 	authorizationHeader = "authorization"
 	bearerAuthPrefix    = "bearer "
 )
 
 func init() {
-	middleware.RegisterBuilder(Name, build)
+	middleware.RegisterBuilder("jwt", build)
 }
 
 var (
-	logger = log.NewLogger(Name)
+	logger = log.NewLogger("middleware/jwt")
 	// ErrMissingJWT is returned when a JWT is missing from a request.
 	ErrMissingJWT = bittorrent.ClientError("unapproved request: missing jwt")
 
@@ -70,13 +68,11 @@ type hook struct {
 	jwks *keyfunc.JWKS
 }
 
-func build(options conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
+func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
 	var cfg Config
 
-	logger.Debug().Object("options", options).Msg("creating new JWT middleware")
-
-	if err = options.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("middleware %s: %w", Name, err)
+	if err = config.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
 
 	if len(cfg.JWKSetURL) > 0 && len(cfg.Issuer) > 0 && len(cfg.Audience) > 0 {
@@ -206,7 +202,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 		if errs := h.validateBaseJWT(jwtParam, claims); len(errs) > 0 {
 			logger.Info().
 				Errs("errors", errs).
-				Array("source", req.RequestAddresses).
+				Array("source", &req.RequestAddresses).
 				Msg("JWT validation failed")
 			err = ErrInvalidJWT
 		} else {
@@ -217,7 +213,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 				} else {
 					logger.Info().
 						Err(err).
-						Array("addresses", req.RequestAddresses).
+						Array("addresses", &req.RequestAddresses).
 						Msg("'infohashes' claim parse failed")
 				}
 			}
@@ -241,7 +237,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 				logger.Info().
 					Array("claimInfoHashes", claimIHs).
 					Array("requestInfoHashes", req.InfoHashes).
-					Array("addresses", req.RequestAddresses).
+					Array("addresses", &req.RequestAddresses).
 					Msg("unequal 'infohashes' claim when validating JWT")
 				err = ErrInvalidJWT
 			}

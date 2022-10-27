@@ -3,34 +3,71 @@
 package frontend
 
 import (
-	"context"
+	"fmt"
+	"sync"
 
-	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/conf"
+	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/stop"
 )
 
-// TrackerLogic is the interface used by a frontend in order to: (1) generate a
-// response from a parsed request, and (2) asynchronously observe anything
-// after the response has been delivered to the client.
-type TrackerLogic interface {
-	// HandleAnnounce generates a response for an Announce.
-	//
-	// Returns the updated context, the generated AnnounceResponse and no error
-	// on success; nil and error on failure.
-	HandleAnnounce(context.Context, *bittorrent.AnnounceRequest) (context.Context, *bittorrent.AnnounceResponse, error)
+var (
+	logger     = log.NewLogger("frontend")
+	buildersMU sync.RWMutex
+	builders   = make(map[string]Builder)
+)
 
-	// AfterAnnounce does something with the results of an Announce after it
-	// has been completed.
-	AfterAnnounce(context.Context, *bittorrent.AnnounceRequest, *bittorrent.AnnounceResponse)
+// Builder is the function used to initialize a new Frontend
+// with provided configuration.
+type Builder func(conf.MapConfig, *middleware.Logic) (Frontend, error)
 
-	// HandleScrape generates a response for a Scrape.
-	//
-	// Returns the updated context, the generated AnnounceResponse and no error
-	// on success; nil and error on failure.
-	HandleScrape(context.Context, *bittorrent.ScrapeRequest) (context.Context, *bittorrent.ScrapeResponse, error)
+// RegisterBuilder makes a Builder available by the provided name.
+//
+// If called twice with the same name, the name is blank, or if the provided
+// Builder is nil, this function panics.
+func RegisterBuilder(name string, b Builder) {
+	if name == "" {
+		panic("frontend: could not register Builder with an empty name")
+	}
+	if b == nil {
+		panic("frontend: could not register a nil Builder")
+	}
 
-	// AfterScrape does something with the results of a Scrape after it has been completed.
-	AfterScrape(context.Context, *bittorrent.ScrapeRequest, *bittorrent.ScrapeResponse)
+	buildersMU.Lock()
+	defer buildersMU.Unlock()
 
-	// Ping executes checks if all hooks are operational
-	Ping(context.Context) error
+	if _, dup := builders[name]; dup {
+		panic("frontend: RegisterBuilder called twice for " + name)
+	}
+
+	builders[name] = b
+}
+
+// Frontend dummy interface for bittorrent frontends
+type Frontend interface {
+	stop.Stopper
+}
+
+// NewFrontends is a utility function for initializing Frontend-s in bulk.
+// Returns nil hook and error if frontend with name provided in config
+// does not exists.
+func NewFrontends(configs []conf.NamedMapConfig, logic *middleware.Logic) (fs []Frontend, err error) {
+	buildersMU.RLock()
+	defer buildersMU.RUnlock()
+	for _, c := range configs {
+		logger.Debug().Object("frontend", c).Msg("starting frontend")
+		newFrontend, ok := builders[c.Name]
+		if !ok {
+			err = fmt.Errorf("hook with name '%s' does not exists", c.Name)
+			break
+		}
+		var f Frontend
+		if f, err = newFrontend(c.Config, logic); err != nil {
+			break
+		}
+		fs = append(fs, f)
+		logger.Info().Str("name", c.Name).Msg("frontend started")
+	}
+	return
 }

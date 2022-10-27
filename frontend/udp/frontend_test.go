@@ -17,12 +17,15 @@ func init() {
 }
 
 func TestStartStopRaceIssue437(t *testing.T) {
-	ps, err := storage.NewStorage("memory", conf.MapConfig{})
+	ps, err := storage.NewStorage(conf.NamedMapConfig{
+		Name:   "memory",
+		Config: conf.MapConfig{},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	lgc := middleware.NewLogic(0, 0, ps, nil, nil)
-	fe, err := udp.NewFrontend(lgc, conf.MapConfig{"addr": "127.0.0.1:0"})
+	fe, err := udp.NewFrontend(conf.MapConfig{"addr": "127.0.0.1:0"}, lgc)
 	if err != nil {
 		t.Fatal(err)
 	}

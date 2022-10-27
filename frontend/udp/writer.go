@@ -18,8 +18,8 @@ func WriteError(w io.Writer, txID []byte, err error) {
 		err = fmt.Errorf("internal error occurred: %w", err)
 	}
 
-	buf := newBuffer()
-	defer buf.free()
+	buf := reqRespBufferPool.Get()
+	defer reqRespBufferPool.Put(buf)
 	writeHeader(buf, txID, errorActionID)
 	_, _ = buf.WriteString(err.Error())
 	_, _ = buf.WriteRune('\000')
@@ -32,8 +32,8 @@ func WriteError(w io.Writer, txID []byte, err error) {
 // If v6Action is set, the action will be 4, according to
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
 func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, v6Action, v6Peers bool) {
-	buf := newBuffer()
-	defer buf.free()
+	buf := reqRespBufferPool.Get()
+	defer reqRespBufferPool.Put(buf)
 
 	if v6Action {
 		writeHeader(buf, txID, announceV6ActionID)
@@ -59,8 +59,8 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 
 // WriteScrape encodes a scrape response according to BEP 15.
 func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
-	buf := newBuffer()
-	defer buf.free()
+	buf := reqRespBufferPool.Get()
+	defer reqRespBufferPool.Put(buf)
 
 	writeHeader(buf, txID, scrapeActionID)
 
@@ -75,8 +75,8 @@ func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 
 // WriteConnectionID encodes a new connection response according to BEP 15.
 func WriteConnectionID(w io.Writer, txID, connID []byte) {
-	buf := newBuffer()
-	defer buf.free()
+	buf := reqRespBufferPool.Get()
+	defer reqRespBufferPool.Put(buf)
 
 	writeHeader(buf, txID, connectActionID)
 	_, _ = buf.Write(connID)

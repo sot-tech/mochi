@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -21,17 +19,13 @@ import (
 )
 
 // Default config constants.
-const (
-	// Name is the name by which this peer store is registered with Conf.
-	Name              = "memory"
-	defaultShardCount = 1024
-)
+const defaultShardCount = 1024
 
-var logger = log.NewLogger(Name)
+var logger = log.NewLogger("storage/memory")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterBuilder(Name, builder)
+	storage.RegisterDriver("memory", builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
@@ -45,11 +39,6 @@ func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 // Config holds the configuration of a memory PeerStorage.
 type Config struct {
 	ShardCount int `cfg:"shard_count"`
-}
-
-// MarshalZerologObject writes configuration into zerolog event
-func (cfg Config) MarshalZerologObject(e *zerolog.Event) {
-	e.Int("shardCount", cfg.ShardCount)
 }
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -108,11 +97,6 @@ type peerStore struct {
 
 	closed chan struct{}
 	wg     sync.WaitGroup
-}
-
-// MarshalZerologObject writes configuration into zerolog event
-func (ps *peerStore) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("type", Name).Object("config", ps.cfg)
 }
 
 var _ storage.PeerStorage = &peerStore{}
@@ -406,7 +390,7 @@ func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWa
 	return
 }
 
-func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers uint32, seeders uint32) {
+func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers, seeders uint32) {
 	shard := ps.shards[ps.shardIndex(ih, v6)]
 	shard.RLock()
 	defer shard.RUnlock()

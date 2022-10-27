@@ -34,17 +34,20 @@ you provide in configuration.
 Implementation expects next data types:
 
 * Table for peers:
-	* info hash - byte array (`bytea`)
-	* peer ID - byte array (`bytea`)
-	* peer address - `inet` or byte array (`bytea`)
-	* peer port - integer or derivative type (`int4`, `integer`)
-	* is seeder - boolean (`bool`)
-	* is IPv6 - boolean (`bool`)
-	* peer creation date and time - `timestamp`
+  * info hash - byte array (`bytea`)
+  * peer ID - byte array (`bytea`)
+  * peer address - `inet` or byte array (`bytea`)
+  * peer port - integer or derivative type (`int4`, `integer`)
+  * is seeder - boolean (`bool`)
+  * is IPv6 - boolean (`bool`)
+  * peer creation date and time - `timestamp`
+* Table of download counts (optional)
+  * info hash - byte array (`bytea`)
+  * count - or derivative type (`int4`, `integer`)
 * Table for arbitrary data (KV store):
-	* context - string (`varchar`, `character varying`)
-	* name - byte array (`bytea`)*
-	* value - byte array (`bytea`)
+  * context - string (`varchar`, `character varying`)
+  * name - byte array (`bytea`)*
+  * value - byte array (`bytea`)
 
 (*) in KV table `name` present as byte array because of possibility
 to place hash as _raw_ string, which is not supported by PostgreSQL.
@@ -66,6 +69,11 @@ CREATE TABLE mo_peers
 
 CREATE INDEX mo_peers_created_idx ON mo_peers (created);
 CREATE INDEX mo_peers_announce_idx ON mo_peers (info_hash, is_seeder, is_v6);
+
+CREATE TABLE mo_downloads (
+	info_hash bytea PRIMARY KEY NOT NULL,
+	downloads int NOT NULL DEFAULT 1
+);
 
 CREATE TABLE mo_kv
 (
@@ -98,49 +106,54 @@ storage:
         peer:
             # Query to add peer info.
             # Expected arguments: 
-            # 1 - info hash (bytea), 
-            # 2 - peer id (bytea), 
-            # 3 - ip address (bytea/inet)
+            # 1 - info_hash (bytea), 
+            # 2 - peer_id (bytea), 
+            # 3 - address (bytea/inet)
             # 4 - port (int4), 
-            # 5 - is seeder (bool), 
-            # 6 - is IPv6 (bool), 
-            # 7 - create date and time (timestamp)
+            # 5 - is_seeder (bool), 
+            # 6 - is_v6 (bool), 
+            # 7 - created (timestamp)
             # Query MUST handle situations when tuple 
             # `info hash - peer ID - address - port` is already 
             # exists in table
-            add_query: INSERT INTO mo_peers VALUES($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
+            add_query: INSERT INTO mo_peers VALUES(@info_hash, @peer_id, @address, @port, @is_seeder, @is_v6, @created) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
             # Query to delete peer info.
-            # Query SHOULD take into account value of `is seeder` flag
-            del_query: DELETE FROM mo_peers WHERE info_hash=$1 AND peer_id=$2 AND address=$3 AND port=$4 AND is_seeder=$5
+            # Query SHOULD take into account value of `is_seeder` flag
+            del_query: DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=@peer_id AND address=@address AND port=@port AND is_seeder=@is_seeder
             # Query to update leecher to seeder
-            graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=$1 AND peer_id=$2 AND address=$3 AND port=$4 AND NOT is_seeder
+            graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND NOT is_seeder
             # Query to get count of peers.
             # Used both for statistics and for scrape (with clause suffix, see next).
             # Only first returned row value used.
             count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
             # Predicate part of `count_query` for get count of peers by info hash
-            by_info_hash_clause: WHERE info_hash = $1
+            by_info_hash_clause: WHERE info_hash = @info_hash
             # Column name of seeders count in `count_query` (case-insensitive).
             count_seeders_column: seeders
             # Column name of leechers count in `count_query` (case-insensitive).
             count_leechers_column: leechers
+        # Queries to get/increment 'snatched' (downloaded) count
+        downloads:
+            get_query: SELECT downloads FROM mo_downloads where info_hash=@info_hash
+            inc_query: INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1
         # Queries for KV-store
         data:
             # Query to add data.
             # Expected arguments: 
             # 1 - context (varchar), 
-            # 2 - name (bytea), 
+            # 2 - key (bytea), 
             # 3 - value (bytea)
-            add_query: INSERT INTO mo_kv VALUES($1, $2, $3) ON CONFLICT (context, name) DO NOTHING
+            add_query: INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING
             # Query to delete data.
-            del_query: DELETE FROM mo_kv WHERE context=$1 AND name=$2
+            # Note: @key parameter is array, NOT single value
+            del_query: DELETE FROM mo_kv WHERE context=@context AND name = ANY(@key)
             # Query to get data.
             # Only first returned row and column value used.
-            get_query: SELECT value FROM mo_kv WHERE context=$1 AND name=$2
+            get_query: SELECT value FROM mo_kv WHERE context=@context AND name=@key
         # Query for check if database is alive (can be omitted)
         ping_query: SELECT 1
         # Query to delete stale peers (peers, which timestamp older than provided argument)
-        gc_query: DELETE FROM mo_peers WHERE created <= $1
+        gc_query: DELETE FROM mo_peers WHERE created <= @created
         # The frequency which stale peers are removed.
         gc_interval: 3m
         # Query to get all info hash count (used for statistics).

@@ -1,0 +1,116 @@
+# @formatter:off
+# Note: see `example_config.yaml` for `frontends` and `*hooks` config description
+
+
+announce_interval: 30m
+min_announce_interval: 15m
+metrics_addr: ""
+
+frontends:
+    -   name: http
+        config:
+            addr: "0.0.0.0:6969"
+            tls: false
+            tls_cert_path: ""
+            tls_key_path: ""
+            reuse_port: true
+            read_timeout: 5s
+            write_timeout: 5s
+            enable_keepalive: false
+            idle_timeout: 30s
+            enable_request_timing: false
+            announce_routes:
+                - "/announce"
+            scrape_routes:
+                - "/scrape"
+            ping_routes:
+                - "/ping"
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            real_ip_header: "x-real-ip"
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+    -   name: udp
+        config:
+            addr: "0.0.0.0:6969"
+            reuse_port: true
+            max_clock_skew: 10s
+            private_key: "paste a random string here that will be used to hmac connection IDs"
+            enable_request_timing: false
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+# This block defines configuration used for PostgreSQL storage.
+# example peers table structure:
+# - info_hash bytea
+# - peer_id bytea
+# - address inet or bytea
+# - port int4
+# - is_seeder bool
+# - is_v6 bool
+# - created timestamp
+# example downloads table structure:
+# - info_hash bytea
+# - downloads int
+storage:
+    name: pg
+    config:
+        # connection string to pg storage. may be URL (postgres://...) or DSN (host=... port=...)
+        connection_string: host=127.0.0.1 database=test user=postgres pool_max_conns=50
+        # query and parameters for announce operation
+        announce:
+            query: SELECT peer_id, address, port FROM mo_peers WHERE info_hash=@info_hash AND is_seeder=@is_seeder AND is_v6=@is_v6 LIMIT @count
+            peer_id_column: peer_id
+            address_column: address
+            port_column: port
+
+        # queries to get/increment 'snatched' (downloaded) count
+        downloads:
+            get_query: SELECT downloads FROM mo_downloads where info_hash=@info_hash
+            inc_query: INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1
+
+        # queries and parameters for add/delete/count peers operations
+        peer:
+            add_query: INSERT INTO mo_peers VALUES(@info_hash, @peer_id, @address, @port, @is_seeder, @is_v6, @created) ON CONFLICT (info_hash, peer_id, address, port) DO UPDATE SET created = EXCLUDED.created, is_seeder = EXCLUDED.is_seeder
+            del_query: DELETE FROM mo_peers WHERE info_hash=@info_hash AND peer_id=@peer_id AND address=@address AND port=@port AND is_seeder=@is_seeder
+            graduate_query: UPDATE mo_peers SET is_seeder=TRUE WHERE info_hash=@info_hash AND peer_id=peer_id AND address=@address AND port=@port AND NOT is_seeder
+            count_query: SELECT COUNT(1) FILTER (WHERE is_seeder) AS seeders, COUNT(1) FILTER (WHERE NOT is_seeder) AS leechers FROM mo_peers
+            # predicate part of `count_query` to get count of peers by info hash
+            by_info_hash_clause: WHERE info_hash = @info_hash
+            count_seeders_column: seeders
+            count_leechers_column: leechers
+
+        # queries for KV-store
+        data:
+            add_query: INSERT INTO mo_kv VALUES(@context, @key, @value) ON CONFLICT (context, name) DO NOTHING
+            # Note: in del_query @key parameter is array, NOT single value
+            del_query: DELETE FROM mo_kv WHERE context=@context AND name = ANY(@key)
+            get_query: SELECT value FROM mo_kv WHERE context=@context AND name=@key
+
+        # query for check if database is alive
+        ping_query: SELECT 1
+
+        # query for garbage collection, expected parameter is timestamp
+        gc_query: DELETE FROM mo_peers WHERE created <= @created
+
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        peer_lifetime: 31m
+
+        # The frequency which stale peers are removed.
+        gc_interval: 3m
+
+        # query for info hash statistics
+        info_hash_count_query: SELECT COUNT(DISTINCT info_hash) as info_hashes FROM mo_peers
+
+        # The interval at which metrics about the number of info hashes and peers
+        # are collected and posted to Prometheus.
+        prometheus_reporting_interval: 1s
+
+posthooks: []
+prehooks: []

@@ -13,11 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-reuseport"
-
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
-	"github.com/sot-tech/mochi/frontend/udp/bytepool"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/bytepool"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
@@ -26,28 +25,32 @@ import (
 )
 
 var (
-	logger                          = log.NewLogger("udp frontend")
+	logger                          = log.NewLogger("frontend/udp")
 	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
-	errUnexpectedConnType           = errors.New("unexpected connection type (not UDPConn)")
 )
 
-// Config represents all of the configurable options for a UDP BitTorrent
+func init() {
+	frontend.RegisterBuilder("udp", NewFrontend)
+}
+
+// Config represents all the configurable options for a UDP BitTorrent
 // Tracker.
 type Config struct {
-	Addr                string
-	ReusePort           bool          `cfg:"reuse_port"`
-	PrivateKey          string        `cfg:"private_key"`
-	MaxClockSkew        time.Duration `cfg:"max_clock_skew"`
-	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	frontend.ListenOptions
+	PrivateKey   string        `cfg:"private_key"`
+	MaxClockSkew time.Duration `cfg:"max_clock_skew"`
 	frontend.ParseOptions
 }
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
-	validcfg := cfg
+func (cfg Config) Validate() (validCfg Config, err error) {
+	if len(cfg.Addr) == 0 {
+		err = frontend.ErrAddressNotProvided
+		return
+	}
+
+	validCfg = cfg
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
@@ -55,45 +58,49 @@ func (cfg Config) Validate() Config {
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
 		}
-		validcfg.PrivateKey = string(pkeyRunes)
+		validCfg.PrivateKey = string(pkeyRunes)
 
 		logger.Warn().
-			Str("name", "UDP.PrivateKey").
+			Str("name", "PrivateKey").
 			Str("provided", "").
-			Str("key", validcfg.PrivateKey).
+			Str("key", validCfg.PrivateKey).
 			Msg("falling back to default configuration")
 	}
 
-	validcfg.ParseOptions = cfg.ParseOptions.Validate()
+	validCfg.ParseOptions = cfg.ParseOptions.Validate()
 
-	return validcfg
+	return
 }
 
-// Frontend holds the state of a UDP BitTorrent Frontend.
-type Frontend struct {
-	socket  *net.UDPConn
-	closing chan struct{}
-	wg      sync.WaitGroup
-
-	genPool *sync.Pool
-
-	logic frontend.TrackerLogic
-	Config
+// udpFE holds the state of a UDP BitTorrent Frontend.
+type udpFE struct {
+	socket         *net.UDPConn
+	closing        chan any
+	wg             sync.WaitGroup
+	genPool        *sync.Pool
+	logic          *middleware.Logic
+	maxClockSkew   time.Duration
+	collectTimings bool
+	frontend.ParseOptions
 }
 
-// NewFrontend creates a new instance of an UDP Frontend that asynchronously
-// serves requests.
-func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, error) {
-	var provided Config
-	if err := c.Unmarshal(&provided); err != nil {
+// NewFrontend builds and starts udp bittorrent frontend from provided configuration
+func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
+	var err error
+	var cfg Config
+	if err = c.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	cfg := provided.Validate()
+	if cfg, err = cfg.Validate(); err != nil {
+		return nil, err
+	}
 
-	f := &Frontend{
-		closing: make(chan struct{}),
-		logic:   logic,
-		Config:  cfg,
+	f := &udpFE{
+		closing:        make(chan any),
+		logic:          logic,
+		maxClockSkew:   cfg.MaxClockSkew,
+		collectTimings: cfg.EnableRequestTiming,
+		ParseOptions:   cfg.ParseOptions,
 		genPool: &sync.Pool{
 			New: func() any {
 				return NewConnectionIDGenerator(cfg.PrivateKey)
@@ -101,22 +108,20 @@ func NewFrontend(logic frontend.TrackerLogic, c conf.MapConfig) (*Frontend, erro
 		},
 	}
 
-	if err := f.listen(); err != nil {
-		return nil, err
+	if f.socket, err = cfg.ListenUDP(); err == nil {
+		f.wg.Add(1)
+		go func() {
+			if err := f.serve(); err != nil {
+				logger.Fatal().Err(err).Msg("server failed")
+			}
+		}()
 	}
 
-	f.wg.Add(1)
-	go func() {
-		if err := f.serve(); err != nil {
-			logger.Fatal().Err(err).Str("proto", "udp").Msg("failed while serving")
-		}
-	}()
-
-	return f, nil
+	return f, err
 }
 
 // Stop provides a thread-safe way to shut down a currently running Frontend.
-func (t *Frontend) Stop() stop.Result {
+func (t *udpFE) Stop() stop.Result {
 	select {
 	case <-t.closing:
 		return stop.AlreadyStopped
@@ -126,42 +131,26 @@ func (t *Frontend) Stop() stop.Result {
 	c := make(stop.Channel)
 	go func() {
 		close(t.closing)
-		_ = t.socket.SetReadDeadline(time.Now())
-		t.wg.Wait()
-		c.Done(t.socket.Close())
+		var err error
+		if t.socket != nil {
+			_ = t.socket.SetReadDeadline(time.Now())
+			t.wg.Wait()
+			err = t.socket.Close()
+		}
+		c.Done(err)
 	}()
 
 	return c.Result()
 }
 
-// listen resolves the address and binds the server socket.
-func (t *Frontend) listen() (err error) {
-	if t.ReusePort {
-		var ln net.PacketConn
-		if ln, err = reuseport.ListenPacket("udp", t.Addr); err == nil {
-			var isOk bool
-			if t.socket, isOk = ln.(*net.UDPConn); !isOk {
-				err = errUnexpectedConnType
-			}
-		}
-	} else {
-		var udpAddr *net.UDPAddr
-		udpAddr, err = net.ResolveUDPAddr("udp", t.Addr)
-		if err == nil {
-			t.socket, err = net.ListenUDP("udp", udpAddr)
-		}
-	}
-	return err
-}
-
 // serve blocks while listening and serving UDP BitTorrent requests
 // until Stop() is called or an error is returned.
-func (t *Frontend) serve() error {
-	pool := bytepool.New(2048)
+func (t *udpFE) serve() error {
+	pool := bytepool.NewBytePool(2048)
 	defer t.wg.Done()
 
 	for {
-		// Check to see if we need to shutdown.
+		// Check to see if we need shutdown.
 		select {
 		case <-t.closing:
 			log.Debug().Msg("serve received shutdown signal")
@@ -196,14 +185,14 @@ func (t *Frontend) serve() error {
 			// Handle the request.
 			addr := addrPort.Addr().Unmap()
 			var start time.Time
-			if t.EnableRequestTiming && metrics.Enabled() {
+			if t.collectTimings && metrics.Enabled() {
 				start = time.Now()
 			}
 			action, err := t.handleRequest(
 				Request{(*buffer)[:n], addr},
 				ResponseWriter{t.socket, addrPort},
 			)
-			if t.EnableRequestTiming && metrics.Enabled() {
+			if t.collectTimings && metrics.Enabled() {
 				recordResponseDuration(action, addr, err, time.Since(start))
 			}
 		}()
@@ -229,7 +218,7 @@ func (w ResponseWriter) Write(b []byte) (int, error) {
 }
 
 // handleRequest parses and responds to a UDP Request.
-func (t *Frontend) handleRequest(r Request, w ResponseWriter) (actionName string, err error) {
+func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, err error) {
 	if len(r.Packet) < 16 {
 		// Malformed, no client packets are less than 16 bytes.
 		// We explicitly return nothing in case this is a DoS attempt.
@@ -248,7 +237,7 @@ func (t *Frontend) handleRequest(r Request, w ResponseWriter) (actionName string
 
 	// If this isn't requesting a new connection ID and the connection ID is
 	// invalid, then fail.
-	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), t.MaxClockSkew) {
+	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), t.maxClockSkew) {
 		err = errBadConnectionID
 		WriteError(w, txID, err)
 		return
