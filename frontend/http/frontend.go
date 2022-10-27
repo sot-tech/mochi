@@ -135,9 +135,6 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend
 
 	go func() {
 		ln, err := cfg.ListenTCP()
-		defer func() {
-			logger.Err(ln.Close()).Msg("closing listener")
-		}()
 		if err == nil {
 			if f.srv.TLSConfig == nil {
 				err = f.srv.Serve(ln)

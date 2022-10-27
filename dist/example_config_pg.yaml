@@ -69,7 +69,7 @@ storage:
             address_column: address
             port_column: port
 
-        # queries to get/increment 'snached' (downloaded) count
+        # queries to get/increment 'snatched' (downloaded) count
         downloads:
             get_query: SELECT downloads FROM mo_downloads where info_hash=@info_hash
             inc_query: INSERT INTO mo_downloads VALUES(@info_hash) ON CONFLICT(info_hash) DO UPDATE SET downloads = mo_downloads.downloads + 1
