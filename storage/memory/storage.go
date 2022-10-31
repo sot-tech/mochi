@@ -3,6 +3,7 @@
 package memory
 
 import (
+	"context"
 	"encoding/binary"
 	"math"
 	"runtime"
@@ -174,7 +175,7 @@ func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, v6 bool) uint32 {
 	return idx
 }
 
-func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *peerStore) PutSeeder(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -207,7 +208,7 @@ func (ps *peerStore) PutSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error 
 	return nil
 }
 
-func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *peerStore) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -240,7 +241,7 @@ func (ps *peerStore) DeleteSeeder(ih bittorrent.InfoHash, p bittorrent.Peer) err
 	return nil
 }
 
-func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *peerStore) PutLeecher(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -273,7 +274,7 @@ func (ps *peerStore) PutLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error
 	return nil
 }
 
-func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *peerStore) DeleteLeecher(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -306,7 +307,7 @@ func (ps *peerStore) DeleteLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) er
 	return nil
 }
 
-func (ps *peerStore) GraduateLeecher(ih bittorrent.InfoHash, p bittorrent.Peer) error {
+func (ps *peerStore) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -372,7 +373,7 @@ func (ps *peerStore) getPeers(shard *peerShard, ih bittorrent.InfoHash, maxCount
 	return
 }
 
-func (ps *peerStore) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (ps *peerStore) AnnouncePeers(_ context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -401,7 +402,7 @@ func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers, seed
 	return
 }
 
-func (ps *peerStore) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+func (ps *peerStore) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
 	select {
 	case <-ps.closed:
 		panic("attempted to interact with stopped memory store")
@@ -427,7 +428,7 @@ type dataStore struct {
 	sync.Map
 }
 
-func (ds *dataStore) Put(ctx string, values ...storage.Entry) error {
+func (ds *dataStore) Put(_ context.Context, ctx string, values ...storage.Entry) error {
 	if len(values) > 0 {
 		c, _ := ds.LoadOrStore(ctx, new(sync.Map))
 		m := c.(*sync.Map)
@@ -438,7 +439,7 @@ func (ds *dataStore) Put(ctx string, values ...storage.Entry) error {
 	return nil
 }
 
-func (ds *dataStore) Contains(ctx string, key string) (bool, error) {
+func (ds *dataStore) Contains(_ context.Context, ctx string, key string) (bool, error) {
 	var exist bool
 	if m, found := ds.Map.Load(ctx); found {
 		_, exist = m.(*sync.Map).Load(key)
@@ -446,7 +447,7 @@ func (ds *dataStore) Contains(ctx string, key string) (bool, error) {
 	return exist, nil
 }
 
-func (ds *dataStore) Load(ctx string, key string) (out []byte, _ error) {
+func (ds *dataStore) Load(_ context.Context, ctx string, key string) (out []byte, _ error) {
 	if m, found := ds.Map.Load(ctx); found {
 		if v, _ := m.(*sync.Map).Load(key); v != nil {
 			out = v.([]byte)
@@ -455,7 +456,7 @@ func (ds *dataStore) Load(ctx string, key string) (out []byte, _ error) {
 	return
 }
 
-func (ds *dataStore) Delete(ctx string, keys ...string) error {
+func (ds *dataStore) Delete(_ context.Context, ctx string, keys ...string) error {
 	if len(keys) > 0 {
 		if m, found := ds.Map.Load(ctx); found {
 			m := m.(*sync.Map)
@@ -537,7 +538,7 @@ func (ps *peerStore) gc(cutoff time.Time) {
 	}
 }
 
-func (*peerStore) Ping() error {
+func (*peerStore) Ping(context.Context) error {
 	return nil
 }
 

@@ -169,6 +169,17 @@ func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) conte
 	return context.WithValue(ctx, bittorrent.RouteParamsKey, rp)
 }
 
+func remapRouteParamsToBgContext(inCtx context.Context) context.Context {
+	rp, isOk := inCtx.Value(bittorrent.RouteParamsKey).(bittorrent.RouteParams)
+	if !isOk {
+		rp = bittorrent.RouteParams{}
+	} else {
+		logger.Warn().Msg("unable to fetch route parameters, probably jammed context")
+	}
+	// FIXME: cancelable context
+	return context.WithValue(context.TODO(), bittorrent.RouteParamsKey, rp)
+}
+
 // announceRoute parses and responds to an Announce.
 func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var err error
@@ -189,7 +200,7 @@ func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 	addr = req.GetFirst()
 
-	ctx := injectRouteParamsToContext(context.Background(), ps)
+	ctx := injectRouteParamsToContext(r.Context(), ps)
 	ctx, resp, err := f.logic.HandleAnnounce(ctx, req)
 	if err != nil {
 		WriteError(w, err)
@@ -202,6 +213,9 @@ func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httpro
 		WriteError(w, err)
 		return
 	}
+
+	// next actions are background and should not be canceled after http writer closed
+	ctx = remapRouteParamsToBgContext(ctx)
 
 	go f.logic.AfterAnnounce(ctx, req, resp)
 }
@@ -225,7 +239,7 @@ func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 	addr = req.GetFirst()
 
-	ctx := injectRouteParamsToContext(context.Background(), ps)
+	ctx := injectRouteParamsToContext(r.Context(), ps)
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)
 	if err != nil {
 		WriteError(w, err)
@@ -239,18 +253,27 @@ func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
+	// next actions are background and should not be canceled after http writer closed
+	ctx = remapRouteParamsToBgContext(ctx)
+
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
 func (f *httpFE) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var err error
+	status := http.StatusOK
+	ctx := r.Context()
 	if r.Method == http.MethodGet {
-		err = f.logic.Ping(context.TODO())
+		err = f.logic.Ping(ctx)
 	}
-	if err == nil {
-		w.WriteHeader(http.StatusOK)
-	} else {
+
+	if err != nil {
 		logger.Error().Err(err).Msg("ping completed with error")
-		w.WriteHeader(http.StatusServiceUnavailable)
+		status = http.StatusServiceUnavailable
+	}
+	if ctxErr := ctx.Err(); ctxErr == nil {
+		w.WriteHeader(status)
+	} else {
+		logger.Info().Err(ctxErr).Str("ip", r.RemoteAddr).Msg("ping request cancelled")
 	}
 }

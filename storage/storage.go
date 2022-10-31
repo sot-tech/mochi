@@ -3,6 +3,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -93,18 +94,18 @@ var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 // DataStorage is the interface, used for implementing store for arbitrary data
 type DataStorage interface {
 	// Put used to place arbitrary k-v data with specified context
-	// into storage. ctx parameter used to group data
+	// into storage. storeCtx parameter used to group data
 	// (i.e. data only for specific middleware module: hash key, table name etc...)
-	Put(ctx string, values ...Entry) error
+	Put(ctx context.Context, storeCtx string, values ...Entry) error
 
 	// Contains checks if any data in specified context exist
-	Contains(ctx string, key string) (bool, error)
+	Contains(ctx context.Context, storeCtx string, key string) (bool, error)
 
 	// Load used to get arbitrary data in specified context by its key
-	Load(ctx string, key string) ([]byte, error)
+	Load(ctx context.Context, storeCtx string, key string) ([]byte, error)
 
 	// Delete used to delete arbitrary data in specified context by its keys
-	Delete(ctx string, keys ...string) error
+	Delete(ctx context.Context, storeCtx string, keys ...string) error
 
 	// Preservable indicates, that this storage can store data permanently,
 	// in other words, is NOT in-memory storage, which data will be lost after restart
@@ -130,33 +131,33 @@ type PeerStorage interface {
 	DataStorage
 	// PutSeeder adds a Seeder to the Swarm identified by the provided
 	// InfoHash.
-	PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error
+	PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteSeeder removes a Seeder from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error
+	DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// PutLeecher adds a Leecher to the Swarm identified by the provided
 	// InfoHash.
 	// If the Swarm does not exist already, it is created.
-	PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
+	PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// DeleteLeecher removes a Leecher from the Swarm identified by the
 	// provided InfoHash.
 	//
 	// If the Swarm or Peer does not exist, this function returns
 	// ErrResourceDoesNotExist.
-	DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
+	DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// GraduateLeecher promotes a Leecher to a Seeder in the Swarm
 	// identified by the provided InfoHash.
 	//
 	// If the given Peer is not present as a Leecher or the swarm does not exist
 	// already, the Peer is added as a Seeder and no error is returned.
-	GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error
+	GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error
 
 	// AnnouncePeers is a best effort attempt to return Peers from the Swarm
 	// identified by the provided InfoHash.
@@ -173,7 +174,7 @@ type PeerStorage interface {
 	//   leechers
 	//
 	// Returns ErrResourceDoesNotExist if the provided InfoHash is not tracked.
-	AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error)
+	AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error)
 
 	// ScrapeSwarm returns information required to answer a Scrape request
 	// about a Swarm identified by the given InfoHash.
@@ -183,11 +184,11 @@ type PeerStorage interface {
 	// filling the Snatches field is optional.
 	//
 	// If the Swarm does not exist, an empty Scrape and no error is returned.
-	ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
+	ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32)
 
 	// Ping used for checks if storage is alive
 	// (connection could be established, enough space etc.)
-	Ping() error
+	Ping(ctx context.Context) error
 
 	// GCAware marks that this storage supports periodic
 	// peers collection

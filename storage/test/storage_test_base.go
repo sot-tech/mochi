@@ -40,7 +40,7 @@ type hashPeer struct {
 
 func (th *testHolder) DeleteSeeder(t *testing.T) {
 	for _, c := range testData {
-		err := th.st.DeleteSeeder(c.ih, c.peer)
+		err := th.st.DeleteSeeder(nil, c.ih, c.peer)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -54,14 +54,14 @@ func (th *testHolder) PutLeecher(t *testing.T) {
 		if c.peer.Addr().Is6() {
 			peer = v6Peer
 		}
-		err := th.st.PutLeecher(c.ih, peer)
+		err := th.st.PutLeecher(nil, c.ih, peer)
 		require.Nil(t, err)
 	}
 }
 
 func (th *testHolder) DeleteLeecher(t *testing.T) {
 	for _, c := range testData {
-		err := th.st.DeleteLeecher(c.ih, c.peer)
+		err := th.st.DeleteLeecher(nil, c.ih, c.peer)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -71,7 +71,7 @@ func (th *testHolder) DeleteLeecher(t *testing.T) {
 
 func (th *testHolder) AnnouncePeers(t *testing.T) {
 	for _, c := range testData {
-		_, err := th.st.AnnouncePeers(c.ih, false, 50, c.peer.Addr().Is6())
+		_, err := th.st.AnnouncePeers(nil, c.ih, false, 50, c.peer.Addr().Is6())
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -81,7 +81,7 @@ func (th *testHolder) AnnouncePeers(t *testing.T) {
 
 func (th *testHolder) ScrapeSwarm(t *testing.T) {
 	for _, c := range testData {
-		l, s, n := th.st.ScrapeSwarm(c.ih)
+		l, s, n := th.st.ScrapeSwarm(nil, c.ih)
 		require.Equal(t, uint32(0), s)
 		require.Equal(t, uint32(0), l)
 		require.Equal(t, uint32(0), n)
@@ -91,26 +91,26 @@ func (th *testHolder) ScrapeSwarm(t *testing.T) {
 func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
 		isV6 := c.peer.Addr().Is6()
-		err := th.st.PutLeecher(c.ih, c.peer)
+		err := th.st.PutLeecher(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err := th.st.AnnouncePeers(c.ih, true, 50, isV6)
+		peers, err := th.st.AnnouncePeers(nil, c.ih, true, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
 		// non-seeder announce should still return the leecher
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
+		peers, err = th.st.AnnouncePeers(nil, c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		l, s, _ := th.st.ScrapeSwarm(c.ih)
+		l, s, _ := th.st.ScrapeSwarm(nil, c.ih)
 		require.Equal(t, uint32(2), l)
 		require.Equal(t, uint32(0), s)
 
-		err = th.st.DeleteLeecher(c.ih, c.peer)
+		err = th.st.DeleteLeecher(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err = th.st.AnnouncePeers(c.ih, true, 50, isV6)
+		peers, err = th.st.AnnouncePeers(nil, c.ih, true, 50, isV6)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -122,22 +122,22 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 	for _, c := range testData {
 		isV6 := c.peer.Addr().Is6()
-		err := th.st.PutSeeder(c.ih, c.peer)
+		err := th.st.PutSeeder(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
 		// Should be leecher to see the seeder
-		peers, err := th.st.AnnouncePeers(c.ih, false, 50, isV6)
+		peers, err := th.st.AnnouncePeers(nil, c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		l, s, _ := th.st.ScrapeSwarm(c.ih)
+		l, s, _ := th.st.ScrapeSwarm(nil, c.ih)
 		require.Equal(t, uint32(1), l)
 		require.Equal(t, uint32(1), s)
 
-		err = th.st.DeleteSeeder(c.ih, c.peer)
+		err = th.st.DeleteSeeder(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
+		peers, err = th.st.AnnouncePeers(nil, c.ih, false, 50, isV6)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -153,44 +153,44 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 		if isV6 {
 			peer = v6Peer
 		}
-		err := th.st.PutLeecher(c.ih, c.peer)
+		err := th.st.PutLeecher(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
-		err = th.st.GraduateLeecher(c.ih, c.peer)
+		err = th.st.GraduateLeecher(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
 		// Has to be leecher to see the graduated seeder
-		peers, err := th.st.AnnouncePeers(c.ih, false, 50, isV6)
+		peers, err := th.st.AnnouncePeers(nil, c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
 		// Deleting the Peer as a Leecher should have no effect
-		err = th.st.DeleteLeecher(c.ih, c.peer)
+		err = th.st.DeleteLeecher(nil, c.ih, c.peer)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
 		require.Nil(t, err)
 
 		// Verify it's still there
-		peers, err = th.st.AnnouncePeers(c.ih, false, 50, isV6)
+		peers, err = th.st.AnnouncePeers(nil, c.ih, false, 50, isV6)
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
 		// Clean up
-		err = th.st.DeleteLeecher(c.ih, peer)
+		err = th.st.DeleteLeecher(nil, c.ih, peer)
 		require.Nil(t, err)
 
 		// Test ErrDNE for missing leecher
-		err = th.st.DeleteLeecher(c.ih, peer)
+		err = th.st.DeleteLeecher(nil, c.ih, peer)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
 		require.Nil(t, err)
 
-		err = th.st.DeleteSeeder(c.ih, c.peer)
+		err = th.st.DeleteSeeder(nil, c.ih, c.peer)
 		require.Nil(t, err)
 
-		err = th.st.DeleteSeeder(c.ih, c.peer)
+		err = th.st.DeleteSeeder(nil, c.ih, c.peer)
 		if errors.Is(err, storage.ErrResourceDoesNotExist) {
 			err = nil
 		}
@@ -200,35 +200,35 @@ func (th *testHolder) LeecherPutGraduateAnnounceDeleteAnnounce(t *testing.T) {
 
 func (th *testHolder) CustomPutContainsLoadDelete(t *testing.T) {
 	for _, c := range testData {
-		err := th.st.Put(kvStoreCtx, storage.Entry{Key: c.peer.String(), Value: []byte(c.ih.RawString())})
+		err := th.st.Put(nil, kvStoreCtx, storage.Entry{Key: c.peer.String(), Value: []byte(c.ih.RawString())})
 		require.Nil(t, err)
 
 		// check if exist in ctx we put
-		contains, err := th.st.Contains(kvStoreCtx, c.peer.String())
+		contains, err := th.st.Contains(nil, kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 		require.True(t, contains)
 
 		// check if not exist in another ctx
-		contains, err = th.st.Contains("", c.peer.String())
+		contains, err = th.st.Contains(nil, "", c.peer.String())
 		require.Nil(t, err)
 		require.False(t, contains)
 
 		// check value and type in ctx we put
-		out, err := th.st.Load(kvStoreCtx, c.peer.String())
+		out, err := th.st.Load(nil, kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
 		require.Equal(t, c.ih, ih)
 
 		// check value is nil in another ctx
-		dummy, err := th.st.Load("", c.peer.String())
+		dummy, err := th.st.Load(nil, "", c.peer.String())
 		require.Nil(t, err)
 		require.Nil(t, dummy)
 
-		err = th.st.Delete(kvStoreCtx, c.peer.String())
+		err = th.st.Delete(nil, kvStoreCtx, c.peer.String())
 		require.Nil(t, err)
 
-		contains, err = th.st.Contains("", c.peer.String())
+		contains, err = th.st.Contains(nil, "", c.peer.String())
 		require.Nil(t, err)
 		require.False(t, contains)
 	}
@@ -245,29 +245,29 @@ func (th *testHolder) CustomBulkPutContainsLoadDelete(t *testing.T) {
 			Value: []byte(c.ih.RawString()),
 		})
 	}
-	err := th.st.Put(kvStoreCtx, pairs...)
+	err := th.st.Put(nil, kvStoreCtx, pairs...)
 	require.Nil(t, err)
 
 	// check if exist in ctx we put
 	for _, k := range keys {
-		contains, err := th.st.Contains(kvStoreCtx, k)
+		contains, err := th.st.Contains(nil, kvStoreCtx, k)
 		require.Nil(t, err)
 		require.True(t, contains)
 	}
 
 	// check value and type in ctx we put
 	for _, p := range pairs {
-		out, _ := th.st.Load(kvStoreCtx, p.Key)
+		out, _ := th.st.Load(nil, kvStoreCtx, p.Key)
 		ih, err := bittorrent.NewInfoHash(out)
 		require.Nil(t, err)
 		require.Equal(t, p.Value, []byte(ih.RawString()))
 	}
 
-	err = th.st.Delete(kvStoreCtx, keys...)
+	err = th.st.Delete(nil, kvStoreCtx, keys...)
 	require.Nil(t, err)
 
 	for _, k := range keys {
-		contains, err := th.st.Contains(kvStoreCtx, k)
+		contains, err := th.st.Contains(nil, kvStoreCtx, k)
 		require.Nil(t, err)
 		require.False(t, contains)
 	}

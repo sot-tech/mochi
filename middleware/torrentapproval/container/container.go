@@ -3,6 +3,7 @@
 package container
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -41,7 +42,7 @@ func Register(n string, c Builder) {
 
 // Container holds InfoHash and checks if value approved or not
 type Container interface {
-	Approved(bittorrent.InfoHash) bool
+	Approved(context.Context, bittorrent.InfoHash) bool
 }
 
 // GetContainer creates Container by its name and provided confBytes

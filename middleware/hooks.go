@@ -46,17 +46,17 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 		return
 	}
 
-	var storeFn func(bittorrent.InfoHash, bittorrent.Peer) error
+	var storeFn func(context.Context, bittorrent.InfoHash, bittorrent.Peer) error
 
 	switch {
 	case req.Event == bittorrent.Stopped:
-		storeFn = func(hash bittorrent.InfoHash, peer bittorrent.Peer) error {
-			err = h.store.DeleteSeeder(hash, peer)
+		storeFn = func(ctx context.Context, hash bittorrent.InfoHash, peer bittorrent.Peer) error {
+			err = h.store.DeleteSeeder(ctx, hash, peer)
 			if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 				return err
 			}
 
-			err = h.store.DeleteLeecher(hash, peer)
+			err = h.store.DeleteLeecher(ctx, hash, peer)
 			if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 				return err
 			}
@@ -74,8 +74,8 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 		storeFn = h.store.PutLeecher
 	}
 	for _, p := range req.Peers() {
-		if err = storeFn(req.InfoHash, p); err == nil && len(req.InfoHash) == bittorrent.InfoHashV2Len {
-			err = storeFn(req.InfoHash.TruncateV1(), p)
+		if err = storeFn(ctx, req.InfoHash, p); err == nil && len(req.InfoHash) == bittorrent.InfoHashV2Len {
+			err = storeFn(ctx, req.InfoHash.TruncateV1(), p)
 		}
 		if err != nil {
 			break
@@ -102,10 +102,10 @@ type responseHook struct {
 	store storage.PeerStorage
 }
 
-func (h *responseHook) scrape(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
-	leechers, seeders, snatched = h.store.ScrapeSwarm(ih)
+func (h *responseHook) scrape(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+	leechers, seeders, snatched = h.store.ScrapeSwarm(ctx, ih)
 	if len(ih) == bittorrent.InfoHashV2Len {
-		l, s, n := h.store.ScrapeSwarm(ih.TruncateV1())
+		l, s, n := h.store.ScrapeSwarm(ctx, ih.TruncateV1())
 		leechers, seeders, snatched = leechers+l, seeders+s, snatched+n
 	}
 	return
@@ -117,9 +117,9 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	resp.Incomplete, resp.Complete, _ = h.scrape(req.InfoHash)
+	resp.Incomplete, resp.Complete, _ = h.scrape(ctx, req.InfoHash)
 
-	err = h.appendPeers(req, resp)
+	err = h.appendPeers(ctx, req, resp)
 	return ctx, err
 }
 
@@ -128,7 +128,7 @@ type fetchArgs struct {
 	v6 bool
 }
 
-func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (err error) {
+func (h *responseHook) appendPeers(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (err error) {
 	seeding := req.Left == 0
 	max := int(req.NumWant)
 	peers := make([]bittorrent.Peer, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers))
@@ -159,7 +159,7 @@ func (h *responseHook) appendPeers(req *bittorrent.AnnounceRequest, resp *bittor
 			break
 		}
 		var storePeers []bittorrent.Peer
-		storePeers, err = h.store.AnnouncePeers(a.ih, seeding, max, a.v6)
+		storePeers, err = h.store.AnnouncePeers(ctx, a.ih, seeding, max, a.v6)
 		if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 			return err
 		}
@@ -209,13 +209,13 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 
 	for _, infoHash := range req.InfoHashes {
 		scr := bittorrent.Scrape{InfoHash: infoHash}
-		scr.Incomplete, scr.Complete, scr.Snatches = h.scrape(infoHash)
+		scr.Incomplete, scr.Complete, scr.Snatches = h.scrape(ctx, infoHash)
 		resp.Files = append(resp.Files, scr)
 	}
 
 	return ctx, nil
 }
 
-func (h *responseHook) Ping(_ context.Context) error {
-	return h.store.Ping()
+func (h *responseHook) Ping(ctx context.Context) error {
+	return h.store.Ping(ctx)
 }
