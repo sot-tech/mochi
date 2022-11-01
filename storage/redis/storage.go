@@ -36,7 +36,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -100,11 +99,7 @@ func newStore(cfg Config) (*store, error) {
 		return nil, err
 	}
 
-	return &store{
-		Connection: rs,
-		closed:     make(chan any),
-		wg:         sync.WaitGroup{},
-	}, nil
+	return &store{Connection: rs, closed: make(chan any)}, nil
 }
 
 // Config holds the configuration of a redis PeerStorage.
@@ -287,8 +282,9 @@ type Connection struct {
 
 type store struct {
 	Connection
-	closed chan any
-	wg     sync.WaitGroup
+	closed     chan any
+	wg         sync.WaitGroup
+	onceCloser sync.Once
 }
 
 func (ps *store) count(key string, getLength bool) (n uint64) {
@@ -611,14 +607,6 @@ func (*Connection) Preservable() bool {
 	return true
 }
 
-func (*store) GCAware() bool {
-	return true
-}
-
-func (*store) StatisticsAware() bool {
-	return true
-}
-
 // Ping sends `PING` request to Redis server
 func (ps *Connection) Ping(ctx context.Context) error {
 	return ps.UniversalClient.Ping(ctx).Err()
@@ -769,21 +757,12 @@ func (ps *store) gc(cutoff time.Time) {
 	}
 }
 
-func (ps *store) Stop() stop.Result {
-	c := make(stop.Channel)
-	go func() {
-		if ps.closed != nil {
-			close(ps.closed)
-		}
+func (ps *store) Close() (err error) {
+	ps.onceCloser.Do(func() {
+		close(ps.closed)
 		ps.wg.Wait()
-		var err error
-		if ps.UniversalClient != nil {
-			logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
-			err = ps.UniversalClient.Close()
-			ps.UniversalClient = nil
-		}
-		c.Done(err)
-	}()
-
-	return c.Result()
+		logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
+		err = ps.UniversalClient.Close()
+	})
+	return
 }

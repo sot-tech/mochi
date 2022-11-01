@@ -1,6 +1,7 @@
 package bittorrent
 
 import (
+	"context"
 	"errors"
 	"net/url"
 	"strconv"
@@ -82,6 +83,27 @@ func (rp RouteParams) ByName(name string) string {
 		}
 	}
 	return ""
+}
+
+// InjectRouteParamsToContext returns new context with specified RouteParams placed in
+// RouteParamsKey key
+func InjectRouteParamsToContext(ctx context.Context, rp RouteParams) context.Context {
+	if rp == nil {
+		rp = RouteParams{}
+	}
+	return context.WithValue(ctx, RouteParamsKey, rp)
+}
+
+// RemapRouteParamsToBgContext returns new context with context.Background parent
+// and copied RouteParams from inCtx
+func RemapRouteParamsToBgContext(inCtx context.Context) context.Context {
+	rp, isOk := inCtx.Value(RouteParamsKey).(RouteParams)
+	if !isOk {
+		rp = RouteParams{}
+	} else {
+		logger.Warn().Msg("unable to fetch route parameters, probably jammed context")
+	}
+	return context.WithValue(context.Background(), RouteParamsKey, rp)
 }
 
 // ParseURLData parses a request URL or UDP URLData as defined in BEP41.

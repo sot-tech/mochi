@@ -29,8 +29,7 @@ func TestStartStopRaceIssue437(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	errC := fe.Stop()
-	if errs := <-errC; len(errs) != 0 {
-		t.Fatal(errs)
+	if err = fe.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

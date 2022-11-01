@@ -12,14 +12,12 @@ package keydb
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/go-redis/redis/v8"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	r "github.com/sot-tech/mochi/storage/redis"
 )
@@ -79,10 +77,7 @@ func newStore(cfg r.Config) (*store, error) {
 
 	var st *store
 	if err == nil {
-		st = &store{
-			Connection: rs,
-			peerTTL:    uint(cfg.PeerLifetime.Seconds()),
-		}
+		st = &store{Connection: rs, peerTTL: uint(cfg.PeerLifetime.Seconds())}
 	}
 
 	return st, err
@@ -176,25 +171,4 @@ func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
 	return s.ScrapeIH(ctx, ih, s.SCard)
-}
-
-func (*store) GCAware() bool {
-	return false
-}
-
-func (*store) ScheduleGC(_, _ time.Duration) {}
-
-func (*store) StatisticsAware() bool {
-	return false
-}
-
-func (*store) ScheduleStatisticsCollection(_ time.Duration) {}
-
-func (s *store) Stop() stop.Result {
-	c := make(stop.Channel)
-	if s.UniversalClient != nil {
-		c.Done(s.UniversalClient.Close())
-		s.UniversalClient = nil
-	}
-	return c.Result()
 }

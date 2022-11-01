@@ -14,7 +14,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -96,8 +95,9 @@ type peerStore struct {
 	cfg    Config
 	shards []*peerShard
 
-	closed chan struct{}
-	wg     sync.WaitGroup
+	closed     chan struct{}
+	wg         sync.WaitGroup
+	onceCloser sync.Once
 }
 
 var _ storage.PeerStorage = &peerStore{}
@@ -468,17 +468,9 @@ func (ds *dataStore) Delete(_ context.Context, ctx string, keys ...string) error
 	return nil
 }
 
-func (*dataStore) Preservable() bool {
-	return false
-}
+func (*dataStore) Preservable() bool { return false }
 
-func (*peerStore) GCAware() bool {
-	return true
-}
-
-func (*peerStore) StatisticsAware() bool {
-	return true
-}
+func (ds *dataStore) Close() error { return nil }
 
 // GC deletes all Peers from the PeerStorage which are older than the
 // cutoff time.
@@ -542,12 +534,9 @@ func (*peerStore) Ping(context.Context) error {
 	return nil
 }
 
-func (ps *peerStore) Stop() stop.Result {
-	c := make(stop.Channel)
-	go func() {
-		if ps.closed != nil {
-			close(ps.closed)
-		}
+func (ps *peerStore) Close() error {
+	ps.onceCloser.Do(func() {
+		close(ps.closed)
 		ps.wg.Wait()
 
 		// Explicitly deallocate our storage.
@@ -556,9 +545,7 @@ func (ps *peerStore) Stop() stop.Result {
 			shards[i] = &peerShard{swarms: make(map[bittorrent.InfoHash]swarm)}
 		}
 		ps.shards = shards
+	})
 
-		c.Done()
-	}()
-
-	return c.Result()
+	return nil
 }

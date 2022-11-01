@@ -3,7 +3,6 @@ package udp
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -12,17 +11,15 @@ import (
 
 // WriteError writes the failure reason as a null-terminated string.
 func WriteError(w io.Writer, txID []byte, err error) {
-	// If the client wasn't at fault, acknowledge it.
-	var clientErr bittorrent.ClientError
-	if !errors.Is(err, &clientErr) {
-		err = fmt.Errorf("internal error occurred: %w", err)
-	}
-
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 	writeHeader(buf, txID, errorActionID)
-	_, _ = buf.WriteString(err.Error())
-	_, _ = buf.WriteRune('\000')
+	// If the client wasn't at fault, acknowledge it.
+	if !errors.As(err, new(bittorrent.ClientError)) {
+		buf.WriteString("internal error occurred: ")
+	}
+	buf.WriteString(err.Error())
+	buf.WriteByte('\000')
 	_, _ = w.Write(buf.Bytes())
 }
 
@@ -50,7 +47,7 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 	}
 
 	for _, peer := range peers {
-		_, _ = buf.Write(peer.Addr().AsSlice())
+		buf.Write(peer.Addr().AsSlice())
 		_ = binary.Write(buf, binary.BigEndian, peer.Port())
 	}
 
@@ -79,8 +76,7 @@ func WriteConnectionID(w io.Writer, txID, connID []byte) {
 	defer reqRespBufferPool.Put(buf)
 
 	writeHeader(buf, txID, connectActionID)
-	_, _ = buf.Write(connID)
-
+	buf.Write(connID)
 	_, _ = w.Write(buf.Bytes())
 }
 

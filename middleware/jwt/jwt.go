@@ -19,7 +19,6 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -110,13 +109,12 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 	return
 }
 
-func (h *hook) Stop() stop.Result {
+func (h *hook) Close() error {
 	logger.Debug().Msg("attempting to shutdown JWT middleware")
-	c := make(stop.Channel)
 	if h.jwks != nil {
-		go h.jwks.EndBackground()
+		h.jwks.EndBackground()
 	}
-	return c.Result()
+	return nil
 }
 
 type verifiableClaims interface {

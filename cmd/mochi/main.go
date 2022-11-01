@@ -37,7 +37,7 @@ func main() {
 	if err := s.Run(*configPath); err != nil {
 		log.Fatal("unable to start server: ", err)
 	}
-	defer s.Dispose()
+	defer s.Shutdown()
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch

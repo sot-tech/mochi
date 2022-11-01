@@ -5,13 +5,13 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 const (
@@ -93,6 +93,7 @@ var ErrResourceDoesNotExist = bittorrent.ClientError("resource does not exist")
 
 // DataStorage is the interface, used for implementing store for arbitrary data
 type DataStorage interface {
+	io.Closer
 	// Put used to place arbitrary k-v data with specified context
 	// into storage. storeCtx parameter used to group data
 	// (i.e. data only for specific middleware module: hash key, table name etc...)
@@ -189,27 +190,23 @@ type PeerStorage interface {
 	// Ping used for checks if storage is alive
 	// (connection could be established, enough space etc.)
 	Ping(ctx context.Context) error
+}
 
-	// GCAware marks that this storage supports periodic
-	// peers collection
-	GCAware() bool
-
+// GarbageCollector marks that this storage supports periodic
+// stale peers collection
+type GarbageCollector interface {
 	// ScheduleGC used to delete stale data, such as timed out seeders/leechers.
 	// Note: implementation must create subroutine by itself
 	ScheduleGC(gcInterval, peerLifeTime time.Duration)
+}
 
-	// StatisticsAware marks that this storage supports periodic
-	// statistics collection
-	StatisticsAware() bool
-
+// StatisticsCollector marks that this storage supports periodic
+// statistics collection
+type StatisticsCollector interface {
 	// ScheduleStatisticsCollection used to receive statistics information about hashes,
 	// seeders and leechers count.
 	// Note: implementation must create subroutine by itself
 	ScheduleStatisticsCollection(reportInterval time.Duration)
-
-	// Stopper is an interface that expects a Stop method to stop the PeerStorage.
-	// For more details see the documentation in the stop package.
-	stop.Stopper
 }
 
 // RegisterDriver makes a Driver available by the provided name.
@@ -256,27 +253,27 @@ func NewStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
 		return
 	}
 
-	if gc := ps.GCAware(); gc {
+	if gc, isOk := ps.(GarbageCollector); isOk {
 		gcInterval, peerTTL := c.sanitizeGCConfig()
 		logger.Info().
 			Str("name", cfg.Name).
 			Dur("gcInterval", gcInterval).
 			Dur("peerTTL", peerTTL).
 			Msg("scheduling GC")
-		ps.ScheduleGC(gcInterval, peerTTL)
+		gc.ScheduleGC(gcInterval, peerTTL)
 	} else {
 		logger.Debug().
 			Str("name", cfg.Name).
 			Msg("storage does not support GC")
 	}
 
-	if st := ps.StatisticsAware(); st {
+	if st, isOk := ps.(StatisticsCollector); isOk {
 		if statInterval := c.sanitizeStatisticsConfig(); statInterval > 0 {
 			logger.Info().
 				Str("name", cfg.Name).
 				Dur("statInterval", statInterval).
 				Msg("scheduling statistics collection")
-			ps.ScheduleStatisticsCollection(statInterval)
+			st.ScheduleStatisticsCollection(statInterval)
 		} else {
 			logger.Info().Str("name", cfg.Name).Msg("statistics collection disabled because of zero reporting interval")
 		}

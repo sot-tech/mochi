@@ -18,7 +18,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 var (
@@ -81,17 +80,17 @@ type httpFE struct {
 }
 
 // NewFrontend builds and starts http bittorrent frontend from provided configuration
-func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend, err error) {
+func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, error) {
 	var cfg Config
+	var err error
 	if err = c.Unmarshal(&cfg); err != nil {
-		return
+		return nil, err
 	}
 	if cfg, err = cfg.Validate(); err != nil {
-		return
+		return nil, err
 	}
 	if len(cfg.AnnounceRoutes) < 1 || len(cfg.ScrapeRoutes) < 1 {
-		err = errRoutesNotProvided
-		return
+		return nil, errRoutesNotProvided
 	}
 
 	f := &httpFE{
@@ -110,7 +109,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend
 	if cfg.UseTLS {
 		var cert tls.Certificate
 		if cert, err = tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath); err != nil {
-			return
+			return nil, err
 		}
 		f.srv.TLSConfig = &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -150,34 +149,17 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (_ frontend.Frontend
 	return f, nil
 }
 
-// Stop provides a thread-safe way to shut down a currently running Frontend.
-func (f *httpFE) Stop() stop.Result {
-	c := make(stop.Channel)
-	if f.srv != nil {
-		go func() {
-			c.Done(f.srv.Shutdown(context.Background()))
-		}()
-	}
-	return c.Result()
+// Close provides a thread-safe way to shut down a currently running Frontend.
+func (f *httpFE) Close() error {
+	return f.srv.Shutdown(context.Background())
 }
 
-func injectRouteParamsToContext(ctx context.Context, ps httprouter.Params) context.Context {
-	rp := bittorrent.RouteParams{}
-	for _, p := range ps {
-		rp = append(rp, bittorrent.RouteParam{Key: p.Key, Value: p.Value})
+func httpParamsToRouteParams(in httprouter.Params) (out bittorrent.RouteParams) {
+	out = make([]bittorrent.RouteParam, 0, len(in))
+	for _, p := range in {
+		out = append(out, bittorrent.RouteParam{Key: p.Key, Value: p.Value})
 	}
-	return context.WithValue(ctx, bittorrent.RouteParamsKey, rp)
-}
-
-func remapRouteParamsToBgContext(inCtx context.Context) context.Context {
-	rp, isOk := inCtx.Value(bittorrent.RouteParamsKey).(bittorrent.RouteParams)
-	if !isOk {
-		rp = bittorrent.RouteParams{}
-	} else {
-		logger.Warn().Msg("unable to fetch route parameters, probably jammed context")
-	}
-	// FIXME: cancelable context
-	return context.WithValue(context.TODO(), bittorrent.RouteParamsKey, rp)
+	return
 }
 
 // announceRoute parses and responds to an Announce.
@@ -200,7 +182,7 @@ func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 	addr = req.GetFirst()
 
-	ctx := injectRouteParamsToContext(r.Context(), ps)
+	ctx := bittorrent.InjectRouteParamsToContext(r.Context(), httpParamsToRouteParams(ps))
 	ctx, resp, err := f.logic.HandleAnnounce(ctx, req)
 	if err != nil {
 		WriteError(w, err)
@@ -215,8 +197,7 @@ func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 
 	// next actions are background and should not be canceled after http writer closed
-	ctx = remapRouteParamsToBgContext(ctx)
-
+	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 	go f.logic.AfterAnnounce(ctx, req, resp)
 }
 
@@ -239,7 +220,7 @@ func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 	addr = req.GetFirst()
 
-	ctx := injectRouteParamsToContext(r.Context(), ps)
+	ctx := bittorrent.InjectRouteParamsToContext(r.Context(), httpParamsToRouteParams(ps))
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)
 	if err != nil {
 		WriteError(w, err)
@@ -254,8 +235,7 @@ func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 
 	// next actions are background and should not be canceled after http writer closed
-	ctx = remapRouteParamsToBgContext(ctx)
-
+	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 

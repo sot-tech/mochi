@@ -17,7 +17,6 @@ import (
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -49,11 +48,6 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 		},
 		watcher: nil,
 	}
-	var w *dirwatch.Instance
-	if w, err = dirwatch.New(c.Path); err != nil {
-		return nil, fmt.Errorf("unable to initialize directory watch: %w", err)
-	}
-	d.watcher = w
 	if len(d.StorageCtx) == 0 {
 		logger.Warn().
 			Str("name", "StorageCtx").
@@ -62,6 +56,11 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 			Msg("falling back to default configuration")
 		d.StorageCtx = container.DefaultStorageCtxName
 	}
+	var w *dirwatch.Instance
+	if w, err = dirwatch.New(c.Path); err != nil {
+		return nil, fmt.Errorf("unable to initialize directory watch: %w", err)
+	}
+	d.watcher = w
 	go func() {
 		for event := range d.watcher.Events {
 			var mi *metainfo.MetaInfo
@@ -124,10 +123,10 @@ type directory struct {
 	watcher *dirwatch.Instance
 }
 
-// Stop closes watching of torrent directory
-func (d *directory) Stop() stop.Result {
-	st := make(stop.Channel)
-	d.watcher.Close()
-	st.Done()
-	return st.Result()
+// Close closes watching of torrent directory
+func (d *directory) Close() error {
+	if d.watcher != nil {
+		d.watcher.Close()
+	}
+	return nil
 }

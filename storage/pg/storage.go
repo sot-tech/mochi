@@ -20,7 +20,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -76,7 +75,13 @@ func newStore(cfg Config) (storage.PeerStorage, error) {
 		return nil, err
 	}
 
-	return &store{Config: cfg, Pool: con, wg: sync.WaitGroup{}, closed: make(chan any)}, nil
+	return &store{
+		Config:     cfg,
+		Pool:       con,
+		wg:         sync.WaitGroup{},
+		closed:     make(chan any),
+		onceCloser: sync.Once{},
+	}, nil
 }
 
 type peerQueryConf struct {
@@ -215,8 +220,9 @@ func (cfg Config) Validate() (Config, error) {
 type store struct {
 	Config
 	*pgxpool.Pool
-	wg     sync.WaitGroup
-	closed chan any
+	wg         sync.WaitGroup
+	closed     chan any
+	onceCloser sync.Once
 }
 
 func (s *store) txBatch(ctx context.Context, batch *pgx.Batch) (err error) {
@@ -242,7 +248,7 @@ func (s *store) Put(ctx context.Context, storeCtx string, values ...storage.Entr
 	default:
 		var batch pgx.Batch
 		for _, v := range values {
-			batch.Queue(s.Data.AddQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(v.Key), pValue: v.Value})
+			batch.Queue(s.Data.AddQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(v.Key), pValue: v.Value})
 		}
 		err = s.txBatch(ctx, &batch)
 	}
@@ -281,11 +287,10 @@ func (s *store) Preservable() bool {
 	return true
 }
 
-func (s *store) GCAware() bool {
-	return len(s.GCQuery) > 0
-}
-
 func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
+	if len(s.GCQuery) == 0 {
+		return
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -311,11 +316,10 @@ func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 	}()
 }
 
-func (s *store) StatisticsAware() bool {
-	return len(s.InfoHashCountQuery) > 0
-}
-
 func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
+	if len(s.InfoHashCountQuery) == 0 {
+		return
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -357,9 +361,7 @@ func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittor
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
 		pV6:       peer.Addr().Is6(),
-	}
-	if s.GCAware() {
-		args[pCreated] = timecache.Now()
+		pCreated:  timecache.Now(),
 	}
 	_, err = s.Exec(ctx, s.Peer.AddQuery, args)
 	return
@@ -576,19 +578,12 @@ func (s *store) Ping(ctx context.Context) error {
 	return err
 }
 
-func (s *store) Stop() stop.Result {
-	c := make(stop.Channel)
+func (s *store) Close() error {
 	go func() {
-		if s.closed != nil {
-			close(s.closed)
-		}
+		close(s.closed)
 		s.wg.Wait()
-		if s.Pool != nil {
-			logger.Info().Msg("pg exiting. mochi does not clear data in database when exiting.")
-			s.Close()
-			s.Pool = nil
-		}
-		c.Done()
+		logger.Info().Msg("pg exiting. mochi does not clear data in database when exiting.")
+		s.Pool.Close()
 	}()
-	return c.Result()
+	return nil
 }
