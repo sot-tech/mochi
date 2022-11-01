@@ -99,9 +99,8 @@ func InjectRouteParamsToContext(ctx context.Context, rp RouteParams) context.Con
 func RemapRouteParamsToBgContext(inCtx context.Context) context.Context {
 	rp, isOk := inCtx.Value(RouteParamsKey).(RouteParams)
 	if !isOk {
-		rp = RouteParams{}
-	} else {
 		logger.Warn().Msg("unable to fetch route parameters, probably jammed context")
+		rp = RouteParams{}
 	}
 	return context.WithValue(context.Background(), RouteParamsKey, rp)
 }
