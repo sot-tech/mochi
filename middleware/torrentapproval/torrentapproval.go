@@ -5,6 +5,7 @@ package torrentapproval
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
@@ -17,7 +18,6 @@ import (
 
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -74,7 +74,7 @@ type hook struct {
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
 	var err error
 
-	if !h.hashContainer.Approved(req.InfoHash) {
+	if !h.hashContainer.Approved(ctx, req.InfoHash) {
 		err = ErrTorrentUnapproved
 	}
 
@@ -86,9 +86,9 @@ func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ 
 	return ctx, nil
 }
 
-func (h *hook) Stop() stop.Result {
-	if st, isOk := h.hashContainer.(stop.Stopper); isOk {
-		return st.Stop()
+func (h *hook) Close() (err error) {
+	if cl, isOk := h.hashContainer.(io.Closer); isOk {
+		err = cl.Close()
 	}
-	return stop.AlreadyStopped
+	return err
 }

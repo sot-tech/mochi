@@ -20,7 +20,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
@@ -81,6 +80,8 @@ type udpFE struct {
 	logic          *middleware.Logic
 	maxClockSkew   time.Duration
 	collectTimings bool
+	ctxCancel      context.CancelFunc
+	onceCloser     sync.Once
 	frontend.ParseOptions
 }
 
@@ -109,43 +110,37 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	}
 
 	if f.socket, err = cfg.ListenUDP(); err == nil {
+		var ctx context.Context
+		ctx, f.ctxCancel = context.WithCancel(context.Background())
 		f.wg.Add(1)
-		go func() {
-			if err := f.serve(); err != nil {
+		go func(ctx context.Context) {
+			if err := f.serve(ctx); err != nil {
 				logger.Fatal().Err(err).Msg("server failed")
 			}
-		}()
+		}(ctx)
 	}
 
 	return f, err
 }
 
-// Stop provides a thread-safe way to shut down a currently running Frontend.
-func (t *udpFE) Stop() stop.Result {
-	select {
-	case <-t.closing:
-		return stop.AlreadyStopped
-	default:
-	}
-
-	c := make(stop.Channel)
-	go func() {
+// Close provides a thread-safe way to shut down a currently running Frontend.
+func (t *udpFE) Close() (err error) {
+	t.onceCloser.Do(func() {
 		close(t.closing)
-		var err error
 		if t.socket != nil {
+			t.ctxCancel()
 			_ = t.socket.SetReadDeadline(time.Now())
 			t.wg.Wait()
 			err = t.socket.Close()
 		}
-		c.Done(err)
-	}()
+	})
 
-	return c.Result()
+	return
 }
 
 // serve blocks while listening and serving UDP BitTorrent requests
 // until Stop() is called or an error is returned.
-func (t *udpFE) serve() error {
+func (t *udpFE) serve(ctx context.Context) error {
 	pool := bytepool.NewBytePool(2048)
 	defer t.wg.Done()
 
@@ -188,7 +183,7 @@ func (t *udpFE) serve() error {
 			if t.collectTimings && metrics.Enabled() {
 				start = time.Now()
 			}
-			action, err := t.handleRequest(
+			action, err := t.handleRequest(ctx,
 				Request{(*buffer)[:n], addr},
 				ResponseWriter{t.socket, addrPort},
 			)
@@ -218,7 +213,7 @@ func (w ResponseWriter) Write(b []byte) (int, error) {
 }
 
 // handleRequest parses and responds to a UDP Request.
-func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, err error) {
+func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) (actionName string, err error) {
 	if len(r.Packet) < 16 {
 		// Malformed, no client packets are less than 16 bytes.
 		// We explicitly return nothing in case this is a DoS attempt.
@@ -265,9 +260,9 @@ func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, e
 			return
 		}
 
-		var ctx context.Context
 		var resp *bittorrent.AnnounceResponse
-		ctx, resp, err = t.logic.HandleAnnounce(context.Background(), req)
+		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
+		ctx, resp, err = t.logic.HandleAnnounce(ctx, req)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -275,6 +270,7 @@ func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, e
 
 		WriteAnnounce(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
 
+		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 		go t.logic.AfterAnnounce(ctx, req, resp)
 
 	case scrapeActionID:
@@ -287,9 +283,9 @@ func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, e
 			return
 		}
 
-		var ctx context.Context
 		var resp *bittorrent.ScrapeResponse
-		ctx, resp, err = t.logic.HandleScrape(context.Background(), req)
+		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
+		ctx, resp, err = t.logic.HandleScrape(ctx, req)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -297,6 +293,7 @@ func (t *udpFE) handleRequest(r Request, w ResponseWriter) (actionName string, e
 
 		WriteScrape(w, txID, resp)
 
+		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 		go t.logic.AfterScrape(ctx, req, resp)
 
 	default:

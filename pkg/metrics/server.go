@@ -14,7 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 const (
@@ -50,14 +49,9 @@ func AddressFamily(ip netip.Addr) string {
 	}
 }
 
-// Stop shuts down the server.
-func (s *Server) Stop() stop.Result {
-	c := make(stop.Channel)
-	go func() {
-		c.Done(s.srv.Shutdown(context.Background()))
-	}()
-
-	return c.Result()
+// Close shuts down the server.
+func (s *Server) Close() error {
+	return s.srv.Shutdown(context.Background())
 }
 
 // NewServer creates a new instance of a Prometheus server that asynchronously

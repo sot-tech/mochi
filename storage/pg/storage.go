@@ -20,7 +20,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -76,7 +75,13 @@ func newStore(cfg Config) (storage.PeerStorage, error) {
 		return nil, err
 	}
 
-	return &store{Config: cfg, Pool: con, wg: sync.WaitGroup{}, closed: make(chan any)}, nil
+	return &store{
+		Config:     cfg,
+		Pool:       con,
+		wg:         sync.WaitGroup{},
+		closed:     make(chan any),
+		onceCloser: sync.Once{},
+	}, nil
 }
 
 type peerQueryConf struct {
@@ -215,14 +220,15 @@ func (cfg Config) Validate() (Config, error) {
 type store struct {
 	Config
 	*pgxpool.Pool
-	wg     sync.WaitGroup
-	closed chan any
+	wg         sync.WaitGroup
+	closed     chan any
+	onceCloser sync.Once
 }
 
 func (s *store) txBatch(ctx context.Context, batch *pgx.Batch) (err error) {
 	var tx pgx.Tx
 	if tx, err = s.Begin(ctx); err == nil {
-		if err = tx.SendBatch(context.TODO(), batch).Close(); err == nil {
+		if err = tx.SendBatch(ctx, batch).Close(); err == nil {
 			err = tx.Commit(ctx)
 		} else {
 			if txErr := tx.Rollback(ctx); txErr != nil {
@@ -233,25 +239,25 @@ func (s *store) txBatch(ctx context.Context, batch *pgx.Batch) (err error) {
 	return
 }
 
-func (s *store) Put(ctx string, values ...storage.Entry) (err error) {
+func (s *store) Put(ctx context.Context, storeCtx string, values ...storage.Entry) (err error) {
 	switch len(values) {
 	case 0:
 		// ignore
 	case 1:
-		_, err = s.Exec(context.TODO(), s.Data.AddQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(values[0].Key), pValue: values[0].Value})
+		_, err = s.Exec(ctx, s.Data.AddQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(values[0].Key), pValue: values[0].Value})
 	default:
 		var batch pgx.Batch
 		for _, v := range values {
-			batch.Queue(s.Data.AddQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(v.Key), pValue: v.Value})
+			batch.Queue(s.Data.AddQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(v.Key), pValue: v.Value})
 		}
-		err = s.txBatch(context.TODO(), &batch)
+		err = s.txBatch(ctx, &batch)
 	}
 	return
 }
 
-func (s *store) Contains(ctx string, key string) (contains bool, err error) {
+func (s *store) Contains(ctx context.Context, storeCtx string, key string) (contains bool, err error) {
 	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Data.GetQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(key)}); err == nil {
+	if rows, err = s.Query(ctx, s.Data.GetQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(key)}); err == nil {
 		defer rows.Close()
 		contains = rows.Next()
 		err = rows.Err()
@@ -259,20 +265,20 @@ func (s *store) Contains(ctx string, key string) (contains bool, err error) {
 	return
 }
 
-func (s *store) Load(ctx string, key string) (out []byte, err error) {
-	if err = s.QueryRow(context.TODO(), s.Data.GetQuery, pgx.NamedArgs{pCtx: ctx, pKey: []byte(key)}).Scan(&out); errors.Is(err, pgx.ErrNoRows) {
+func (s *store) Load(ctx context.Context, storeCtx string, key string) (out []byte, err error) {
+	if err = s.QueryRow(ctx, s.Data.GetQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(key)}).Scan(&out); errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	return
 }
 
-func (s *store) Delete(ctx string, keys ...string) (err error) {
+func (s *store) Delete(ctx context.Context, storeCtx string, keys ...string) (err error) {
 	if len(keys) > 0 {
 		baKeys := make([][]byte, len(keys))
 		for i, k := range keys {
 			baKeys[i] = []byte(k)
 		}
-		_, err = s.Exec(context.TODO(), s.Data.DelQuery, pgx.NamedArgs{pCtx: ctx, pKey: baKeys})
+		_, err = s.Exec(ctx, s.Data.DelQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: baKeys})
 	}
 	return
 }
@@ -281,11 +287,10 @@ func (s *store) Preservable() bool {
 	return true
 }
 
-func (s *store) GCAware() bool {
-	return len(s.GCQuery) > 0
-}
-
 func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
+	if len(s.GCQuery) == 0 {
+		return
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -311,11 +316,10 @@ func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 	}()
 }
 
-func (s *store) StatisticsAware() bool {
-	return len(s.InfoHashCountQuery) > 0
-}
-
 func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
+	if len(s.InfoHashCountQuery) == 0 {
+		return
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -328,7 +332,7 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 			case <-t.C:
 				if metrics.Enabled() {
 					before := time.Now()
-					sc, lc := s.countPeers(nil)
+					sc, lc := s.countPeers(context.Background(), nil)
 					var hc int
 					if err := s.QueryRow(context.Background(), s.InfoHashCountQuery).Scan(&hc); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 						logger.Error().Err(err).Msg("error occurred while get info hash count")
@@ -344,7 +348,7 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 	}()
 }
 
-func (s *store) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
+func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
@@ -357,20 +361,18 @@ func (s *store) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder boo
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
 		pV6:       peer.Addr().Is6(),
+		pCreated:  timecache.Now(),
 	}
-	if s.GCAware() {
-		args[pCreated] = timecache.Now()
-	}
-	_, err = s.Exec(context.TODO(), s.Peer.AddQuery, args)
+	_, err = s.Exec(ctx, s.Peer.AddQuery, args)
 	return
 }
 
-func (s *store) delPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
+func (s *store) delPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
 		Msg("del peer")
-	_, err = s.Exec(context.TODO(), s.Peer.DelQuery, pgx.NamedArgs{
+	_, err = s.Exec(ctx, s.Peer.DelQuery, pgx.NamedArgs{
 		pInfoHash: []byte(ih),
 		pPeerID:   peer.ID[:],
 		pAddress:  net.IP(peer.Addr().AsSlice()),
@@ -380,23 +382,23 @@ func (s *store) delPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder boo
 	return
 }
 
-func (s *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.putPeer(ih, peer, true)
+func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.putPeer(ctx, ih, peer, true)
 }
 
-func (s *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ih, peer, true)
+func (s *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(ctx, ih, peer, true)
 }
 
-func (s *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.putPeer(ih, peer, false)
+func (s *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.putPeer(ctx, ih, peer, false)
 }
 
-func (s *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ih, peer, false)
+func (s *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(ctx, ih, peer, false)
 }
 
-func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
@@ -410,12 +412,12 @@ func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) er
 		pPort:     peer.Port(),
 	})
 	batch.Queue(s.Downloads.IncrementQuery, pgx.NamedArgs{pInfoHash: ihb})
-	return s.txBatch(context.TODO(), &batch)
+	return s.txBatch(ctx, &batch)
 }
 
-func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
+func (s *store) getPeers(ctx context.Context, ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
 	var rows pgx.Rows
-	if rows, err = s.Query(context.TODO(), s.Announce.Query, pgx.NamedArgs{
+	if rows, err = s.Query(ctx, s.Announce.Query, pgx.NamedArgs{
 		pInfoHash: []byte(ih),
 		pSeeder:   seeders,
 		pV6:       isV6,
@@ -484,7 +486,7 @@ func (s *store) getPeers(ih bittorrent.InfoHash, seeders bool, maxCount int, isV
 	return
 }
 
-func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Bool("forSeeder", forSeeder).
@@ -492,11 +494,11 @@ func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant in
 		Bool("v6", v6).
 		Msg("announce peers")
 	if forSeeder {
-		peers, err = s.getPeers(ih, false, numWant, v6)
+		peers, err = s.getPeers(ctx, ih, false, numWant, v6)
 	} else {
-		if peers, err = s.getPeers(ih, true, numWant, v6); err == nil {
+		if peers, err = s.getPeers(ctx, ih, true, numWant, v6); err == nil {
 			var addPeers []bittorrent.Peer
-			addPeers, err = s.getPeers(ih, false, numWant-len(peers), v6)
+			addPeers, err = s.getPeers(ctx, ih, false, numWant-len(peers), v6)
 			peers = append(peers, addPeers...)
 		}
 	}
@@ -513,13 +515,13 @@ func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant in
 	return
 }
 
-func (s *store) countPeers(ih []byte) (seeders uint32, leechers uint32) {
+func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leechers uint32) {
 	var rows pgx.Rows
 	var err error
 	if len(ih) == 0 {
-		rows, err = s.Query(context.TODO(), s.Peer.CountQuery)
+		rows, err = s.Query(ctx, s.Peer.CountQuery)
 	} else {
-		rows, err = s.Query(context.TODO(), s.Peer.CountQuery+" "+s.Peer.ByInfoHashClause, pgx.NamedArgs{pInfoHash: ih})
+		rows, err = s.Query(ctx, s.Peer.CountQuery+" "+s.Peer.ByInfoHashClause, pgx.NamedArgs{pInfoHash: ih})
 	}
 	if err == nil {
 		defer rows.Close()
@@ -556,14 +558,14 @@ func (s *store) countPeers(ih []byte) (seeders uint32, leechers uint32) {
 	return
 }
 
-func (s *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
 	ihb := []byte(ih)
-	seeders, leechers = s.countPeers(ihb)
+	seeders, leechers = s.countPeers(ctx, ihb)
 	if len(s.Downloads.GetQuery) > 0 {
-		if err := s.QueryRow(context.TODO(), s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := s.QueryRow(ctx, s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			logger.Error().Stringer("infoHash", ih).Err(err).Msg("error occurred while get info downloads count")
 		}
 	}
@@ -571,24 +573,17 @@ func (s *store) ScrapeSwarm(ih bittorrent.InfoHash) (leechers uint32, seeders ui
 	return
 }
 
-func (s *store) Ping() error {
-	_, err := s.Exec(context.TODO(), s.PingQuery)
+func (s *store) Ping(ctx context.Context) error {
+	_, err := s.Exec(ctx, s.PingQuery)
 	return err
 }
 
-func (s *store) Stop() stop.Result {
-	c := make(stop.Channel)
+func (s *store) Close() error {
 	go func() {
-		if s.closed != nil {
-			close(s.closed)
-		}
+		close(s.closed)
 		s.wg.Wait()
-		if s.Pool != nil {
-			logger.Info().Msg("pg exiting. mochi does not clear data in database when exiting.")
-			s.Close()
-			s.Pool = nil
-		}
-		c.Done()
+		logger.Info().Msg("pg exiting. mochi does not clear data in database when exiting.")
+		s.Pool.Close()
 	}()
-	return c.Result()
+	return nil
 }

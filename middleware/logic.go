@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -118,26 +117,4 @@ func (l *Logic) Ping(ctx context.Context) (err error) {
 		}
 	}
 	return
-}
-
-// Stop stops the Logic.
-//
-// This stops any hooks that implement stop.Stopper.
-func (l *Logic) Stop() stop.Result {
-	stopGroup := stop.NewGroup()
-	for _, hook := range l.preHooks {
-		stoppable, ok := hook.(stop.Stopper)
-		if ok {
-			stopGroup.Add(stoppable)
-		}
-	}
-
-	for _, hook := range l.postHooks {
-		stoppable, ok := hook.(stop.Stopper)
-		if ok {
-			stopGroup.Add(stoppable)
-		}
-	}
-
-	return stopGroup.Stop()
 }

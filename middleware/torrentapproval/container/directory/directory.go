@@ -5,6 +5,7 @@
 package directory
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/anacrolix/torrent/metainfo"
@@ -16,7 +17,6 @@ import (
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 )
 
@@ -48,11 +48,6 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 		},
 		watcher: nil,
 	}
-	var w *dirwatch.Instance
-	if w, err = dirwatch.New(c.Path); err != nil {
-		return nil, fmt.Errorf("unable to initialize directory watch: %w", err)
-	}
-	d.watcher = w
 	if len(d.StorageCtx) == 0 {
 		logger.Warn().
 			Str("name", "StorageCtx").
@@ -61,6 +56,11 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 			Msg("falling back to default configuration")
 		d.StorageCtx = container.DefaultStorageCtxName
 	}
+	var w *dirwatch.Instance
+	if w, err = dirwatch.New(c.Path); err != nil {
+		return nil, fmt.Errorf("unable to initialize directory watch: %w", err)
+	}
+	d.watcher = w
 	go func() {
 		for event := range d.watcher.Events {
 			var mi *metainfo.MetaInfo
@@ -85,28 +85,23 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 						name = list.DUMMY
 					}
 					bName := []byte(name)
-					logger.Err(d.Storage.Put(d.StorageCtx,
-						storage.Entry{
-							Key:   event.InfoHash.AsString(),
-							Value: bName,
-						}, storage.Entry{
-							Key:   v2hash.RawString(),
-							Value: bName,
-						}, storage.Entry{
-							Key:   v2hash.TruncateV1().RawString(),
-							Value: bName,
-						})).
+					logger.Err(d.Storage.Put(context.Background(), d.StorageCtx, storage.Entry{
+						Key:   event.InfoHash.AsString(),
+						Value: bName,
+					}, storage.Entry{
+						Key:   v2hash.RawString(),
+						Value: bName,
+					}, storage.Entry{
+						Key:   v2hash.TruncateV1().RawString(),
+						Value: bName,
+					})).
 						Str("action", "add").
 						Str("file", event.TorrentFilePath).
 						Stringer("infoHash", event.InfoHash).
 						Stringer("infoHashV2", v2hash).
 						Msg("approval torrent watcher event")
 				case dirwatch.Removed:
-					logger.Err(d.Storage.Delete(c.StorageCtx,
-						event.InfoHash.AsString(),
-						v2hash.RawString(),
-						v2hash.TruncateV1().RawString(),
-					)).
+					logger.Err(d.Storage.Delete(context.Background(), c.StorageCtx, event.InfoHash.AsString(), v2hash.RawString(), v2hash.TruncateV1().RawString())).
 						Str("action", "delete").
 						Str("file", event.TorrentFilePath).
 						Stringer("infoHash", event.InfoHash).
@@ -128,10 +123,10 @@ type directory struct {
 	watcher *dirwatch.Instance
 }
 
-// Stop closes watching of torrent directory
-func (d *directory) Stop() stop.Result {
-	st := make(stop.Channel)
-	d.watcher.Close()
-	st.Done()
-	return st.Result()
+// Close closes watching of torrent directory
+func (d *directory) Close() error {
+	if d.watcher != nil {
+		d.watcher.Close()
+	}
+	return nil
 }

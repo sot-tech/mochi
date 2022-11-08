@@ -36,7 +36,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/metrics"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
 )
@@ -100,11 +99,7 @@ func newStore(cfg Config) (*store, error) {
 		return nil, err
 	}
 
-	return &store{
-		Connection: rs,
-		closed:     make(chan any),
-		wg:         sync.WaitGroup{},
-	}, nil
+	return &store{Connection: rs, closed: make(chan any)}, nil
 }
 
 // Config holds the configuration of a redis PeerStorage.
@@ -287,8 +282,9 @@ type Connection struct {
 
 type store struct {
 	Connection
-	closed chan any
-	wg     sync.WaitGroup
+	closed     chan any
+	wg         sync.WaitGroup
+	onceCloser sync.Once
 }
 
 func (ps *store) count(key string, getLength bool) (n uint64) {
@@ -309,8 +305,8 @@ func (ps *store) getClock() int64 {
 	return timecache.NowUnixNano()
 }
 
-func (ps *store) tx(txf func(tx redis.Pipeliner) error) (err error) {
-	if pipe, txErr := ps.TxPipelined(context.TODO(), txf); txErr == nil {
+func (ps *store) tx(ctx context.Context, txf func(tx redis.Pipeliner) error) (err error) {
+	if pipe, txErr := ps.TxPipelined(ctx, txf); txErr == nil {
 		errs := make([]string, 0)
 		for _, c := range pipe {
 			if err := c.Err(); err != nil {
@@ -358,58 +354,58 @@ func InfoHashKey(infoHash string, seeder, v6 bool) (infoHashKey string) {
 	return
 }
 
-func (ps *store) putPeer(infoHashKey, peerCountKey, peerID string) error {
+func (ps *store) putPeer(ctx context.Context, infoHashKey, peerCountKey, peerID string) error {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
 		Msg("put peer")
-	return ps.tx(func(tx redis.Pipeliner) (err error) {
-		if err = tx.HSet(context.TODO(), infoHashKey, peerID, ps.getClock()).Err(); err != nil {
+	return ps.tx(ctx, func(tx redis.Pipeliner) (err error) {
+		if err = tx.HSet(ctx, infoHashKey, peerID, ps.getClock()).Err(); err != nil {
 			return
 		}
-		if err = tx.Incr(context.TODO(), peerCountKey).Err(); err != nil {
+		if err = tx.Incr(ctx, peerCountKey).Err(); err != nil {
 			return
 		}
-		err = tx.SAdd(context.TODO(), IHKey, infoHashKey).Err()
+		err = tx.SAdd(ctx, IHKey, infoHashKey).Err()
 		return
 	})
 }
 
-func (ps *store) delPeer(infoHashKey, peerCountKey, peerID string) error {
+func (ps *store) delPeer(ctx context.Context, infoHashKey, peerCountKey, peerID string) error {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
 		Msg("del peer")
-	deleted, err := ps.HDel(context.TODO(), infoHashKey, peerID).Uint64()
+	deleted, err := ps.HDel(ctx, infoHashKey, peerID).Uint64()
 	err = AsNil(err)
 	if err == nil {
 		if deleted == 0 {
 			err = storage.ErrResourceDoesNotExist
 		} else {
-			err = ps.Decr(context.TODO(), peerCountKey).Err()
+			err = ps.Decr(ctx, peerCountKey).Err()
 		}
 	}
 
 	return err
 }
 
-func (ps *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
+func (ps *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
 }
 
-func (ps *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
+func (ps *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
 }
 
-func (ps *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
+func (ps *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
 }
 
-func (ps *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
+func (ps *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
 }
 
-func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
@@ -418,25 +414,25 @@ func (ps *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) e
 	infoHash, peerID, isV6 := ih.RawString(), peer.RawString(), peer.Addr().Is6()
 	ihSeederKey, ihLeecherKey := InfoHashKey(infoHash, true, isV6), InfoHashKey(infoHash, false, isV6)
 
-	return ps.tx(func(tx redis.Pipeliner) error {
-		deleted, err := tx.HDel(context.TODO(), ihLeecherKey, peerID).Uint64()
+	return ps.tx(ctx, func(tx redis.Pipeliner) error {
+		deleted, err := tx.HDel(ctx, ihLeecherKey, peerID).Uint64()
 		err = AsNil(err)
 		if err == nil {
 			if deleted > 0 {
-				err = tx.Decr(context.TODO(), CountLeecherKey).Err()
+				err = tx.Decr(ctx, CountLeecherKey).Err()
 			}
 		}
 		if err == nil {
-			err = tx.HSet(context.TODO(), ihSeederKey, peerID, ps.getClock()).Err()
+			err = tx.HSet(ctx, ihSeederKey, peerID, ps.getClock()).Err()
 		}
 		if err == nil {
-			err = tx.Incr(context.TODO(), CountSeederKey).Err()
+			err = tx.Incr(ctx, CountSeederKey).Err()
 		}
 		if err == nil {
-			err = tx.SAdd(context.TODO(), IHKey, ihSeederKey).Err()
+			err = tx.SAdd(ctx, IHKey, ihSeederKey).Err()
 		}
 		if err == nil {
-			err = tx.HIncrBy(context.TODO(), CountDownloadsKey, infoHash, 1).Err()
+			err = tx.HIncrBy(ctx, CountDownloadsKey, infoHash, 1).Err()
 		}
 		return err
 	})
@@ -457,7 +453,7 @@ func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers [
 	return
 }
 
-type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
+type getPeersFn func(string, int) *redis.StringSliceCmd
 
 // GetPeers retrieves peers for provided info hash by calling membersFn and
 // converts result to bittorrent.Peer array.
@@ -477,7 +473,7 @@ func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount 
 
 	for _, infoHashKey := range infoHashKeys {
 		var peers []bittorrent.Peer
-		peers, err = ps.parsePeersList(membersFn(context.TODO(), infoHashKey, maxCount))
+		peers, err = ps.parsePeersList(membersFn(infoHashKey, maxCount))
 		maxCount -= len(peers)
 		out = append(out, peers...)
 		if err != nil || maxCount <= 0 {
@@ -497,7 +493,7 @@ func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount 
 	return
 }
 
-func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
+func (ps *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Bool("forSeeder", forSeeder).
@@ -505,15 +501,15 @@ func (ps *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant i
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return ps.GetPeers(ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return ps.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return ps.HRandField(ctx, infoHashKey, maxCount, false)
 	})
 }
 
 type getPeerCountFn func(context.Context, string) *redis.IntCmd
 
-func (ps *Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uint32 {
-	count, err := countFn(context.TODO(), infoHashKey).Result()
+func (ps *Connection) countPeers(ctx context.Context, infoHashKey string, countFn getPeerCountFn) uint32 {
+	count, err := countFn(ctx, infoHashKey).Result()
 	err = AsNil(err)
 	if err != nil {
 		logger.Error().Err(err).Str("infoHashKey", infoHashKey).Msg("key size calculation failure")
@@ -522,14 +518,14 @@ func (ps *Connection) countPeers(infoHashKey string, countFn getPeerCountFn) uin
 }
 
 // ScrapeIH calls provided countFn and returns seeders, leechers and downloads count for specified info hash
-func (ps *Connection) ScrapeIH(ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount, downloadsCount uint32) {
+func (ps *Connection) ScrapeIH(ctx context.Context, ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount, downloadsCount uint32) {
 	infoHash := ih.RawString()
 
-	leechersCount = ps.countPeers(InfoHashKey(infoHash, false, false), countFn) +
-		ps.countPeers(InfoHashKey(infoHash, false, true), countFn)
-	seedersCount = ps.countPeers(InfoHashKey(infoHash, true, false), countFn) +
-		ps.countPeers(InfoHashKey(infoHash, true, true), countFn)
-	d, err := ps.HGet(context.TODO(), CountDownloadsKey, infoHash).Uint64()
+	leechersCount = ps.countPeers(ctx, InfoHashKey(infoHash, false, false), countFn) +
+		ps.countPeers(ctx, InfoHashKey(infoHash, false, true), countFn)
+	seedersCount = ps.countPeers(ctx, InfoHashKey(infoHash, true, false), countFn) +
+		ps.countPeers(ctx, InfoHashKey(infoHash, true, true), countFn)
+	d, err := ps.HGet(ctx, CountDownloadsKey, infoHash).Uint64()
 	if err = AsNil(err); err != nil {
 		logger.Error().Err(err).Str("infoHash", infoHash).Msg("downloads count calculation failure")
 	}
@@ -538,31 +534,31 @@ func (ps *Connection) ScrapeIH(ih bittorrent.InfoHash, countFn getPeerCountFn) (
 	return
 }
 
-func (ps *store) ScrapeSwarm(ih bittorrent.InfoHash) (uint32, uint32, uint32) {
+func (ps *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-	return ps.ScrapeIH(ih, ps.HLen)
+	return ps.ScrapeIH(ctx, ih, ps.HLen)
 }
 
 const argNumErrorMsg = "ERR wrong number of arguments"
 
 // Put - storage.DataStorage implementation
-func (ps *Connection) Put(ctx string, values ...storage.Entry) (err error) {
+func (ps *Connection) Put(ctx context.Context, storeCtx string, values ...storage.Entry) (err error) {
 	if l := len(values); l > 0 {
 		if l == 1 {
-			err = ps.HSet(context.TODO(), PrefixKey+ctx, values[0].Key, values[0].Value).Err()
+			err = ps.HSet(ctx, PrefixKey+storeCtx, values[0].Key, values[0].Value).Err()
 		} else {
 			args := make([]any, 0, l*2)
 			for _, p := range values {
 				args = append(args, p.Key, p.Value)
 			}
-			err = ps.HSet(context.TODO(), PrefixKey+ctx, args...).Err()
+			err = ps.HSet(ctx, PrefixKey+storeCtx, args...).Err()
 			if err != nil {
 				if strings.Contains(err.Error(), argNumErrorMsg) {
 					logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HSET")
 					for _, p := range values {
-						if err = ps.HSet(context.TODO(), PrefixKey+ctx, p.Key, p.Value).Err(); err != nil {
+						if err = ps.HSet(ctx, PrefixKey+storeCtx, p.Key, p.Value).Err(); err != nil {
 							break
 						}
 					}
@@ -574,14 +570,14 @@ func (ps *Connection) Put(ctx string, values ...storage.Entry) (err error) {
 }
 
 // Contains - storage.DataStorage implementation
-func (ps *Connection) Contains(ctx string, key string) (bool, error) {
-	exist, err := ps.HExists(context.TODO(), PrefixKey+ctx, key).Result()
+func (ps *Connection) Contains(ctx context.Context, storeCtx string, key string) (bool, error) {
+	exist, err := ps.HExists(ctx, PrefixKey+storeCtx, key).Result()
 	return exist, AsNil(err)
 }
 
 // Load - storage.DataStorage implementation
-func (ps *Connection) Load(ctx string, key string) (v []byte, err error) {
-	v, err = ps.HGet(context.TODO(), PrefixKey+ctx, key).Bytes()
+func (ps *Connection) Load(ctx context.Context, storeCtx string, key string) (v []byte, err error) {
+	v, err = ps.HGet(ctx, PrefixKey+storeCtx, key).Bytes()
 	if err != nil && errors.Is(err, redis.Nil) {
 		v, err = nil, nil
 	}
@@ -589,14 +585,14 @@ func (ps *Connection) Load(ctx string, key string) (v []byte, err error) {
 }
 
 // Delete - storage.DataStorage implementation
-func (ps *Connection) Delete(ctx string, keys ...string) (err error) {
+func (ps *Connection) Delete(ctx context.Context, storeCtx string, keys ...string) (err error) {
 	if len(keys) > 0 {
-		err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, keys...).Err())
+		err = AsNil(ps.HDel(ctx, PrefixKey+storeCtx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
-					if err = AsNil(ps.HDel(context.TODO(), PrefixKey+ctx, k).Err()); err != nil {
+					if err = AsNil(ps.HDel(ctx, PrefixKey+storeCtx, k).Err()); err != nil {
 						break
 					}
 				}
@@ -611,17 +607,9 @@ func (*Connection) Preservable() bool {
 	return true
 }
 
-func (*store) GCAware() bool {
-	return true
-}
-
-func (*store) StatisticsAware() bool {
-	return true
-}
-
 // Ping sends `PING` request to Redis server
-func (ps *Connection) Ping() error {
-	return ps.UniversalClient.Ping(context.TODO()).Err()
+func (ps *Connection) Ping(ctx context.Context) error {
+	return ps.UniversalClient.Ping(ctx).Err()
 }
 
 // GC deletes all Peers from the PeerStorage which are older than the
@@ -747,7 +735,6 @@ func (ps *store) gc(cutoff time.Time) {
 					if err == nil && infoHashCount == 0 {
 						// Empty hashes are not shown among existing keys,
 						// in other words, it's removed automatically after `HDEL` the last field.
-						// _, err := ps.Del(context.TODO(), infoHashKey)
 						err = AsNil(ps.SRem(context.Background(), IHKey, infoHashKey).Err())
 					}
 					return err
@@ -770,21 +757,12 @@ func (ps *store) gc(cutoff time.Time) {
 	}
 }
 
-func (ps *store) Stop() stop.Result {
-	c := make(stop.Channel)
-	go func() {
-		if ps.closed != nil {
-			close(ps.closed)
-		}
+func (ps *store) Close() (err error) {
+	ps.onceCloser.Do(func() {
+		close(ps.closed)
 		ps.wg.Wait()
-		var err error
-		if ps.UniversalClient != nil {
-			logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
-			err = ps.UniversalClient.Close()
-			ps.UniversalClient = nil
-		}
-		c.Done(err)
-	}()
-
-	return c.Result()
+		logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
+		err = ps.UniversalClient.Close()
+	})
+	return
 }

@@ -12,14 +12,12 @@ package keydb
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/go-redis/redis/v8"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 	"github.com/sot-tech/mochi/storage"
 	r "github.com/sot-tech/mochi/storage/redis"
 )
@@ -79,10 +77,7 @@ func newStore(cfg r.Config) (*store, error) {
 
 	var st *store
 	if err == nil {
-		st = &store{
-			Connection: rs,
-			peerTTL:    uint(cfg.PeerLifetime.Seconds()),
-		}
+		st = &store{Connection: rs, peerTTL: uint(cfg.PeerLifetime.Seconds())}
 	}
 
 	return st, err
@@ -93,27 +88,23 @@ type store struct {
 	peerTTL uint
 }
 
-func (s *store) setPeerTTL(infoHashKey, peerID string) error {
-	return s.Process(context.TODO(), redis.NewCmd(context.TODO(), expireMemberCmd, infoHashKey, peerID, s.peerTTL))
-}
-
-func (s *store) addPeer(infoHashKey, peerID string) (err error) {
+func (s *store) addPeer(ctx context.Context, infoHashKey, peerID string) (err error) {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
 		Msg("add peer")
-	if err = s.SAdd(context.TODO(), infoHashKey, peerID).Err(); err == nil {
-		err = s.setPeerTTL(infoHashKey, peerID)
+	if err = s.SAdd(ctx, infoHashKey, peerID).Err(); err == nil {
+		err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, infoHashKey, peerID, s.peerTTL))
 	}
 	return
 }
 
-func (s *store) delPeer(infoHashKey, peerID string) error {
+func (s *store) delPeer(ctx context.Context, infoHashKey, peerID string) error {
 	logger.Trace().
 		Str("infoHashKey", infoHashKey).
 		Str("peerID", peerID).
 		Msg("del peer")
-	deleted, err := s.SRem(context.TODO(), infoHashKey, peerID).Uint64()
+	deleted, err := s.SRem(ctx, infoHashKey, peerID).Uint64()
 	err = r.AsNil(err)
 	if err == nil && deleted == 0 {
 		err = storage.ErrResourceDoesNotExist
@@ -122,23 +113,23 @@ func (s *store) delPeer(infoHashKey, peerID string) error {
 	return err
 }
 
-func (s *store) PutSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
+func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s *store) DeleteSeeder(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
+func (s *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s *store) PutLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
+func (s *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s *store) DeleteLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
+func (s *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
 }
 
-func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
+func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Object("peer", peer).
@@ -147,21 +138,21 @@ func (s *store) GraduateLeecher(ih bittorrent.InfoHash, peer bittorrent.Peer) (e
 	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6())
 	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
 	var moved bool
-	if moved, err = s.SMove(context.TODO(), ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
+	if moved, err = s.SMove(ctx, ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
 		if moved {
-			err = s.setPeerTTL(ihSeederKey, peerID)
+			err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, ihSeederKey, peerID, s.peerTTL))
 		} else {
-			err = s.addPeer(ihSeederKey, peerID)
+			err = s.addPeer(ctx, ihSeederKey, peerID)
 		}
 		if err == nil {
-			err = s.HIncrBy(context.TODO(), r.CountDownloadsKey, infoHash, 1).Err()
+			err = s.HIncrBy(ctx, r.CountDownloadsKey, infoHash, 1).Err()
 		}
 	}
 	return err
 }
 
 // AnnouncePeers is the same function as redis.AnnouncePeers
-func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
+func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) ([]bittorrent.Peer, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Bool("forSeeder", forSeeder).
@@ -169,36 +160,15 @@ func (s *store) AnnouncePeers(ih bittorrent.InfoHash, forSeeder bool, numWant in
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return s.GetPeers(ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
-		return s.SRandMemberN(context.TODO(), infoHashKey, int64(maxCount))
+	return s.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
+		return s.SRandMemberN(ctx, infoHashKey, int64(maxCount))
 	})
 }
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
-func (s *store) ScrapeSwarm(ih bittorrent.InfoHash) (uint32, uint32, uint32) {
+func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-	return s.ScrapeIH(ih, s.SCard)
-}
-
-func (*store) GCAware() bool {
-	return false
-}
-
-func (*store) ScheduleGC(_, _ time.Duration) {}
-
-func (*store) StatisticsAware() bool {
-	return false
-}
-
-func (*store) ScheduleStatisticsCollection(_ time.Duration) {}
-
-func (s *store) Stop() stop.Result {
-	c := make(stop.Channel)
-	if s.UniversalClient != nil {
-		c.Done(s.UniversalClient.Close())
-		s.UniversalClient = nil
-	}
-	return c.Result()
+	return s.ScrapeIH(ctx, ih, s.SCard)
 }

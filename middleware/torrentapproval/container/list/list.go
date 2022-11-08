@@ -3,6 +3,7 @@
 package list
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -64,7 +65,7 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 				init = append(init, storage.Entry{Key: ih.TruncateV1().RawString(), Value: []byte(DUMMY)})
 			}
 		}
-		if err := l.Storage.Put(l.StorageCtx, init...); err != nil {
+		if err := l.Storage.Put(context.Background(), l.StorageCtx, init...); err != nil {
 			return nil, fmt.Errorf("unable to put initial data: %w", err)
 		}
 	}
@@ -84,11 +85,11 @@ type List struct {
 // Approved checks if specified hash is approved or not.
 // If List.Invert set to true and hash found in storage, function will return false,
 // that means that hash is blacklisted.
-func (l *List) Approved(hash bittorrent.InfoHash) (contains bool) {
+func (l *List) Approved(ctx context.Context, hash bittorrent.InfoHash) (contains bool) {
 	var err error
-	if contains, err = l.Storage.Contains(l.StorageCtx, hash.RawString()); err == nil {
+	if contains, err = l.Storage.Contains(ctx, l.StorageCtx, hash.RawString()); err == nil {
 		if len(hash) == bittorrent.InfoHashV2Len {
-			if containsV2, errV2 := l.Storage.Contains(l.StorageCtx, hash.TruncateV1().RawString()); err == nil {
+			if containsV2, errV2 := l.Storage.Contains(ctx, l.StorageCtx, hash.TruncateV1().RawString()); err == nil {
 				contains = contains || containsV2
 			} else {
 				err = errV2

@@ -4,12 +4,12 @@ package frontend
 
 import (
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	"github.com/sot-tech/mochi/pkg/stop"
 )
 
 var (
@@ -46,7 +46,7 @@ func RegisterBuilder(name string, b Builder) {
 
 // Frontend dummy interface for bittorrent frontends
 type Frontend interface {
-	stop.Stopper
+	io.Closer
 }
 
 // NewFrontends is a utility function for initializing Frontend-s in bulk.
