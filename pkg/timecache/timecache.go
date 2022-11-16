@@ -71,7 +71,7 @@ func (t *TimeCache) Stop() {
 
 // Now returns the cached time as a time.Time value.
 func (t *TimeCache) Now() time.Time {
-	return time.Unix(0, t.clock.Load())
+	return time.Unix(0, t.NowUnixNano())
 }
 
 // NowUnixNano returns the cached time as nanoseconds since the Unix Epoch.
