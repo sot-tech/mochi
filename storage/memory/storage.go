@@ -160,10 +160,6 @@ func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) 
 	}()
 }
 
-func (ps *peerStore) getClock() int64 {
-	return timecache.NowUnixNano()
-}
-
 func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, v6 bool) uint32 {
 	// There are twice the amount of shards specified by the user, the first
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
@@ -203,7 +199,7 @@ func (ps *peerStore) PutSeeder(_ context.Context, ih bittorrent.InfoHash, p bitt
 	}
 
 	// Update the peer in the swarm.
-	shard.swarms[ih].seeders[p] = ps.getClock()
+	shard.swarms[ih].seeders[p] = timecache.NowUnixNano()
 
 	return nil
 }
@@ -269,7 +265,7 @@ func (ps *peerStore) PutLeecher(_ context.Context, ih bittorrent.InfoHash, p bit
 	}
 
 	// Update the peer in the swarm.
-	shard.swarms[ih].leechers[p] = ps.getClock()
+	shard.swarms[ih].leechers[p] = timecache.NowUnixNano()
 
 	return nil
 }
@@ -341,7 +337,7 @@ func (ps *peerStore) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, 
 	}
 
 	// Update the peer in the swarm.
-	shard.swarms[ih].seeders[p] = ps.getClock()
+	shard.swarms[ih].seeders[p] = timecache.NowUnixNano()
 
 	return nil
 }

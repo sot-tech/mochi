@@ -354,7 +354,7 @@ func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittor
 		Object("peer", peer).
 		Bool("seeder", seeder).
 		Msg("put peer")
-	args := pgx.NamedArgs{
+	_, err = s.Exec(ctx, s.Peer.AddQuery, pgx.NamedArgs{
 		pInfoHash: []byte(ih),
 		pPeerID:   peer.ID[:],
 		pAddress:  net.IP(peer.Addr().AsSlice()),
@@ -362,8 +362,7 @@ func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittor
 		pSeeder:   seeder,
 		pV6:       peer.Addr().Is6(),
 		pCreated:  timecache.Now(),
-	}
-	_, err = s.Exec(ctx, s.Peer.AddQuery, args)
+	})
 	return
 }
 
