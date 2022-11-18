@@ -84,7 +84,7 @@ func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) []byte {
 	log.Debug().
 		Stringer("ip", ip).
 		Time("now", now).
-		Bytes("connID", g.connID).
+		Hex("connID", g.connID).
 		Msg("generated connection ID")
 	return g.connID
 }
@@ -95,7 +95,7 @@ func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now
 	log.Debug().
 		Stringer("ip", ip).
 		Time("ts", ts).Time("now", now).
-		Bytes("connID", g.connID).
+		Hex("connID", g.connID).
 		Msg("validating connection ID")
 	if now.After(ts.Add(ttl)) || ts.After(now.Add(maxClockSkew)) {
 		return false

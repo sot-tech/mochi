@@ -60,7 +60,7 @@ func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
 	log.Debug().
 		Stringer("ip", ip).
 		Time("now", now).
-		Bytes("connID", buf).
+		Hex("connID", buf).
 		Msg("manually generated connection ID")
 	return buf
 }
