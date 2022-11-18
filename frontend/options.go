@@ -9,15 +9,12 @@ import (
 )
 
 const (
-	defaultReadTimeout  = 2 * time.Second
-	defaultWriteTimeout = 2 * time.Second
+	defaultReadTimeout   = 2 * time.Second
+	defaultWriteTimeout  = 2 * time.Second
+	defaultListenAddress = ":6969"
 )
 
-var (
-	// ErrAddressNotProvided returned if listen address not provided in configuration
-	ErrAddressNotProvided     = errors.New("address not provided")
-	errUnexpectedListenerType = errors.New("unexpected listener type")
-)
+var errUnexpectedListenerType = errors.New("unexpected listener type")
 
 // ListenOptions is the base configuration which may be used in net listeners
 type ListenOptions struct {
@@ -30,11 +27,17 @@ type ListenOptions struct {
 
 // Validate checks if listen address provided and sets default
 // timeout options if needed
-func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
+func (lo ListenOptions) Validate(ignoreTimeouts bool) (validOptions ListenOptions) {
 	validOptions = lo
 	if len(lo.Addr) == 0 {
-		err = ErrAddressNotProvided
-	} else {
+		validOptions.Addr = defaultListenAddress
+		logger.Warn().
+			Str("name", "Addr").
+			Str("provided", lo.Addr).
+			Str("default", validOptions.Addr).
+			Msg("falling back to default configuration")
+	}
+	if !ignoreTimeouts {
 		if lo.ReadTimeout <= 0 {
 			validOptions.ReadTimeout = defaultReadTimeout
 			logger.Warn().

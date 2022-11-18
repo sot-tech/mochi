@@ -23,13 +23,16 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
+// Name - registered name of the frontend
+const Name = "udp"
+
 var (
 	logger                          = log.NewLogger("frontend/udp")
 	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 )
 
 func init() {
-	frontend.RegisterBuilder("udp", NewFrontend)
+	frontend.RegisterBuilder(Name, NewFrontend)
 }
 
 // Config represents all the configurable options for a UDP BitTorrent
@@ -43,13 +46,9 @@ type Config struct {
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-func (cfg Config) Validate() (validCfg Config, err error) {
-	if len(cfg.Addr) == 0 {
-		err = frontend.ErrAddressNotProvided
-		return
-	}
-
+func (cfg Config) Validate() (validCfg Config) {
 	validCfg = cfg
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(true)
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
@@ -92,9 +91,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	if err = c.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	if cfg, err = cfg.Validate(); err != nil {
-		return nil, err
-	}
+	cfg = cfg.Validate()
 
 	f := &udpFE{
 		closing:        make(chan any),

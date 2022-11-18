@@ -18,14 +18,18 @@ import (
 	"github.com/sot-tech/mochi/storage"
 )
 
-// Default config constants.
-const defaultShardCount = 1024
+const (
+	// Name - registered name of the storage
+	Name = "memory"
+	// Default config constants.
+	defaultShardCount = 1024
+)
 
 var logger = log.NewLogger("storage/memory")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver("memory", builder)
+	storage.RegisterDriver(Name, builder)
 }
 
 func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {

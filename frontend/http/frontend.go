@@ -20,14 +20,16 @@ import (
 	"github.com/sot-tech/mochi/pkg/metrics"
 )
 
+// Name - registered name of the frontend
+const Name = "http"
+
 var (
-	logger               = log.NewLogger("frontend/http")
-	errTLSNotProvided    = errors.New("tls certificate/key not provided")
-	errRoutesNotProvided = errors.New("routes not provided")
+	logger            = log.NewLogger("frontend/http")
+	errTLSNotProvided = errors.New("tls certificate/key not provided")
 )
 
 func init() {
-	frontend.RegisterBuilder("http", NewFrontend)
+	frontend.RegisterBuilder(Name, NewFrontend)
 }
 
 // Config represents all configurable options for an HTTP BitTorrent Frontend
@@ -44,15 +46,17 @@ type Config struct {
 	ParseOptions
 }
 
-const defaultIdleTimeout = 30 * time.Second
+const (
+	defaultIdleTimeout   = 30 * time.Second
+	defaultAnnounceRoute = "/announce"
+	defaultScrapeRoute   = "/scrape"
+)
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config, err error) {
 	validCfg = cfg
-	if validCfg.ListenOptions, err = cfg.ListenOptions.Validate(); err != nil {
-		return
-	}
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(false)
 	if cfg.UseTLS && (len(cfg.TLSCertPath) == 0 || len(cfg.TLSKeyPath) == 0) {
 		err = errTLSNotProvided
 		return
@@ -67,6 +71,22 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 				Dur("default", validCfg.IdleTimeout).
 				Msg("falling back to default configuration")
 		}
+	}
+	if len(cfg.AnnounceRoutes) == 0 {
+		validCfg.AnnounceRoutes = []string{defaultAnnounceRoute}
+		logger.Warn().
+			Str("name", "AnnounceRoutes").
+			Strs("provided", cfg.AnnounceRoutes).
+			Strs("default", validCfg.AnnounceRoutes).
+			Msg("falling back to default configuration")
+	}
+	if len(cfg.ScrapeRoutes) == 0 {
+		validCfg.ScrapeRoutes = []string{defaultScrapeRoute}
+		logger.Warn().
+			Str("name", "ScrapeRoutes").
+			Strs("provided", cfg.ScrapeRoutes).
+			Strs("default", validCfg.ScrapeRoutes).
+			Msg("falling back to default configuration")
 	}
 	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate()
 	return
@@ -88,9 +108,6 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	}
 	if cfg, err = cfg.Validate(); err != nil {
 		return nil, err
-	}
-	if len(cfg.AnnounceRoutes) < 1 || len(cfg.ScrapeRoutes) < 1 {
-		return nil, errRoutesNotProvided
 	}
 
 	f := &httpFE{

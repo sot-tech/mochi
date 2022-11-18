@@ -25,12 +25,7 @@ type Server struct {
 // Run begins an instance of Conf.
 // It is optional to provide an instance of the peer store to avoid the
 // creation of a new one.
-func (r *Server) Run(configFilePath string) error {
-	cfg, err := ParseConfigFile(configFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
+func (r *Server) Run(cfg *Config) (err error) {
 	if len(cfg.MetricsAddr) > 0 {
 		log.Info().Str("address", cfg.MetricsAddr).Msg("starting metrics server")
 		r.frontends = append(r.frontends, metrics.NewServer(cfg.MetricsAddr))
