@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/minio/sha256-simd"
+	"github.com/zeebo/xxh3"
 
 	"github.com/sot-tech/mochi/pkg/log"
 )
@@ -41,7 +41,9 @@ type ConnectionIDGenerator struct {
 // NewConnectionIDGenerator creates a new connection ID generator.
 func NewConnectionIDGenerator(key string) *ConnectionIDGenerator {
 	return &ConnectionIDGenerator{
-		mac:     hmac.New(sha256.New, []byte(key)),
+		mac: hmac.New(func() hash.Hash {
+			return xxh3.New()
+		}, []byte(key)),
 		connID:  make([]byte, 8),
 		scratch: make([]byte, 32),
 	}

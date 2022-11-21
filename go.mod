@@ -8,7 +8,7 @@ require (
 	github.com/anacrolix/torrent v1.47.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v4 v4.4.2
-	github.com/jackc/pgx/v5 v5.1.0
+	github.com/jackc/pgx/v5 v5.1.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/libp2p/go-reuseport v0.2.0
 	github.com/minio/sha256-simd v1.0.0
@@ -16,6 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
+	github.com/zeebo/xxh3 v1.0.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -44,7 +45,7 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	golang.org/x/crypto v0.2.0 // indirect
+	golang.org/x/crypto v0.3.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
