@@ -27,6 +27,7 @@ func main() {
 	logOut := flag.String(logOutArg, "stderr", "output for logging, might be 'stderr', 'stdout' or file path")
 	logLevel := flag.String(logLevelArg, "warn", "logging level: trace, debug, info, warn, error, fatal, panic")
 	logPretty := flag.Bool(logPrettyArg, false, "enable log pretty print. used only if 'logOut' set to 'stdout' or 'stderr'. if not set, log outputs json")
+	//goland:noinspection GoBoolExpressions
 	logColored := flag.Bool(logColorsArg, runtime.GOOS == "windows", "enable log coloring. used only if set 'logPretty'")
 	configPath := flag.String(configArg, "/etc/mochi.yaml", "location of configuration file")
 	quickStart := flag.Bool(quickArg, false, "start tracker with default configuration (all frontends, in-memory store, no hooks)")

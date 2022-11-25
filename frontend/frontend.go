@@ -3,8 +3,10 @@
 package frontend
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/sot-tech/mochi/middleware"
@@ -68,6 +70,37 @@ func NewFrontends(configs []conf.NamedMapConfig, logic *middleware.Logic) (fs []
 		}
 		fs = append(fs, f)
 		logger.Info().Str("name", c.Name).Msg("frontend started")
+	}
+	return
+}
+
+// CloseGroup simultaneously calls Close for each non-nil
+// array element and combines non-nil errors into one
+func CloseGroup(cls []io.Closer) (err error) {
+	l := len(cls)
+	errs := make([]error, l)
+	wg := sync.WaitGroup{}
+	wg.Add(l)
+	for i, c := range cls {
+		if c != nil {
+			go func(i int, c io.Closer) {
+				defer wg.Done()
+				if e := c.Close(); e != nil {
+					errs[i] = e
+				}
+			}(i, c)
+		}
+	}
+	wg.Wait()
+	sb := strings.Builder{}
+	for _, e := range errs {
+		if e != nil {
+			sb.WriteString(e.Error())
+			sb.WriteString("; ")
+		}
+	}
+	if sb.Len() > 0 {
+		err = errors.New(sb.String())
 	}
 	return
 }

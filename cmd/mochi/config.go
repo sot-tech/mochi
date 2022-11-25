@@ -11,6 +11,9 @@ import (
 	fu "github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/pkg/conf"
 
+	// Seed math random
+	_ "github.com/sot-tech/mochi/pkg/randseed"
+
 	// Imports to register middleware hooks.
 	_ "github.com/sot-tech/mochi/middleware/clientapproval"
 	_ "github.com/sot-tech/mochi/middleware/jwt"

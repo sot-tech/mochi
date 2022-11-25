@@ -6,8 +6,10 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
@@ -56,7 +58,7 @@ const (
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config, err error) {
 	validCfg = cfg
-	validCfg.ListenOptions = cfg.ListenOptions.Validate(false)
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(false, logger)
 	if cfg.UseTLS && (len(cfg.TLSCertPath) == 0 || len(cfg.TLSKeyPath) == 0) {
 		err = errTLSNotProvided
 		return
@@ -88,14 +90,28 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 			Strs("default", validCfg.ScrapeRoutes).
 			Msg("falling back to default configuration")
 	}
-	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate()
+	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate(logger)
+	return
+}
+
+// httpServer replaces http.Close method with http.Shutdown
+type httpServer struct {
+	*http.Server
+}
+
+func (c httpServer) Close() (err error) {
+	if c.Server != nil {
+		err = c.Shutdown(context.Background())
+	}
 	return
 }
 
 type httpFE struct {
-	srv            *http.Server
+	servers        []httpServer
 	logic          *middleware.Logic
 	collectTimings bool
+	onceCloser     sync.Once
+
 	ParseOptions
 }
 
@@ -111,15 +127,21 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	}
 
 	f := &httpFE{
-		logic: logic,
-		srv: &http.Server{
-			ReadTimeout:       cfg.ReadTimeout,
-			ReadHeaderTimeout: cfg.ReadTimeout,
-			WriteTimeout:      cfg.WriteTimeout,
-			IdleTimeout:       cfg.IdleTimeout,
-		},
+		logic:          logic,
+		servers:        make([]httpServer, cfg.Workers),
 		collectTimings: cfg.EnableRequestTiming,
 		ParseOptions:   cfg.ParseOptions,
+	}
+
+	for i := range f.servers {
+		f.servers[i] = httpServer{
+			&http.Server{
+				ReadTimeout:       cfg.ReadTimeout,
+				ReadHeaderTimeout: cfg.ReadTimeout,
+				WriteTimeout:      cfg.WriteTimeout,
+				IdleTimeout:       cfg.IdleTimeout,
+			},
+		}
 	}
 
 	// If TLS is enabled, create a key pair.
@@ -128,9 +150,12 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		if cert, err = tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath); err != nil {
 			return nil, err
 		}
-		f.srv.TLSConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS12,
+		certs := []tls.Certificate{cert}
+		for i := range f.servers {
+			f.servers[i].TLSConfig = &tls.Config{
+				Certificates: certs,
+				MinVersion:   tls.VersionTLS12,
+			}
 		}
 	}
 
@@ -145,30 +170,41 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		router.GET(route, f.ping)
 		router.HEAD(route, f.ping)
 	}
-	f.srv.Handler = router
 
-	f.srv.SetKeepAlivesEnabled(cfg.EnableKeepAlive)
-
-	go func() {
-		ln, err := cfg.ListenTCP()
-		if err == nil {
-			if f.srv.TLSConfig == nil {
-				err = f.srv.Serve(ln)
-			} else {
-				err = f.srv.ServeTLS(ln, "", "")
-			}
-		}
-		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatal().Err(err).Msg("server failed")
-		}
-	}()
+	for _, srv := range f.servers {
+		srv.Handler = router
+		srv.SetKeepAlivesEnabled(cfg.EnableKeepAlive)
+		go runServer(srv, &cfg)
+	}
 
 	return f, nil
 }
 
-// Close provides a thread-safe way to shut down a currently running Frontend.
-func (f *httpFE) Close() error {
-	return f.srv.Shutdown(context.Background())
+func runServer(s httpServer, cfg *Config) {
+	ln, err := cfg.ListenTCP()
+	if err == nil {
+		if s.TLSConfig == nil {
+			err = s.Serve(ln)
+		} else {
+			err = s.ServeTLS(ln, "", "")
+		}
+	}
+	if !errors.Is(err, http.ErrServerClosed) {
+		logger.Fatal().Err(err).Msg("server failed")
+	}
+}
+
+// Close provides a thread-safe way to gracefully shut down a currently running Frontend.
+func (f *httpFE) Close() (err error) {
+	f.onceCloser.Do(func() {
+		cls := make([]io.Closer, len(f.servers))
+		for i, s := range f.servers {
+			cls[i] = s
+		}
+		err = frontend.CloseGroup(cls)
+	})
+
+	return
 }
 
 func httpParamsToRouteParams(in httprouter.Params) (out bittorrent.RouteParams) {

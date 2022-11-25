@@ -12,6 +12,8 @@ import (
 	"github.com/anacrolix/torrent/tracker"
 
 	"github.com/sot-tech/mochi/bittorrent"
+
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 func main() {

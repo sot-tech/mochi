@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -48,7 +49,7 @@ type Config struct {
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config) {
 	validCfg = cfg
-	validCfg.ListenOptions = cfg.ListenOptions.Validate(true)
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(true, logger)
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
@@ -65,14 +66,14 @@ func (cfg Config) Validate() (validCfg Config) {
 			Msg("falling back to default configuration")
 	}
 
-	validCfg.ParseOptions = cfg.ParseOptions.Validate()
+	validCfg.ParseOptions = cfg.ParseOptions.Validate(logger)
 
 	return
 }
 
 // udpFE holds the state of a UDP BitTorrent Frontend.
 type udpFE struct {
-	socket         *net.UDPConn
+	sockets        []*net.UDPConn
 	closing        chan any
 	wg             sync.WaitGroup
 	genPool        *sync.Pool
@@ -94,6 +95,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	cfg = cfg.Validate()
 
 	f := &udpFE{
+		sockets:        make([]*net.UDPConn, cfg.Workers),
 		closing:        make(chan any),
 		logic:          logic,
 		maxClockSkew:   cfg.MaxClockSkew,
@@ -106,30 +108,40 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		},
 	}
 
-	if f.socket, err = cfg.ListenUDP(); err == nil {
-		var ctx context.Context
-		ctx, f.ctxCancel = context.WithCancel(context.Background())
-		f.wg.Add(1)
-		go func(ctx context.Context) {
-			if err := f.serve(ctx); err != nil {
-				logger.Fatal().Err(err).Msg("server failed")
-			}
-		}(ctx)
+	var ctx context.Context
+	ctx, f.ctxCancel = context.WithCancel(context.Background())
+	for i := range f.sockets {
+		if f.sockets[i], err = cfg.ListenUDP(); err == nil {
+			f.wg.Add(1)
+			go func(socket *net.UDPConn, ctx context.Context) {
+				if err := f.serve(ctx, socket); err != nil {
+					logger.Fatal().Err(err).Msg("server failed")
+				}
+			}(f.sockets[i], ctx)
+		}
+	}
+	if err != nil {
+		_ = f.Close()
 	}
 
 	return f, err
 }
 
 // Close provides a thread-safe way to shut down a currently running Frontend.
-func (t *udpFE) Close() (err error) {
-	t.onceCloser.Do(func() {
-		close(t.closing)
-		if t.socket != nil {
-			t.ctxCancel()
-			_ = t.socket.SetReadDeadline(time.Now())
-			t.wg.Wait()
-			err = t.socket.Close()
+func (f *udpFE) Close() (err error) {
+	f.onceCloser.Do(func() {
+		close(f.closing)
+		f.ctxCancel()
+		cls := make([]io.Closer, 0, len(f.sockets))
+		now := time.Now()
+		for _, s := range f.sockets {
+			if s != nil {
+				_ = s.SetDeadline(now)
+				cls = append(cls, s)
+			}
 		}
+		f.wg.Wait()
+		err = frontend.CloseGroup(cls)
 	})
 
 	return
@@ -137,14 +149,14 @@ func (t *udpFE) Close() (err error) {
 
 // serve blocks while listening and serving UDP BitTorrent requests
 // until Stop() is called or an error is returned.
-func (t *udpFE) serve(ctx context.Context) error {
+func (f *udpFE) serve(ctx context.Context, socket *net.UDPConn) error {
 	pool := bytepool.NewBytePool(2048)
-	defer t.wg.Done()
+	defer f.wg.Done()
 
 	for {
 		// Check to see if we need shutdown.
 		select {
-		case <-t.closing:
+		case <-f.closing:
 			log.Debug().Msg("serve received shutdown signal")
 			return nil
 		default:
@@ -152,7 +164,7 @@ func (t *udpFE) serve(ctx context.Context) error {
 
 		// Read a UDP packet into a reusable buffer.
 		buffer := pool.Get()
-		n, addrPort, err := t.socket.ReadFromUDPAddrPort(*buffer)
+		n, addrPort, err := socket.ReadFromUDPAddrPort(*buffer)
 		if err != nil {
 			pool.Put(buffer)
 			var netErr net.Error
@@ -169,22 +181,22 @@ func (t *udpFE) serve(ctx context.Context) error {
 			continue
 		}
 
-		t.wg.Add(1)
+		f.wg.Add(1)
 		go func() {
-			defer t.wg.Done()
+			defer f.wg.Done()
 			defer pool.Put(buffer)
 
 			// Handle the request.
 			addr := addrPort.Addr().Unmap()
 			var start time.Time
-			if t.collectTimings && metrics.Enabled() {
+			if f.collectTimings && metrics.Enabled() {
 				start = time.Now()
 			}
-			action, err := t.handleRequest(ctx,
+			action, err := f.handleRequest(ctx,
 				Request{(*buffer)[:n], addr},
-				ResponseWriter{t.socket, addrPort},
+				ResponseWriter{socket, addrPort},
 			)
-			if t.collectTimings && metrics.Enabled() {
+			if f.collectTimings && metrics.Enabled() {
 				recordResponseDuration(action, addr, err, time.Since(start))
 			}
 		}()
@@ -210,7 +222,7 @@ func (w ResponseWriter) Write(b []byte) (int, error) {
 }
 
 // handleRequest parses and responds to a UDP Request.
-func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) (actionName string, err error) {
+func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) (actionName string, err error) {
 	if len(r.Packet) < 16 {
 		// Malformed, no client packets are less than 16 bytes.
 		// We explicitly return nothing in case this is a DoS attempt.
@@ -224,12 +236,12 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 	txID := r.Packet[12:16]
 
 	// get a connection ID generator/validator from the pool.
-	gen := t.genPool.Get().(*ConnectionIDGenerator)
-	defer t.genPool.Put(gen)
+	gen := f.genPool.Get().(*ConnectionIDGenerator)
+	defer f.genPool.Put(gen)
 
 	// If this isn't requesting a new connection ID and the connection ID is
 	// invalid, then fail.
-	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), t.maxClockSkew) {
+	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), f.maxClockSkew) {
 		err = errBadConnectionID
 		WriteError(w, txID, err)
 		return
@@ -251,7 +263,7 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		actionName = "announce"
 
 		var req *bittorrent.AnnounceRequest
-		req, err = ParseAnnounce(r, actionID == announceV6ActionID, t.ParseOptions)
+		req, err = ParseAnnounce(r, actionID == announceV6ActionID, f.ParseOptions)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -259,7 +271,7 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 
 		var resp *bittorrent.AnnounceResponse
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
-		ctx, resp, err = t.logic.HandleAnnounce(ctx, req)
+		ctx, resp, err = f.logic.HandleAnnounce(ctx, req)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -268,13 +280,13 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		WriteAnnounce(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
 
 		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-		go t.logic.AfterAnnounce(ctx, req, resp)
+		go f.logic.AfterAnnounce(ctx, req, resp)
 
 	case scrapeActionID:
 		actionName = "scrape"
 
 		var req *bittorrent.ScrapeRequest
-		req, err = ParseScrape(r, t.ParseOptions)
+		req, err = ParseScrape(r, f.ParseOptions)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -282,7 +294,7 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 
 		var resp *bittorrent.ScrapeResponse
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
-		ctx, resp, err = t.logic.HandleScrape(ctx, req)
+		ctx, resp, err = f.logic.HandleScrape(ctx, req)
 		if err != nil {
 			WriteError(w, txID, err)
 			return
@@ -291,7 +303,7 @@ func (t *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		WriteScrape(w, txID, resp)
 
 		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-		go t.logic.AfterScrape(ctx, req, resp)
+		go f.logic.AfterScrape(ctx, req, resp)
 
 	default:
 		err = errUnknownAction
