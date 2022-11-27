@@ -18,6 +18,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/zeebo/xxh3 v1.0.2
 	gopkg.in/yaml.v3 v3.0.1
+	github.com/cornelk/hashmap v1.0.8
 )
 
 require (
