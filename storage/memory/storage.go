@@ -58,7 +58,7 @@ func (cfg Config) Validate() Config {
 
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
 		validcfg.ShardCount = defaultShardCount
-		log.Warn().
+		logger.Warn().
 			Str("name", "ShardCount").
 			Int("provided", cfg.ShardCount).
 			Int("default", validcfg.ShardCount).
