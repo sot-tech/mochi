@@ -6,7 +6,6 @@ require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20221122215814-f99b6a62c703
 	github.com/MicahParks/keyfunc v1.6.0
 	github.com/anacrolix/torrent v1.47.0
-	github.com/cornelk/hashmap v1.0.8
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/jackc/pgx/v5 v5.1.1
