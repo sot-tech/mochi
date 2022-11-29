@@ -1,6 +1,8 @@
 ---
 run:
-    go: "1.19"
+    # mochi in not written with generics (a.t.m),
+    # so we can check with 1.17
+    go: "1.17"
     timeout: "5m"
 output:
     sort-results: true

@@ -140,16 +140,6 @@ func (p *ihSwarm) keys(fn func(k bittorrent.InfoHash) bool) {
 	p.RUnlock()
 }
 
-func (p *ihSwarm) forEach(fn func(k bittorrent.InfoHash, v swarm) bool) {
-	p.RLock()
-	for k, v := range p.m {
-		if !fn(k, v) {
-			break
-		}
-	}
-	p.RUnlock()
-}
-
 type swarm struct {
 	// map serialized peer to mtime
 	seeders  *peers
@@ -172,7 +162,6 @@ func (p *peers) set(k bittorrent.Peer, v int64) {
 	p.Lock()
 	p.m[k] = v
 	p.Unlock()
-	return
 }
 
 func (p *peers) del(k bittorrent.Peer) (ok bool) {

@@ -33,29 +33,19 @@ type ConnectionIDGenerator struct {
 	// It will be overwritten by subsequent calls to Generate.
 	connID []byte
 
-	// scratch is a 32-byte slice that is used as a scratchpad for the generated
-	// HMACs.
-	scratch []byte
+	// the leeway for a timestamp on a connection ID.
+	maxClockSkew time.Duration
 }
 
 // NewConnectionIDGenerator creates a new connection ID generator.
-func NewConnectionIDGenerator(key string) *ConnectionIDGenerator {
+func NewConnectionIDGenerator(key string, maxClockSkew time.Duration) *ConnectionIDGenerator {
 	return &ConnectionIDGenerator{
 		mac: hmac.New(func() hash.Hash {
 			return xxh3.New()
 		}, []byte(key)),
-		connID:  make([]byte, 8),
-		scratch: make([]byte, 32),
+		connID:       make([]byte, 8),
+		maxClockSkew: maxClockSkew,
 	}
-}
-
-// reset resets the generator.
-// This is called by other methods of the generator, it's not necessary to call
-// it after getting a generator from a pool.
-func (g *ConnectionIDGenerator) reset() {
-	g.mac.Reset()
-	g.connID = g.connID[:8]
-	g.scratch = g.scratch[:0]
 }
 
 // Generate generates an 8-byte connection ID as described in BEP 15 for the
@@ -73,15 +63,12 @@ func (g *ConnectionIDGenerator) reset() {
 // will be reused, so it must not be referenced after returning the generator
 // to a pool and will be overwritten be subsequent calls to Generate!
 func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) []byte {
-	g.reset()
-
+	g.mac.Reset()
 	binary.BigEndian.PutUint32(g.connID, uint32(now.Unix()))
 
 	g.mac.Write(g.connID[:4])
-	ipBytes, _ := ip.MarshalBinary()
-	g.mac.Write(ipBytes)
-	g.scratch = g.mac.Sum(g.scratch)
-	copy(g.connID[4:8], g.scratch[:4])
+	g.mac.Write(ip.AsSlice())
+	copy(g.connID[4:8], g.mac.Sum(nil)[:4])
 
 	log.Debug().
 		Stringer("ip", ip).
@@ -92,22 +79,20 @@ func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) []byte {
 }
 
 // Validate validates the given connection ID for an IP and the current time.
-func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration) bool {
-	ts := time.Unix(int64(binary.BigEndian.Uint32(connectionID[:4])), 0)
+func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time) bool {
+	g.mac.Reset()
+	tsBytes := connectionID[:4]
+	ts := time.Unix(int64(binary.BigEndian.Uint32(tsBytes)), 0)
 	log.Debug().
 		Stringer("ip", ip).
-		Time("ts", ts).Time("now", now).
+		Time("ts", ts).
+		Time("now", now).
 		Hex("connID", g.connID).
 		Msg("validating connection ID")
-	if now.After(ts.Add(ttl)) || ts.After(now.Add(maxClockSkew)) {
-		return false
-	}
 
-	g.reset()
-
-	g.mac.Write(connectionID[:4])
-	ipBytes, _ := ip.MarshalBinary()
-	g.mac.Write(ipBytes)
-	g.scratch = g.mac.Sum(g.scratch)
-	return hmac.Equal(g.scratch[:4], connectionID[4:])
+	g.mac.Write(tsBytes)
+	g.mac.Write(ip.AsSlice())
+	return hmac.Equal(g.mac.Sum(nil)[:4], connectionID[4:8]) &&
+		now.Before(ts.Add(ttl)) &&
+		ts.Before(now.Add(g.maxClockSkew))
 }

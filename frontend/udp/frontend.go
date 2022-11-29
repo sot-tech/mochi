@@ -78,7 +78,6 @@ type udpFE struct {
 	wg             sync.WaitGroup
 	genPool        *sync.Pool
 	logic          *middleware.Logic
-	maxClockSkew   time.Duration
 	collectTimings bool
 	ctxCancel      context.CancelFunc
 	onceCloser     sync.Once
@@ -98,12 +97,11 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		sockets:        make([]*net.UDPConn, cfg.Workers),
 		closing:        make(chan any),
 		logic:          logic,
-		maxClockSkew:   cfg.MaxClockSkew,
 		collectTimings: cfg.EnableRequestTiming,
 		ParseOptions:   cfg.ParseOptions,
 		genPool: &sync.Pool{
 			New: func() any {
-				return NewConnectionIDGenerator(cfg.PrivateKey)
+				return NewConnectionIDGenerator(cfg.PrivateKey, cfg.MaxClockSkew)
 			},
 		},
 	}
@@ -241,7 +239,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 
 	// If this isn't requesting a new connection ID and the connection ID is
 	// invalid, then fail.
-	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now(), f.maxClockSkew) {
+	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now()) {
 		err = errBadConnectionID
 		WriteError(w, txID, err)
 		return

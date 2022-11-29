@@ -4,13 +4,14 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/minio/sha256-simd"
 	"github.com/stretchr/testify/require"
+	"github.com/zeebo/xxh3"
 
 	"github.com/sot-tech/mochi/pkg/log"
 )
@@ -32,14 +33,14 @@ var golden = []struct {
 // This is a wrapper around creating a new ConnectionIDGenerator and generating
 // an ID. It is recommended to use the generator for performance.
 func NewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
-	return NewConnectionIDGenerator(key).Generate(ip, now)
+	return NewConnectionIDGenerator(key, 0).Generate(ip, now)
 }
 
 // ValidConnectionID determines whether a connection identifier is legitimate.
 // This is a wrapper around creating a new ConnectionIDGenerator and validating
 // the ID. It is recommended to use the generator for performance.
 func ValidConnectionID(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration, key string) bool {
-	return NewConnectionIDGenerator(key).Validate(connectionID, ip, now, maxClockSkew)
+	return NewConnectionIDGenerator(key, maxClockSkew).Validate(connectionID, ip, now)
 }
 
 // simpleNewConnectionID generates a new connection ID the explicit way.
@@ -48,10 +49,11 @@ func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint32(buf, uint32(now.Unix()))
 
-	mac := hmac.New(sha256.New, []byte(key))
+	mac := hmac.New(func() hash.Hash {
+		return xxh3.New()
+	}, []byte(key))
 	mac.Write(buf[:4])
-	ipBytes, _ := ip.MarshalBinary()
-	mac.Write(ipBytes)
+	mac.Write(ip.AsSlice())
 	macBytes := mac.Sum(nil)[:4]
 	copy(buf[4:], macBytes)
 
@@ -93,7 +95,7 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 			cid := NewConnectionID(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0), tt.key)
 			require.Len(t, cid, 8)
 
-			gen := NewConnectionIDGenerator(tt.key)
+			gen := NewConnectionIDGenerator(tt.key, 0)
 
 			for i := 0; i < 3; i++ {
 				connID := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
@@ -106,10 +108,10 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 func TestReuseGeneratorValidate(t *testing.T) {
 	for _, tt := range golden {
 		t.Run(fmt.Sprintf("%s created at %d verified at %d", tt.ip, tt.createdAt, tt.now), func(t *testing.T) {
-			gen := NewConnectionIDGenerator(tt.key)
+			gen := NewConnectionIDGenerator(tt.key, time.Minute)
 			cid := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
 			for i := 0; i < 3; i++ {
-				got := gen.Validate(cid, netip.MustParseAddr(tt.ip), time.Unix(tt.now, 0), time.Minute)
+				got := gen.Validate(cid, netip.MustParseAddr(tt.ip), time.Unix(tt.now, 0))
 				if got != tt.valid {
 					t.Errorf("expected validity: %t got validity: %t", tt.valid, got)
 				}
@@ -159,7 +161,7 @@ func BenchmarkConnectionIDGenerator_Generate(b *testing.B) {
 
 	pool := &sync.Pool{
 		New: func() any {
-			return NewConnectionIDGenerator(key)
+			return NewConnectionIDGenerator(key, 0)
 		},
 	}
 
@@ -197,14 +199,14 @@ func BenchmarkConnectionIDGenerator_Validate(b *testing.B) {
 
 	pool := &sync.Pool{
 		New: func() any {
-			return NewConnectionIDGenerator(key)
+			return NewConnectionIDGenerator(key, 10*time.Second)
 		},
 	}
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			gen := pool.Get().(*ConnectionIDGenerator)
-			if !gen.Validate(cid, ip, createdAt, 10*time.Second) {
+			if !gen.Validate(cid, ip, createdAt) {
 				b.FailNow()
 			}
 			pool.Put(gen)
