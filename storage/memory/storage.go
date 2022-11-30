@@ -570,13 +570,6 @@ func (ps *peerStore) Close() error {
 	ps.onceCloser.Do(func() {
 		close(ps.closed)
 		ps.wg.Wait()
-
-		// Explicitly deallocate our storage.
-		shards := make([]*peerShard, len(ps.shards))
-		for i := 0; i < len(ps.shards); i++ {
-			shards[i] = &peerShard{swarms: &ihSwarm{m: make(map[bittorrent.InfoHash]swarm)}}
-		}
-		ps.shards = shards
 	})
 
 	return nil
