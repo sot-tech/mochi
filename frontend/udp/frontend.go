@@ -24,8 +24,12 @@ import (
 	"github.com/sot-tech/mochi/pkg/timecache"
 )
 
-// Name - registered name of the frontend
-const Name = "udp"
+const (
+	// Name - registered name of the frontend
+	Name                = "udp"
+	maxAllowedClockSkew = 30 * time.Second
+	defaultMaxClockSkew = 10 * time.Second
+)
 
 var (
 	logger                          = log.NewLogger("frontend/udp")
@@ -62,7 +66,19 @@ func (cfg Config) Validate() (validCfg Config) {
 		logger.Warn().
 			Str("name", "PrivateKey").
 			Str("provided", "").
-			Str("key", validCfg.PrivateKey).
+			Str("default", validCfg.PrivateKey).
+			Msg("falling back to default configuration")
+	}
+
+	sb := cfg.MaxClockSkew >> 63
+	validCfg.MaxClockSkew = (cfg.MaxClockSkew ^ sb) + (sb & 1)
+
+	if validCfg.MaxClockSkew == 0 || validCfg.MaxClockSkew > maxAllowedClockSkew {
+		validCfg.MaxClockSkew = defaultMaxClockSkew
+		logger.Warn().
+			Str("name", "MaxClockSkew").
+			Dur("provided", cfg.MaxClockSkew).
+			Dur("default", validCfg.MaxClockSkew).
 			Msg("falling back to default configuration")
 	}
 

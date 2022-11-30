@@ -4,16 +4,17 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"hash"
+	"math/rand"
 	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-	"github.com/zeebo/xxh3"
-
 	"github.com/sot-tech/mochi/pkg/log"
+	_ "github.com/sot-tech/mochi/pkg/randseed"
+	"github.com/stretchr/testify/require"
 )
 
 var golden = []struct {
@@ -46,25 +47,26 @@ func ValidConnectionID(connectionID []byte, ip netip.Addr, now time.Time, maxClo
 // simpleNewConnectionID generates a new connection ID the explicit way.
 // This is used to verify correct behaviour of the generator.
 func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint32(buf, uint32(now.Unix()))
-
+	buffer := make([]byte, 9)
 	mac := hmac.New(func() hash.Hash {
-		return xxh3.New()
+		return xxhash.New()
 	}, []byte(key))
-	mac.Write(buf[:4])
+	buffer[0] = byte(rand.Int())
+	binary.BigEndian.PutUint64(buffer[1:], uint64(now.Unix()))
+	mac.Write(buffer)
 	mac.Write(ip.AsSlice())
-	macBytes := mac.Sum(nil)[:4]
-	copy(buf[4:], macBytes)
+	buffer[0], buffer[1], buffer[2] = buffer[0], buffer[7], buffer[8]
+	copy(buffer[3:8], mac.Sum(nil))
+	buffer = buffer[:8]
 
 	// this is just in here because logging impacts performance and we benchmark
 	// this version too.
 	log.Debug().
 		Stringer("ip", ip).
-		Time("now", now).
-		Hex("connID", buf).
-		Msg("manually generated connection ID")
-	return buf
+		Time("ts", now).
+		Hex("connID", buffer).
+		Msg("generated connection ID")
+	return buffer
 }
 
 func TestVerification(t *testing.T) {
