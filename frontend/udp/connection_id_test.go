@@ -101,7 +101,7 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 
 			for i := 0; i < 3; i++ {
 				connID := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
-				require.Equal(t, cid, connID) // IDs should NOT be equal because of salt
+				require.NotEqual(t, cid, connID) // IDs should NOT be equal because of salt
 			}
 		})
 	}
