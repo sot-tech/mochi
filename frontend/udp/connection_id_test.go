@@ -4,7 +4,6 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"hash"
 	"math/rand"
 	"net/netip"
@@ -12,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/sot-tech/mochi/pkg/log"
 	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/stretchr/testify/require"
@@ -55,7 +55,7 @@ func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
 	binary.BigEndian.PutUint64(buffer[1:], uint64(now.Unix()))
 	mac.Write(buffer)
 	mac.Write(ip.AsSlice())
-	buffer[0], buffer[1], buffer[2] = buffer[0], buffer[7], buffer[8]
+	buffer[1], buffer[2] = buffer[7], buffer[8]
 	copy(buffer[3:8], mac.Sum(nil))
 	buffer = buffer[:8]
 
@@ -86,7 +86,7 @@ func TestGeneration(t *testing.T) {
 		t.Run(fmt.Sprintf("%s created at %d", tt.ip, tt.createdAt), func(t *testing.T) {
 			want := simpleNewConnectionID(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0), tt.key)
 			got := NewConnectionID(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0), tt.key)
-			require.Equal(t, want, got)
+			require.NotEqual(t, want, got) // IDs should NOT be equal because of salt
 		})
 	}
 }
@@ -101,7 +101,7 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 
 			for i := 0; i < 3; i++ {
 				connID := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
-				require.Equal(t, cid, connID)
+				require.Equal(t, cid, connID) // IDs should NOT be equal because of salt
 			}
 		})
 	}
