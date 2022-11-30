@@ -27,6 +27,7 @@ import (
 const (
 	// Name - registered name of the frontend
 	Name                = "udp"
+	defaultKeyLen       = 32
 	maxAllowedClockSkew = 30 * time.Second
 	defaultMaxClockSkew = 10 * time.Second
 )
@@ -57,7 +58,7 @@ func (cfg Config) Validate() (validCfg Config) {
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
-		pkeyRunes := make([]rune, 64)
+		pkeyRunes := make([]rune, defaultKeyLen)
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
 		}
@@ -70,6 +71,7 @@ func (cfg Config) Validate() (validCfg Config) {
 			Msg("falling back to default configuration")
 	}
 
+	// ABS
 	sb := cfg.MaxClockSkew >> 63
 	validCfg.MaxClockSkew = (cfg.MaxClockSkew ^ sb) + (sb & 1)
 
@@ -108,6 +110,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		return nil, err
 	}
 	cfg = cfg.Validate()
+	pKey := []byte(cfg.PrivateKey)
 
 	f := &udpFE{
 		sockets:        make([]*net.UDPConn, cfg.Workers),
@@ -117,7 +120,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		ParseOptions:   cfg.ParseOptions,
 		genPool: &sync.Pool{
 			New: func() any {
-				return NewConnectionIDGenerator(cfg.PrivateKey, cfg.MaxClockSkew)
+				return NewConnectionIDGenerator(pKey, cfg.MaxClockSkew)
 			},
 		},
 	}

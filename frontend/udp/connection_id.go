@@ -61,11 +61,11 @@ type ConnectionIDGenerator struct {
 }
 
 // NewConnectionIDGenerator creates a new connection ID generator.
-func NewConnectionIDGenerator(key string, maxClockSkew time.Duration) *ConnectionIDGenerator {
+func NewConnectionIDGenerator(key []byte, maxClockSkew time.Duration) *ConnectionIDGenerator {
 	return &ConnectionIDGenerator{
 		mac: hmac.New(func() hash.Hash {
 			return xxhash.New()
-		}, []byte(key)),
+		}, key),
 		connID:       make([]byte, connIDLen),
 		buff:         make([]byte, buffLen),
 		scratch:      make([]byte, scratchLen),
