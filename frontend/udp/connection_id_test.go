@@ -21,36 +21,36 @@ var golden = []struct {
 	createdAt int64
 	now       int64
 	ip        string
-	key       string
+	key       []byte
 	valid     bool
 }{
-	{0, 1, "127.0.0.1", "", true},
-	{0, 420420, "127.0.0.1", "", false},
-	{0, 0, "::1", "", true},
+	{0, 1, "127.0.0.1", []byte(""), true},
+	{0, 420420, "127.0.0.1", []byte(""), false},
+	{0, 0, "::1", []byte(""), true},
 }
 
 // NewConnectionID creates an 8-byte connection identifier for UDP packets as
 // described by BEP 15.
 // This is a wrapper around creating a new ConnectionIDGenerator and generating
 // an ID. It is recommended to use the generator for performance.
-func NewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
+func NewConnectionID(ip netip.Addr, now time.Time, key []byte) []byte {
 	return NewConnectionIDGenerator(key, 0).Generate(ip, now)
 }
 
 // ValidConnectionID determines whether a connection identifier is legitimate.
 // This is a wrapper around creating a new ConnectionIDGenerator and validating
 // the ID. It is recommended to use the generator for performance.
-func ValidConnectionID(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration, key string) bool {
+func ValidConnectionID(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration, key []byte) bool {
 	return NewConnectionIDGenerator(key, maxClockSkew).Validate(connectionID, ip, now)
 }
 
 // simpleNewConnectionID generates a new connection ID the explicit way.
 // This is used to verify correct behaviour of the generator.
-func simpleNewConnectionID(ip netip.Addr, now time.Time, key string) []byte {
+func simpleNewConnectionID(ip netip.Addr, now time.Time, key []byte) []byte {
 	buffer := make([]byte, 9)
 	mac := hmac.New(func() hash.Hash {
 		return xxhash.New()
-	}, []byte(key))
+	}, key)
 	buffer[0] = byte(rand.Int())
 	binary.BigEndian.PutUint64(buffer[1:], uint64(now.Unix()))
 	mac.Write(buffer)
@@ -124,7 +124,7 @@ func TestReuseGeneratorValidate(t *testing.T) {
 
 func BenchmarkSimpleNewConnectionID(b *testing.B) {
 	ip := netip.MustParseAddr("127.0.0.1")
-	key := "some random string that is hopefully at least this long"
+	key := []byte("some random string that is hopefully at least this long")
 	createdAt := time.Now()
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -141,7 +141,7 @@ func BenchmarkSimpleNewConnectionID(b *testing.B) {
 
 func BenchmarkNewConnectionID(b *testing.B) {
 	ip := netip.MustParseAddr("127.0.0.1")
-	key := "some random string that is hopefully at least this long"
+	key := []byte("some random string that is hopefully at least this long")
 	createdAt := time.Now()
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -158,7 +158,7 @@ func BenchmarkNewConnectionID(b *testing.B) {
 
 func BenchmarkConnectionIDGenerator_Generate(b *testing.B) {
 	ip := netip.MustParseAddr("127.0.0.1")
-	key := "some random string that is hopefully at least this long"
+	key := []byte("some random string that is hopefully at least this long")
 	createdAt := time.Now()
 
 	pool := &sync.Pool{
@@ -180,7 +180,7 @@ func BenchmarkConnectionIDGenerator_Generate(b *testing.B) {
 
 func BenchmarkValidConnectionID(b *testing.B) {
 	ip := netip.MustParseAddr("127.0.0.1")
-	key := "some random string that is hopefully at least this long"
+	key := []byte("some random string that is hopefully at least this long")
 	createdAt := time.Now()
 	cid := NewConnectionID(ip, createdAt, key)
 
@@ -195,7 +195,7 @@ func BenchmarkValidConnectionID(b *testing.B) {
 
 func BenchmarkConnectionIDGenerator_Validate(b *testing.B) {
 	ip := netip.MustParseAddr("127.0.0.1")
-	key := "some random string that is hopefully at least this long"
+	key := []byte("some random string that is hopefully at least this long")
 	createdAt := time.Now()
 	cid := NewConnectionID(ip, createdAt, key)
 
