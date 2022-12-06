@@ -7,11 +7,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	fh "github.com/sot-tech/mochi/frontend/http"
+	fu "github.com/sot-tech/mochi/frontend/udp"
 	"github.com/sot-tech/mochi/pkg/conf"
 
-	// Imports to register frontends
-	_ "github.com/sot-tech/mochi/frontend/http"
-	_ "github.com/sot-tech/mochi/frontend/udp"
+	// Seed math random
+	_ "github.com/sot-tech/mochi/pkg/randseed"
 
 	// Imports to register middleware hooks.
 	_ "github.com/sot-tech/mochi/middleware/clientapproval"
@@ -21,12 +22,12 @@ import (
 
 	// Imports to register storage drivers.
 	_ "github.com/sot-tech/mochi/storage/keydb"
-	_ "github.com/sot-tech/mochi/storage/memory"
+	sm "github.com/sot-tech/mochi/storage/memory"
 	_ "github.com/sot-tech/mochi/storage/pg"
 	_ "github.com/sot-tech/mochi/storage/redis"
 )
 
-// Config represents the configuration used for executing Conf.
+// Config represents the configuration used for Server start.
 type Config struct {
 	// TODO(jzelinskie): Evaluate whether we would like to make
 	//  AnnounceInterval and MinAnnounceInterval optional.
@@ -40,6 +41,27 @@ type Config struct {
 	Storage             conf.NamedMapConfig   `yaml:"storage"`
 	PreHooks            []conf.NamedMapConfig `yaml:"prehooks"`
 	PostHooks           []conf.NamedMapConfig `yaml:"posthooks"`
+}
+
+// QuickConfig is the simple configuration for quick start without config file.
+// Includes in-memory store, http and udp frontends without any middleware.
+var QuickConfig = &Config{
+	Frontends: []conf.NamedMapConfig{
+		{
+			Name:   fh.Name,
+			Config: conf.MapConfig{},
+		},
+		{
+			Name:   fu.Name,
+			Config: conf.MapConfig{},
+		},
+	},
+	Storage: conf.NamedMapConfig{
+		Name:   sm.Name,
+		Config: conf.MapConfig{},
+	},
+	PreHooks:  []conf.NamedMapConfig{},
+	PostHooks: []conf.NamedMapConfig{},
 }
 
 // ParseConfigFile returns a new Config given the path to a YAML

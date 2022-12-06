@@ -14,6 +14,7 @@ frontends:
             tls_cert_path: ""
             tls_key_path: ""
             reuse_port: true
+            workers: 1
             read_timeout: 5s
             write_timeout: 5s
             enable_keepalive: false
@@ -36,6 +37,7 @@ frontends:
         config:
             addr: "0.0.0.0:6969"
             reuse_port: true
+            workers: 1
             max_clock_skew: 10s
             private_key: "paste a random string here that will be used to hmac connection IDs"
             enable_request_timing: false

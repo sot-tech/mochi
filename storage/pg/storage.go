@@ -475,7 +475,7 @@ func (s *store) getPeers(ctx context.Context, ih bittorrent.InfoHash, seeders bo
 			} else {
 				logger.Warn().
 					Err(err).
-					Bytes("peerID", id).
+					Hex("peerID", id).
 					IPAddr("ip", ip).
 					Int("port", port).
 					Msg("unable to scan/construct peer")
@@ -552,7 +552,7 @@ func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leec
 		}
 	}
 	if err != nil {
-		logger.Error().Err(err).Bytes("infoHash", ih).Msg("unable to get peers count")
+		logger.Error().Err(err).Hex("infoHash", ih).Msg("unable to get peers count")
 	}
 	return
 }

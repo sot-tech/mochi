@@ -44,7 +44,7 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.GarbageCollectionInterval <= 0 {
 		gcInterval = DefaultGarbageCollectionInterval
 		logger.Warn().
-			Str("name", "garbageCollectionInterval").
+			Str("name", "GarbageCollectionInterval").
 			Dur("provided", c.GarbageCollectionInterval).
 			Dur("default", DefaultGarbageCollectionInterval).
 			Msg("falling back to default configuration")
@@ -54,7 +54,7 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	if c.PeerLifetime <= 0 {
 		peerTTL = DefaultPeerLifetime
 		logger.Warn().
-			Str("name", "peerLifetime").
+			Str("name", "PeerLifetime").
 			Dur("provided", c.PeerLifetime).
 			Dur("default", DefaultPeerLifetime).
 			Msg("falling back to default configuration")
@@ -68,7 +68,7 @@ func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 	if c.PrometheusReportingInterval < 0 {
 		statInterval = DefaultPrometheusReportingInterval
 		logger.Warn().
-			Str("name", "prometheusReportingInterval").
+			Str("name", "PrometheusReportingInterval").
 			Dur("provided", c.PrometheusReportingInterval).
 			Dur("default", DefaultPrometheusReportingInterval).
 			Msg("falling back to default configuration")

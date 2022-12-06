@@ -34,9 +34,13 @@ frontends:
             tls_key_path: ""
 
             # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same HTTP(S) port.
-            # You can also use this parameter to define two or mote listeners for the same address and port,
-            # and (possibly) increase throughput.
+            # You can also use this parameter to define two or more listeners or separate processes
+            # for the same address and port, and (possibly) increase throughput (faster queue processing
+            # because of multiple 'workers').
             reuse_port: true
+
+            # Number of connection listeners to start. See reuse_port, default is 1.
+            workers: 1
 
             # The timeout durations for HTTP requests.
             read_timeout: 5s
@@ -110,9 +114,13 @@ frontends:
             addr: "0.0.0.0:6969"
 
             # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same UDP port.
-            # You can also use this parameter to define two or mote listeners for the same address and port,
-            # and (a little) increase throughput (faster queue processing because of multiple 'workers').
+            # You can also use this parameter to define two or more listeners or separate processes
+            # for the same address and port, and (a little) increase throughput (faster queue processing
+            # because of multiple 'workers').
             reuse_port: true
+
+            # Number of connection listeners to start. See reuse_port, default is 1.
+            workers: 1
 
             # The leeway for a timestamp on a connection ID.
             max_clock_skew: 10s

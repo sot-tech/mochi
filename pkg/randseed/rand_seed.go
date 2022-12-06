@@ -13,7 +13,7 @@ func init() {
 }
 
 // GenSeed returns 64bit seed from crypto/rand source or
-// from current time, if crypto random error occurred
+// from current time, if crypto random read error occurred
 func GenSeed() (seed int64) {
 	r := make([]byte, 8)
 	if _, err := cr.Read(r); err == nil {

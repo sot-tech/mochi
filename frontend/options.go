@@ -6,23 +6,22 @@ import (
 	"time"
 
 	"github.com/libp2p/go-reuseport"
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 const (
-	defaultReadTimeout  = 2 * time.Second
-	defaultWriteTimeout = 2 * time.Second
+	defaultReadTimeout   = 2 * time.Second
+	defaultWriteTimeout  = 2 * time.Second
+	defaultListenAddress = ":6969"
 )
 
-var (
-	// ErrAddressNotProvided returned if listen address not provided in configuration
-	ErrAddressNotProvided     = errors.New("address not provided")
-	errUnexpectedListenerType = errors.New("unexpected listener type")
-)
+var errUnexpectedListenerType = errors.New("unexpected listener type")
 
 // ListenOptions is the base configuration which may be used in net listeners
 type ListenOptions struct {
 	Addr                string
-	ReusePort           bool          `cfg:"reuse_port"`
+	ReusePort           bool `cfg:"reuse_port"`
+	Workers             uint
 	ReadTimeout         time.Duration `cfg:"read_timeout"`
 	WriteTimeout        time.Duration `cfg:"write_timeout"`
 	EnableRequestTiming bool          `cfg:"enable_request_timing"`
@@ -30,11 +29,24 @@ type ListenOptions struct {
 
 // Validate checks if listen address provided and sets default
 // timeout options if needed
-func (lo ListenOptions) Validate() (validOptions ListenOptions, err error) {
+func (lo ListenOptions) Validate(ignoreTimeouts bool, logger *log.Logger) (validOptions ListenOptions) {
 	validOptions = lo
 	if len(lo.Addr) == 0 {
-		err = ErrAddressNotProvided
-	} else {
+		validOptions.Addr = defaultListenAddress
+		logger.Warn().
+			Str("name", "Addr").
+			Str("provided", lo.Addr).
+			Str("default", validOptions.Addr).
+			Msg("falling back to default configuration")
+	}
+	if lo.Workers == 0 {
+		validOptions.Workers = 1
+	}
+	if lo.Workers > 1 && !lo.ReusePort {
+		validOptions.ReusePort = true
+		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
+	}
+	if !ignoreTimeouts {
 		if lo.ReadTimeout <= 0 {
 			validOptions.ReadTimeout = defaultReadTimeout
 			logger.Warn().
@@ -111,7 +123,7 @@ type ParseOptions struct {
 
 // Validate sanity checks values set in a config and returns a new config with
 // default values replacing anything that is invalid.
-func (op ParseOptions) Validate() ParseOptions {
+func (op ParseOptions) Validate(logger *log.Logger) ParseOptions {
 	valid := op
 	if op.MaxNumWant <= 0 {
 		valid.MaxNumWant = defaultMaxNumWant

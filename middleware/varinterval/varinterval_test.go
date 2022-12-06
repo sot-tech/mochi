@@ -3,7 +3,6 @@ package varinterval
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -63,14 +62,4 @@ func TestHandleAnnounce(t *testing.T) {
 	require.Equal(t, ctx, nCtx)
 	require.True(t, resp.Interval > 0, "interval should have been increased")
 	require.True(t, resp.MinInterval > 0, "min_interval should have been increased")
-}
-
-func BenchmarkXORoShiRo128Plus(b *testing.B) {
-	s0, s1 := rand.Uint64(), rand.Uint64()
-	var v uint64
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v, s0, s1 = xoroshiro128p(s0, s1)
-	}
-	_, _, _ = v, s0, s1
 }

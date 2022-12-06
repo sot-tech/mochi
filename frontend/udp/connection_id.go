@@ -4,16 +4,29 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"hash"
+	"math/rand"
 	"net/netip"
 	"time"
 
-	"github.com/minio/sha256-simd"
+	"github.com/cespare/xxhash/v2"
 
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/xorshift"
 )
 
 // ttl is the duration a connection ID should be valid according to BEP 15.
-const ttl = 2 * time.Minute
+var ttl = int64(2 * time.Minute)
+
+const (
+	// length of connection ID
+	connIDLen = 8
+	// uint64 length + 1 byte salt
+	buffLen = 9
+	// 16 bytes enough for hashes with output length up to 128bit
+	scratchLen = 16
+	// length of HMAC in bytes to place it in connection ID
+	hmacLen = 5
+)
 
 // A ConnectionIDGenerator is a reusable generator and validator for connection
 // IDs as described in BEP 15.
@@ -33,17 +46,31 @@ type ConnectionIDGenerator struct {
 	// It will be overwritten by subsequent calls to Generate.
 	connID []byte
 
+	// buffer for HMAC input
+	buff []byte
+
 	// scratch is a 32-byte slice that is used as a scratchpad for the generated
-	// HMACs.
+	// HMACs to increase hash performance.
 	scratch []byte
+
+	// the leeway for a timestamp on a connection ID.
+	maxClockSkew int64
+
+	// PRNG footprint holder
+	s uint64
 }
 
 // NewConnectionIDGenerator creates a new connection ID generator.
-func NewConnectionIDGenerator(key string) *ConnectionIDGenerator {
+func NewConnectionIDGenerator(key []byte, maxClockSkew time.Duration) *ConnectionIDGenerator {
 	return &ConnectionIDGenerator{
-		mac:     hmac.New(sha256.New, []byte(key)),
-		connID:  make([]byte, 8),
-		scratch: make([]byte, 32),
+		mac: hmac.New(func() hash.Hash {
+			return xxhash.New()
+		}, key),
+		connID:       make([]byte, connIDLen),
+		buff:         make([]byte, buffLen),
+		scratch:      make([]byte, scratchLen),
+		maxClockSkew: int64(maxClockSkew),
+		s:            rand.Uint64(),
 	}
 }
 
@@ -52,60 +79,69 @@ func NewConnectionIDGenerator(key string) *ConnectionIDGenerator {
 // it after getting a generator from a pool.
 func (g *ConnectionIDGenerator) reset() {
 	g.mac.Reset()
-	g.connID = g.connID[:8]
+	g.connID = g.connID[:connIDLen]
+	g.buff = g.buff[:buffLen]
 	g.scratch = g.scratch[:0]
 }
 
 // Generate generates an 8-byte connection ID as described in BEP 15 for the
 // given IP and the current time.
 //
-// The first 4 bytes of the connection identifier is a unix timestamp and the
-// last 4 bytes are a truncated HMAC token created from the aforementioned
-// unix timestamp and the source IP address of the UDP packet.
+// The first byte is random salt, next 2 bytes - truncated unix timestamp
+// when ID was generated, last 5 bytes are a truncated HMAC token created
+// from salt (1 byte), full unix timestamp (8 bytes) and source IP (4/16 bytes).
+//
+// Salt used to mitigate generation same MAC if there are several clients
+// from same IP sent requests within one second.
 //
 // Truncated HMAC is known to be safe for 2^(-n) where n is the size in bits
-// of the truncated HMAC token. In this use case we have 32 bits, thus a
+// of the truncated HMAC token. In this use case we have 40 bits, thus a
 // forgery probability of approximately 1 in 4 billion.
 //
-// The generated ID is written to g.connID, which is also returned. g.connID
+// The generated ID is written to g.buffer, which is also returned. g.buffer
 // will be reused, so it must not be referenced after returning the generator
 // to a pool and will be overwritten be subsequent calls to Generate!
-func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) []byte {
+func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) (out []byte) {
 	g.reset()
+	var r uint64
+	r, g.s = xorshift.XorShift64S(g.s)
+	g.buff[0] = byte(r)
+	binary.BigEndian.PutUint64(g.buff[1:], uint64(now.Unix()))
+	g.mac.Write(g.buff)
+	g.mac.Write(ip.AsSlice())
 
-	binary.BigEndian.PutUint32(g.connID, uint32(now.Unix()))
-
-	g.mac.Write(g.connID[:4])
-	ipBytes, _ := ip.MarshalBinary()
-	g.mac.Write(ipBytes)
 	g.scratch = g.mac.Sum(g.scratch)
-	copy(g.connID[4:8], g.scratch[:4])
+	g.connID[0], g.connID[1], g.connID[2] = g.buff[0], g.buff[7], g.buff[8]
+	copy(g.connID[connIDLen-hmacLen:], g.scratch[:hmacLen])
 
 	log.Debug().
 		Stringer("ip", ip).
-		Time("now", now).
-		Bytes("connID", g.connID).
+		Hex("connID", g.connID).
 		Msg("generated connection ID")
-	return g.connID
+	return g.connID[:connIDLen]
 }
 
 // Validate validates the given connection ID for an IP and the current time.
-func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time, maxClockSkew time.Duration) bool {
-	ts := time.Unix(int64(binary.BigEndian.Uint32(connectionID[:4])), 0)
+func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time) bool {
+	g.reset()
+	nowTS := now.Unix()
+	g.buff[0] = connectionID[0]
+	// connectionID contains only 2 bytes of timestamp, so we clean little 16 bits to place it and rehash.
+	// We will provide restored full timestamp respectively to current timestamp,
+	// 2 bytes should be enough to avoid collisions within ~18 hours from same IP.
+	ts := nowTS&((^int64(0)>>16)<<16) | int64(connectionID[1])<<8 | int64(connectionID[2])
+	binary.BigEndian.PutUint64(g.buff[1:], uint64(ts))
+	g.mac.Write(g.buff)
+	g.mac.Write(ip.AsSlice())
+	g.scratch = g.mac.Sum(g.scratch)
+	res := hmac.Equal(g.scratch[:hmacLen], connectionID[connIDLen-hmacLen:connIDLen])
+	// ts-skew < now < ts+ttl+skew
+	res = ts-g.maxClockSkew < nowTS && res
+	res = nowTS < ts+ttl+g.maxClockSkew && res
 	log.Debug().
 		Stringer("ip", ip).
-		Time("ts", ts).Time("now", now).
-		Bytes("connID", g.connID).
+		Hex("connID", connectionID).
+		Bool("result", res).
 		Msg("validating connection ID")
-	if now.After(ts.Add(ttl)) || ts.After(now.Add(maxClockSkew)) {
-		return false
-	}
-
-	g.reset()
-
-	g.mac.Write(connectionID[:4])
-	ipBytes, _ := ip.MarshalBinary()
-	g.mac.Write(ipBytes)
-	g.scratch = g.mac.Sum(g.scratch)
-	return hmac.Equal(g.scratch[:4], connectionID[4:])
+	return res
 }
