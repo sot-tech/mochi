@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20221205211830-fe848ebc2e22
-	github.com/MicahParks/keyfunc v1.7.0
+	github.com/MicahParks/keyfunc v1.9.0
 	github.com/anacrolix/torrent v1.47.1-0.20221102120345-c63f7e1bd720
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/go-redis/redis/v8 v8.11.5
