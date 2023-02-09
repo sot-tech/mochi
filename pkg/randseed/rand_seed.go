@@ -9,6 +9,7 @@ import (
 
 func init() {
 	// Seeding global math random
+	//staticcheck
 	rand.Seed(GenSeed())
 }
 

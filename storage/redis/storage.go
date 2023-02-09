@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -502,7 +502,7 @@ func (ps *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forS
 		Msg("announce peers")
 
 	return ps.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
-		return ps.HRandField(ctx, infoHashKey, maxCount, false)
+		return ps.HRandField(ctx, infoHashKey, maxCount)
 	})
 }
 
