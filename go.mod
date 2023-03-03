@@ -8,7 +8,7 @@ require (
 	github.com/anacrolix/torrent v1.48.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
-	github.com/jackc/pgx/v5 v5.3.0
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/libp2p/go-reuseport v0.2.0
 	github.com/minio/sha256-simd v1.0.0

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	cr "crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"math/rand"
@@ -74,7 +75,9 @@ func init() {
 	_ = log.ConfigureLogger("", "info", false, false)
 	privKey, _ = jwt.ParseECPrivateKeyFromPEM([]byte(privKeyPEM))
 	ihBytes := make([]byte, bittorrent.InfoHashV1Len)
-	rand.Read(ihBytes)
+	if _, err := cr.Read(ihBytes); err != nil {
+		panic(err)
+	}
 	infoHash, _ = bittorrent.NewInfoHash(ihBytes)
 	s2 := sha256.New()
 	s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
@@ -158,7 +161,9 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 
 	token.Header["kid"] = jwksData.Keys[0].KeyID
 	k := make([]byte, 20)
-	rand.Read(k)
+	if _, err := cr.Read(k); err != nil {
+		panic(err)
+	}
 	tokenString, err := token.SignedString(k)
 	require.Nil(t, err)
 	//goland:noinspection HttpUrlsUsage

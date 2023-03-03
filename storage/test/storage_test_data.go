@@ -3,12 +3,10 @@
 package test
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"net/netip"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	// used for seeding global math.Rand
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 var (
@@ -25,14 +23,18 @@ func randIH(v2 bool) (ih bittorrent.InfoHash) {
 	} else {
 		b = make([]byte, bittorrent.InfoHashV1Len)
 	}
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	ih, _ = bittorrent.NewInfoHash(b)
 	return
 }
 
 func randPeerID() (ih bittorrent.PeerID) {
 	b := make([]byte, bittorrent.PeerIDLen)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	ih, _ = bittorrent.NewPeerID(b)
 	return
 }
