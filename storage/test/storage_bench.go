@@ -4,6 +4,7 @@ package test
 
 import (
 	"context"
+	cr "crypto/rand"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -42,7 +43,9 @@ func generatePeers() (a [peersCount]bittorrent.Peer) {
 		} else {
 			ip = make([]byte, net.IPv6len)
 		}
-		rand.Read(ip)
+		if _, err := cr.Read(ip); err != nil {
+			panic(err)
+		}
 		addr, ok := netip.AddrFromSlice(ip)
 		if !ok {
 			panic("unable to create ip from random bytes")

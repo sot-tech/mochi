@@ -3,17 +3,15 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"github.com/anacrolix/torrent/tracker"
 
 	"github.com/sot-tech/mochi/bittorrent"
-
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 func main() {
@@ -43,7 +41,9 @@ func main() {
 
 func test(addr string, delay time.Duration) error {
 	b := make([]byte, bittorrent.InfoHashV1Len)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	ih, _ := bittorrent.NewInfoHash(b)
 	return testWithInfoHash(ih, addr, delay)
 }
