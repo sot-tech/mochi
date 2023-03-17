@@ -1,4 +1,4 @@
-package bittorrent
+package http
 
 import (
 	"net/url"
@@ -24,34 +24,34 @@ var (
 		{"peer_id": {""}, "compact": {""}},
 	}
 
-	InvalidQueries = []string{
-		"/announce?" + "info_hash=%0%a",
+	InvalidQueries = [][]byte{
+		[]byte("/announce?info_hash=%0%a"),
 	}
 
 	// See https://github.com/chihaya/chihaya/issues/334.
-	shouldNotPanicQueries = []string{
-		"/annnounce?" + "info_hash=" + testPeerID + "&a",
-		"/annnounce?" + "info_hash=" + testPeerID + "&=b?",
+	shouldNotPanicQueries = [][]byte{
+		[]byte("/annnounce?info_hash=" + testPeerID + "&a"),
+		[]byte("/annnounce?info_hash=" + testPeerID + "&=b?"),
 	}
 )
 
-func mapArrayEqual(boxed map[string][]string, unboxed map[string]string) bool {
-	if len(boxed) != len(unboxed) {
-		return false
+func mapArrayEqual(boxed map[string][]string, unboxed *queryParams) (bool, string) {
+	if len(boxed) != unboxed.Len() {
+		return false, ""
 	}
 
 	for mapKey, mapVal := range boxed {
 		// Always expect box to hold only one element
-		if len(mapVal) != 1 || mapVal[0] != unboxed[mapKey] {
-			return false
+		if len(mapVal) != 1 || mapVal[0] != string(unboxed.Peek(mapKey)) {
+			return false, mapVal[0]
 		}
 	}
 
-	return true
+	return true, ""
 }
 
 func TestParseEmptyURLData(t *testing.T) {
-	parsedQuery, err := ParseURLData("")
+	parsedQuery, err := parseURLData(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,49 +62,32 @@ func TestParseEmptyURLData(t *testing.T) {
 
 func TestParseValidURLData(t *testing.T) {
 	for parseIndex, parseVal := range ValidAnnounceArguments {
-		parsedQueryObj, err := ParseURLData("/announce?" + parseVal.Encode())
+		parsedQueryObj, err := parseURLData([]byte("/announce?" + parseVal.Encode()))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if !mapArrayEqual(parseVal, parsedQueryObj.params) {
-			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, parsedQueryObj.params)
-		}
-
-		if parsedQueryObj.path != "/announce" {
-			t.Fatalf("Incorrect path, expected %q, got %q", "/announce", parsedQueryObj.path)
-		}
-	}
-}
-
-func TestParseInvalidURLData(t *testing.T) {
-	for parseIndex, parseStr := range InvalidQueries {
-		parsedQueryObj, err := ParseURLData(parseStr)
-		if err == nil {
-			t.Fatal("Should have produced error", parseIndex)
-		}
-
-		if parsedQueryObj != nil {
-			t.Fatal("Should be nil after error", parsedQueryObj, parseIndex)
+		if eq, exp := mapArrayEqual(parseVal, parsedQueryObj); !eq {
+			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, exp)
 		}
 	}
 }
 
 func TestParseShouldNotPanicURLData(t *testing.T) {
 	for _, parseStr := range shouldNotPanicQueries {
-		_, _ = ParseURLData(parseStr)
+		_, _ = parseURLData(parseStr)
 	}
 }
 
 func BenchmarkParseQuery(b *testing.B) {
-	announceStrings := make([]string, 0)
+	announceStrings := make([][]byte, 0)
 	for i := range ValidAnnounceArguments {
-		announceStrings = append(announceStrings, ValidAnnounceArguments[i].Encode())
+		announceStrings = append(announceStrings, []byte(ValidAnnounceArguments[i].Encode()))
 	}
 	b.ResetTimer()
 	for bCount := 0; bCount < b.N; bCount++ {
 		i := bCount % len(announceStrings)
-		parsedQueryObj, err := parseQuery(announceStrings[i])
+		parsedQueryObj, err := parseURLData(announceStrings[i])
 		if err != nil {
 			b.Error(err, i)
 			b.Log(parsedQueryObj)

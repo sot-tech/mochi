@@ -2,11 +2,6 @@ package bittorrent
 
 import (
 	"context"
-	"errors"
-	"net/url"
-	"strconv"
-	"strings"
-
 	"github.com/rs/zerolog"
 )
 
@@ -21,37 +16,7 @@ type Params interface {
 	// returned as a string because they are encoded in the URL as strings.
 	String(key string) (string, bool)
 
-	// RawPath returns the raw path from the request URL.
-	// The path returned can contain URL encoded data.
-	// For a request of the form "/announce?port=1234" this would return
-	// "/announce".
-	RawPath() string
-
-	// RawQuery returns the raw query from the request URL, excluding the
-	// delimiter '?'.
-	// For a request of the form "/announce?port=1234" this would return
-	// "port=1234"
-	RawQuery() string
-
 	zerolog.LogObjectMarshaler
-}
-
-var (
-	// ErrKeyNotFound is returned when a provided key has no value associated with
-	// it.
-	ErrKeyNotFound = errors.New("query: value for the provided key does not exist")
-	// ErrInvalidQueryEscape is returned when a query string contains invalid
-	// escapes.
-	ErrInvalidQueryEscape = ClientError("invalid query escape")
-)
-
-// QueryParams parses a URL Query and implements the Params interface with some
-// additional helpers.
-type QueryParams struct {
-	path       string
-	query      string
-	params     map[string]string
-	infoHashes []InfoHash
 }
 
 type routeParamsKey struct{}
@@ -103,136 +68,4 @@ func RemapRouteParamsToBgContext(inCtx context.Context) context.Context {
 		rp = RouteParams{}
 	}
 	return context.WithValue(context.Background(), RouteParamsKey, rp)
-}
-
-// ParseURLData parses a request URL or UDP URLData as defined in BEP41.
-// It expects a concatenated string of the request's path and query parts as
-// defined in RFC 3986. As both the udp: and http: scheme used by BitTorrent
-// include an authority part the path part must always begin with a slash.
-// An example of the expected URLData would be "/announce?port=1234&uploaded=0"
-// or "/?auth=0x1337".
-// HTTP servers should pass (*http.Request).RequestURI, UDP servers should
-// pass the concatenated, unchanged URLData as defined in BEP41.
-//
-// Note that, in the case of a key occurring multiple times in the query, only
-// the last value for that key is kept.
-// The only exception to this rule is the key "info_hash" which will attempt to
-// parse each value as an InfoHash and return an error if parsing fails. All
-// InfoHashes are collected and can later be retrieved by calling the InfoHashes
-// method.
-//
-// Also note that any error that is encountered during parsing is returned as a
-// ClientError, as this method is expected to be used to parse client-provided
-// data.
-func ParseURLData(urlData string) (*QueryParams, error) {
-	var path, query string
-
-	queryDelim := strings.IndexAny(urlData, "?")
-	if queryDelim == -1 {
-		path = urlData
-	} else {
-		path = urlData[:queryDelim]
-		query = urlData[queryDelim+1:]
-	}
-
-	q, err := parseQuery(query)
-	if err != nil {
-		return nil, ClientError(err.Error())
-	}
-	q.path = path
-	return q, nil
-}
-
-// parseQuery parses a URL query into QueryParams.
-// The query is expected to exclude the delimiting '?'.
-func parseQuery(query string) (q *QueryParams, err error) {
-	// This is basically url.parseQuery, but with a map[string]string
-	// instead of map[string][]string for the values.
-	q = &QueryParams{
-		query:      query,
-		infoHashes: nil,
-		params:     make(map[string]string),
-	}
-
-	for query != "" {
-		key := query
-		if i := strings.IndexAny(key, "&;"); i >= 0 {
-			key, query = key[:i], key[i+1:]
-		} else {
-			query = ""
-		}
-		if key == "" {
-			continue
-		}
-		value := ""
-		if i := strings.Index(key, "="); i >= 0 {
-			key, value = key[:i], key[i+1:]
-		}
-		key, err = url.QueryUnescape(key)
-		if err != nil {
-			// QueryUnescape returns an error like "invalid escape: '%x'".
-			// But frontends record these errors to prometheus, which generates
-			// a lot of time series.
-			// We log it here for debugging instead.
-			return nil, ErrInvalidQueryEscape
-		}
-		value, err = url.QueryUnescape(value)
-		if err != nil {
-			// QueryUnescape returns an error like "invalid escape: '%x'".
-			// But frontends record these errors to prometheus, which generates
-			// a lot of time series.
-			// We log it here for debugging instead.
-			return nil, ErrInvalidQueryEscape
-		}
-
-		if key == "info_hash" {
-			if ih, err := NewInfoHash(value); err == nil {
-				q.infoHashes = append(q.infoHashes, ih)
-			} else {
-				return nil, err
-			}
-		} else {
-			q.params[strings.ToLower(key)] = value
-		}
-	}
-
-	return q, nil
-}
-
-// String returns a string parsed from a query. Every key can be returned as a
-// string because they are encoded in the URL as strings.
-func (qp QueryParams) String(key string) (string, bool) {
-	value, ok := qp.params[strings.ToLower(key)]
-	return value, ok
-}
-
-// Uint returns an uint parsed from a query. After being called, it is safe to
-// cast the uint64 to your desired length.
-func (qp QueryParams) Uint(key string, bitSize int) (uint64, error) {
-	str, exists := qp.params[strings.ToLower(key)]
-	if !exists {
-		return 0, ErrKeyNotFound
-	}
-
-	return strconv.ParseUint(str, 10, bitSize)
-}
-
-// InfoHashes returns a list of requested infohashes.
-func (qp QueryParams) InfoHashes() []InfoHash {
-	return qp.infoHashes
-}
-
-// RawPath returns the raw path from the parsed URL.
-func (qp QueryParams) RawPath() string {
-	return qp.path
-}
-
-// RawQuery returns the raw query from the parsed URL.
-func (qp QueryParams) RawQuery() string {
-	return qp.query
-}
-
-// MarshalZerologObject writes fields into zerolog event
-func (qp QueryParams) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("path", qp.path).Str("query", qp.query)
 }

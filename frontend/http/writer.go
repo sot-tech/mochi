@@ -3,8 +3,9 @@ package http
 import (
 	"bytes"
 	"errors"
+	"github.com/valyala/fasthttp"
+	"io"
 	"net"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -14,21 +15,18 @@ import (
 
 var respBufferPool = bytepool.NewBufferPool()
 
-// WriteError communicates an error to a BitTorrent client over HTTP.
-func WriteError(w http.ResponseWriter, err error) {
+func writeErrorResponse(w io.StringWriter, err error) {
 	message := "internal server error"
 	var clientErr bittorrent.ClientError
 	if errors.As(err, &clientErr) {
 		message = clientErr.Error()
 	} else {
-		logger.Error().Err(err).Msg("http: internal error")
+		logger.Error().Err(err).Msg("internal error")
 	}
-	_, _ = w.Write([]byte("d14:failure reason" + strconv.Itoa(len(message)) + ":" + message + "e"))
+	_, _ = w.WriteString("d14:failure reason" + strconv.Itoa(len(message)) + ":" + message + "e")
 }
 
-// WriteAnnounceResponse communicates the results of an Announce to a
-// BitTorrent client over HTTP.
-func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceResponse) error {
+func writeAnnounceResponse(w io.Writer, resp *bittorrent.AnnounceResponse) {
 	bb := respBufferPool.Get()
 	defer respBufferPool.Put(bb)
 
@@ -40,13 +38,13 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	}
 
 	bb.WriteString("d8:completei")
-	bb.WriteString(strconv.FormatUint(uint64(resp.Complete), 10))
+	bb.Write(fasthttp.AppendUint(nil, int(resp.Complete)))
 	bb.WriteString("e10:incompletei")
-	bb.WriteString(strconv.FormatUint(uint64(resp.Incomplete), 10))
+	bb.Write(fasthttp.AppendUint(nil, int(resp.Incomplete)))
 	bb.WriteString("e8:intervali")
-	bb.WriteString(strconv.FormatUint(uint64(resp.Interval), 10))
+	bb.Write(fasthttp.AppendUint(nil, int(resp.Interval)))
 	bb.WriteString("e12:min intervali")
-	bb.WriteString(strconv.FormatUint(uint64(resp.MinInterval), 10))
+	bb.Write(fasthttp.AppendUint(nil, int(resp.MinInterval)))
 	bb.WriteByte('e')
 
 	// Add the peers to the dictionary in the compact format.
@@ -68,8 +66,7 @@ func WriteAnnounceResponse(w http.ResponseWriter, resp *bittorrent.AnnounceRespo
 	}
 	bb.WriteByte('e')
 
-	_, err := bb.WriteTo(w)
-	return err
+	_, _ = bb.WriteTo(w)
 }
 
 func compactAddresses(bb *bytes.Buffer, peers bittorrent.Peers, v6 bool) {
@@ -80,13 +77,12 @@ func compactAddresses(bb *bytes.Buffer, peers bittorrent.Peers, v6 bool) {
 			key, al = "6:peers6", net.IPv6len
 		}
 		bb.WriteString(key)
-		bb.WriteString(strconv.Itoa((al + 2) * l))
+		bb.Write(fasthttp.AppendUint(nil, (al+2)*l))
 		bb.WriteByte(':')
 		for _, peer := range peers {
 			bb.Write(peer.Addr().AsSlice())
 			port := peer.Port()
-			bb.WriteByte(byte(port >> 8))
-			bb.WriteByte(byte(port))
+			bb.Write([]byte{byte(port >> 8), byte(port)})
 		}
 	}
 }
@@ -94,35 +90,32 @@ func compactAddresses(bb *bytes.Buffer, peers bittorrent.Peers, v6 bool) {
 func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
 	bb.WriteString("d2:ip")
 	addr := peer.Addr().String()
-	bb.WriteString(strconv.Itoa(len(addr)))
+	bb.Write(fasthttp.AppendUint(nil, len(addr)))
 	bb.WriteByte(':')
 	bb.WriteString(addr)
 	bb.WriteString("7:peer id20:")
 	bb.Write(peer.ID[:])
 	bb.WriteString("4:porti")
-	bb.WriteString(strconv.FormatUint(uint64(peer.Port()), 10))
-	bb.WriteString("ee")
+	bb.Write(fasthttp.AppendUint(nil, int(peer.Port())))
+	bb.Write([]byte{'e', 'e'})
 }
 
-// WriteScrapeResponse communicates the results of a Scrape to a BitTorrent
-// client over HTTP.
-func WriteScrapeResponse(w http.ResponseWriter, resp *bittorrent.ScrapeResponse) error {
+func writeScrapeResponse(w io.Writer, resp *bittorrent.ScrapeResponse) {
 	bb := respBufferPool.Get()
 	defer respBufferPool.Put(bb)
 	bb.WriteString("d5:filesd")
 	for _, scrape := range resp.Files {
-		bb.WriteString(strconv.Itoa(len(scrape.InfoHash)))
+		bb.Write(fasthttp.AppendUint(nil, len(scrape.InfoHash)))
 		bb.WriteByte(':')
 		bb.Write([]byte(scrape.InfoHash))
 		bb.WriteString("d8:completei")
-		bb.WriteString(strconv.FormatUint(uint64(scrape.Complete), 10))
+		bb.Write(fasthttp.AppendUint(nil, int(scrape.Complete)))
 		bb.WriteString("e10:downloadedi")
-		bb.WriteString(strconv.FormatUint(uint64(scrape.Snatches), 10))
+		bb.Write(fasthttp.AppendUint(nil, int(scrape.Snatches)))
 		bb.WriteString("e10:incompletei")
-		bb.WriteString(strconv.FormatUint(uint64(scrape.Incomplete), 10))
+		bb.Write(fasthttp.AppendUint(nil, int(scrape.Incomplete)))
 		bb.WriteString("ee")
 	}
-	bb.WriteString("ee")
-	_, err := bb.WriteTo(w)
-	return err
+	bb.Write([]byte{'e', 'e'})
+	_, _ = bb.WriteTo(w)
 }

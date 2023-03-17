@@ -21,14 +21,10 @@ import (
 
 var (
 	root        = zl.Logger
-	rootWg      = sync.WaitGroup{}
+	rootMu      = sync.Mutex{}
 	customOut   io.WriteCloser
 	customOutMu = sync.Mutex{}
 )
-
-func init() {
-	rootWg.Add(1)
-}
 
 // ConfigureLogger initializes root and all child loggers.
 // NOTE: this function MUST be called before any child log call
@@ -70,9 +66,10 @@ func ConfigureLogger(output, level string, formatted, colored bool) (err error) 
 			return err
 		}
 	}
+	rootMu.Lock()
+	defer rootMu.Unlock()
 	root = zerolog.New(w).With().Timestamp().Logger()
 	zerolog.SetGlobalLevel(lvl)
-	rootWg.Done()
 	return nil
 }
 
@@ -87,7 +84,6 @@ type Logger struct {
 
 func (l *Logger) init() {
 	l.zlOnce.Do(func() {
-		rootWg.Wait()
 		l.Logger = root.With().Str("component", l.comp).Logger()
 	})
 }

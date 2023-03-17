@@ -61,14 +61,6 @@ func (p params) String(key string) (out string, found bool) {
 	return
 }
 
-func (params) RawPath() (s string) {
-	return
-}
-
-func (params) RawQuery() (s string) {
-	return
-}
-
 func (params) MarshalZerologObject(*zerolog.Event) {}
 
 func init() {

@@ -54,7 +54,15 @@ type Config struct {
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config) {
 	validCfg = cfg
-	validCfg.ListenOptions = cfg.ListenOptions.Validate(true, logger)
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
+
+	if cfg.Workers == 0 {
+		cfg.Workers = 1
+	}
+	if cfg.Workers > 1 && !cfg.ReusePort {
+		cfg.ReusePort = true
+		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
+	}
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {

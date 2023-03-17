@@ -88,7 +88,15 @@ func NewInfoHash(data any) (InfoHash, error) {
 	case [InfoHashV2Len]byte:
 		ba = t[:]
 	case []byte:
-		ba = t
+		l := len(t)
+		if l == InfoHashV1Len*2 || l == InfoHashV2Len*2 {
+			ba = make([]byte, l/2)
+			if _, err := hex.Decode(ba, t); err != nil {
+				return NoneInfoHash, err
+			}
+		} else {
+			ba = t
+		}
 	case string:
 		l := len(t)
 		if l == InfoHashV1Len*2 || l == InfoHashV2Len*2 {
