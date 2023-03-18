@@ -1,11 +1,8 @@
-package http
+package udp
 
 import (
-	"bytes"
 	"net/url"
 	"testing"
-
-	"github.com/valyala/fasthttp"
 )
 
 var (
@@ -27,6 +24,10 @@ var (
 		{"peer_id": {""}, "compact": {""}},
 	}
 
+	InvalidQueries = [][]byte{
+		[]byte("/announce?info_hash=%0%a"),
+	}
+
 	// See https://github.com/chihaya/chihaya/issues/334.
 	shouldNotPanicQueries = [][]byte{
 		[]byte("/annnounce?info_hash=" + testPeerID + "&a"),
@@ -34,52 +35,23 @@ var (
 	}
 )
 
-func mapArrayEqual(boxed map[string][]string, unboxed *queryParams) (bool, string) {
-	if len(boxed) != unboxed.Len() {
-		return false, ""
+func mapArrayEqual(boxed map[string][]string, unboxed map[string]string) bool {
+	if len(boxed) != len(unboxed) {
+		return false
 	}
 
 	for mapKey, mapVal := range boxed {
 		// Always expect box to hold only one element
-		if len(mapVal) != 1 || mapVal[0] != string(unboxed.Peek(mapKey)) {
-			return false, mapVal[0]
+		if len(mapVal) != 1 || mapVal[0] != unboxed[mapKey] {
+			return false
 		}
 	}
 
-	return true, ""
-}
-
-// parseURLData parses a request URL or UDP URLData as defined in BEP41.
-// It expects a concatenated string of the request's path and query parts as
-// defined in RFC 3986. As both the udp: and http: scheme used by BitTorrent
-// include an authority part the path part must always begin with a slash.
-// An example of the expected URLData would be "/announce?port=1234&uploaded=0"
-// or "/?auth=0x1337".
-// HTTP servers should pass (*http.Request).RequestURI, UDP servers should
-// pass the concatenated, unchanged URLData as defined in BEP41.
-//
-// Note that, in the case of a key occurring multiple times in the query, only
-// the last value for that key is kept.
-// The only exception to this rule is the key "info_hash" which will attempt to
-// parse each value as an InfoHash and return an error if parsing fails. All
-// InfoHashes are collected and can later be retrieved by calling the InfoHashes
-// method.
-//
-// Also note that any error that is encountered during parsing is returned as a
-// ClientError, as this method is expected to be used to parse client-provided
-// data.
-func parseURLData(urlData []byte) (*queryParams, error) {
-	i := bytes.IndexByte(urlData, '?')
-	if i >= 0 {
-		urlData = urlData[i+1:]
-	}
-	q := &queryParams{new(fasthttp.Args)}
-	q.ParseBytes(urlData)
-	return q, nil
+	return true
 }
 
 func TestParseEmptyURLData(t *testing.T) {
-	parsedQuery, err := parseURLData(nil)
+	parsedQuery, err := parseQuery(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,20 +62,33 @@ func TestParseEmptyURLData(t *testing.T) {
 
 func TestParseValidURLData(t *testing.T) {
 	for parseIndex, parseVal := range ValidAnnounceArguments {
-		parsedQueryObj, err := parseURLData([]byte("/announce?" + parseVal.Encode()))
+		parsedQueryObj, err := parseQuery([]byte("/announce?" + parseVal.Encode()))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if eq, exp := mapArrayEqual(parseVal, parsedQueryObj); !eq {
-			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, exp)
+		if !mapArrayEqual(parseVal, parsedQueryObj.params) {
+			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, parsedQueryObj.params)
+		}
+	}
+}
+
+func TestParseInvalidURLData(t *testing.T) {
+	for parseIndex, parseStr := range InvalidQueries {
+		parsedQueryObj, err := parseQuery(parseStr)
+		if err == nil {
+			t.Fatal("Should have produced error", parseIndex)
+		}
+
+		if parsedQueryObj != nil {
+			t.Fatal("Should be nil after error", parsedQueryObj, parseIndex)
 		}
 	}
 }
 
 func TestParseShouldNotPanicURLData(t *testing.T) {
 	for _, parseStr := range shouldNotPanicQueries {
-		_, _ = parseURLData(parseStr)
+		_, _ = parseQuery(parseStr)
 	}
 }
 
@@ -115,7 +100,7 @@ func BenchmarkParseQuery(b *testing.B) {
 	b.ResetTimer()
 	for bCount := 0; bCount < b.N; bCount++ {
 		i := bCount % len(announceStrings)
-		parsedQueryObj, err := parseURLData(announceStrings[i])
+		parsedQueryObj, err := parseQuery(announceStrings[i])
 		if err != nil {
 			b.Error(err, i)
 			b.Log(parsedQueryObj)

@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/middleware"
-	"github.com/sot-tech/mochi/pkg/log"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/middleware"
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 const iterations = 10000
@@ -58,6 +59,7 @@ func init() {
 
 func runGet(u string, checkResponse bool) (err error) {
 	var r *http.Response
+	// nolint:gosec
 	if r, err = http.Get(u); err == nil {
 		if r.StatusCode < 400 {
 			if checkResponse {

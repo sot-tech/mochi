@@ -3,11 +3,12 @@ package http
 import (
 	"bytes"
 	"errors"
-	"github.com/valyala/fasthttp"
 	"io"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/valyala/fasthttp"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/bytepool"

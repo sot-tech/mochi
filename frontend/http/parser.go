@@ -3,10 +3,12 @@ package http
 import (
 	"bytes"
 	"errors"
+	"net/netip"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+
 	"github.com/valyala/fasthttp"
-	"net/netip"
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.
@@ -55,7 +57,7 @@ func ParseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	if len(infoHashes) > 1 {
 		return nil, errMultipleInfoHashes
 	}
-	//FIXME: make sure that we have a copy of InfoHash
+	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash = infoHashes[0]
 
 	// Determine if the client expects a compact response.
@@ -123,7 +125,7 @@ func ParseScrape(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.ScrapeR
 	}
 
 	request := &bittorrent.ScrapeRequest{
-		//FIXME: make sure that we have a copy of InfoHashes
+		// FIXME: make sure that we have a copy of InfoHashes
 		InfoHashes:       infoHashes,
 		Params:           qp,
 		RequestAddresses: requestedIPs(r, qp, opts),

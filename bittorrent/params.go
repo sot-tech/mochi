@@ -2,6 +2,7 @@ package bittorrent
 
 import (
 	"context"
+
 	"github.com/rs/zerolog"
 )
 
