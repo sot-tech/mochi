@@ -2,9 +2,9 @@ package udp
 
 import (
 	"crypto/hmac"
+	cr "crypto/rand"
 	"encoding/binary"
 	"hash"
-	"math/rand"
 	"net/netip"
 	"time"
 
@@ -70,18 +70,25 @@ func NewConnectionIDGenerator(key []byte, maxClockSkew time.Duration) *Connectio
 		buff:         make([]byte, buffLen),
 		scratch:      make([]byte, scratchLen),
 		maxClockSkew: int64(maxClockSkew),
-		s:            rand.Uint64(),
 	}
 }
 
 // reset resets the generator.
 // This is called by other methods of the generator, it's not necessary to call
 // it after getting a generator from a pool.
-func (g *ConnectionIDGenerator) reset() {
+func (g *ConnectionIDGenerator) reset(init bool) {
 	g.mac.Reset()
 	g.connID = g.connID[:connIDLen]
 	g.buff = g.buff[:buffLen]
 	g.scratch = g.scratch[:0]
+	if init {
+		r := make([]byte, 8)
+		if _, err := cr.Read(r); err == nil {
+			g.s = binary.BigEndian.Uint64(r)
+		} else {
+			g.s = uint64(time.Now().UnixNano())
+		}
+	}
 }
 
 // Generate generates an 8-byte connection ID as described in BEP 15 for the
@@ -102,7 +109,7 @@ func (g *ConnectionIDGenerator) reset() {
 // will be reused, so it must not be referenced after returning the generator
 // to a pool and will be overwritten be subsequent calls to Generate!
 func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) (out []byte) {
-	g.reset()
+	g.reset(true)
 	var r uint64
 	r, g.s = xorshift.XorShift64S(g.s)
 	g.buff[0] = byte(r)
@@ -123,7 +130,7 @@ func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) (out []by
 
 // Validate validates the given connection ID for an IP and the current time.
 func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now time.Time) bool {
-	g.reset()
+	g.reset(false)
 	nowTS := now.Unix()
 	g.buff[0] = connectionID[0]
 	// connectionID contains only 2 bytes of timestamp, so we clean little 16 bits to place it and rehash.
