@@ -70,7 +70,7 @@ func newStore(cfg r.Config) (*store, error) {
 
 	cmd := redis.NewCommandsInfoCmd(context.Background(), "COMMAND", "INFO", expireMemberCmd)
 	_ = rs.Process(context.Background(), cmd)
-	err = r.AsNil(cmd.Err())
+	err = r.NoResultErr(cmd.Err())
 	if err == nil && len(cmd.Val()) == 0 {
 		err = errNotKeyDB
 	}
@@ -105,7 +105,7 @@ func (s *store) delPeer(ctx context.Context, infoHashKey, peerID string) error {
 		Str("peerID", peerID).
 		Msg("del peer")
 	deleted, err := s.SRem(ctx, infoHashKey, peerID).Uint64()
-	err = r.AsNil(err)
+	err = r.NoResultErr(err)
 	if err == nil && deleted == 0 {
 		err = storage.ErrResourceDoesNotExist
 	}
@@ -166,7 +166,7 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 }
 
 // ScrapeSwarm is the same function as redis.ScrapeSwarm except `SCard` call instead of `HLen`
-func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32) {
+func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")

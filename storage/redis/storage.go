@@ -294,7 +294,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	} else {
 		n, err = ps.Get(context.Background(), key).Uint64()
 	}
-	err = AsNil(err)
+	err = NoResultErr(err)
 	if err != nil {
 		logger.Error().Err(err).Str("key", key).Msg("GET/SCARD failure")
 	}
@@ -322,9 +322,9 @@ func (ps *store) tx(ctx context.Context, txf func(tx redis.Pipeliner) error) (er
 	return
 }
 
-// AsNil returns nil if provided err is redis.Nil
+// NoResultErr returns nil if provided err is redis.Nil
 // otherwise returns err
-func AsNil(err error) error {
+func NoResultErr(err error) error {
 	if err == nil || errors.Is(err, redis.Nil) {
 		return nil
 	}
@@ -377,7 +377,7 @@ func (ps *store) delPeer(ctx context.Context, infoHashKey, peerCountKey, peerID 
 		Str("peerID", peerID).
 		Msg("del peer")
 	deleted, err := ps.HDel(ctx, infoHashKey, peerID).Uint64()
-	err = AsNil(err)
+	err = NoResultErr(err)
 	if err == nil {
 		if deleted == 0 {
 			err = storage.ErrResourceDoesNotExist
@@ -416,7 +416,7 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 
 	return ps.tx(ctx, func(tx redis.Pipeliner) error {
 		deleted, err := tx.HDel(ctx, ihLeecherKey, peerID).Uint64()
-		err = AsNil(err)
+		err = NoResultErr(err)
 		if err == nil {
 			if deleted > 0 {
 				err = tx.Decr(ctx, CountLeecherKey).Err()
@@ -441,7 +441,7 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
 	var peerIds []string
 	peerIds, err = peersResult.Result()
-	if err = AsNil(err); err == nil {
+	if err = NoResultErr(err); err == nil {
 		for _, peerID := range peerIds {
 			if p, err := bittorrent.NewPeer(peerID); err == nil {
 				peers = append(peers, p)
@@ -508,33 +508,38 @@ func (ps *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forS
 
 type getPeerCountFn func(context.Context, string) *redis.IntCmd
 
-func (ps *Connection) countPeers(ctx context.Context, infoHashKey string, countFn getPeerCountFn) uint32 {
-	count, err := countFn(ctx, infoHashKey).Result()
-	err = AsNil(err)
-	if err != nil {
-		logger.Error().Err(err).Str("infoHashKey", infoHashKey).Msg("key size calculation failure")
-	}
-	return uint32(count)
-}
-
 // ScrapeIH calls provided countFn and returns seeders, leechers and downloads count for specified info hash
-func (ps *Connection) ScrapeIH(ctx context.Context, ih bittorrent.InfoHash, countFn getPeerCountFn) (leechersCount, seedersCount, downloadsCount uint32) {
+func (ps *Connection) ScrapeIH(ctx context.Context, ih bittorrent.InfoHash, countFn getPeerCountFn) (
+	leechersCount, seedersCount, downloadsCount uint32, err error,
+) {
 	infoHash := ih.RawString()
+	var lc4, lc6, sc4, sc6, dc int64
 
-	leechersCount = ps.countPeers(ctx, InfoHashKey(infoHash, false, false), countFn) +
-		ps.countPeers(ctx, InfoHashKey(infoHash, false, true), countFn)
-	seedersCount = ps.countPeers(ctx, InfoHashKey(infoHash, true, false), countFn) +
-		ps.countPeers(ctx, InfoHashKey(infoHash, true, true), countFn)
-	d, err := ps.HGet(ctx, CountDownloadsKey, infoHash).Uint64()
-	if err = AsNil(err); err != nil {
-		logger.Error().Err(err).Str("infoHash", infoHash).Msg("downloads count calculation failure")
+	lc4, err = countFn(ctx, InfoHashKey(infoHash, false, false)).Result()
+	if err = NoResultErr(err); err != nil {
+		return
 	}
-	downloadsCount = uint32(d)
-
+	lc6, err = countFn(ctx, InfoHashKey(infoHash, false, true)).Result()
+	if err = NoResultErr(err); err != nil {
+		return
+	}
+	sc4, err = countFn(ctx, InfoHashKey(infoHash, true, false)).Result()
+	if err = NoResultErr(err); err != nil {
+		return
+	}
+	sc6, err = countFn(ctx, InfoHashKey(infoHash, true, true)).Result()
+	if err = NoResultErr(err); err != nil {
+		return
+	}
+	dc, err = ps.HGet(ctx, CountDownloadsKey, infoHash).Int64()
+	if err = NoResultErr(err); err != nil {
+		return
+	}
+	leechersCount, seedersCount, downloadsCount = uint32(lc4+lc6), uint32(sc4+sc6), uint32(dc)
 	return
 }
 
-func (ps *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32) {
+func (ps *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32, error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
@@ -572,7 +577,7 @@ func (ps *Connection) Put(ctx context.Context, storeCtx string, values ...storag
 // Contains - storage.DataStorage implementation
 func (ps *Connection) Contains(ctx context.Context, storeCtx string, key string) (bool, error) {
 	exist, err := ps.HExists(ctx, PrefixKey+storeCtx, key).Result()
-	return exist, AsNil(err)
+	return exist, NoResultErr(err)
 }
 
 // Load - storage.DataStorage implementation
@@ -587,12 +592,12 @@ func (ps *Connection) Load(ctx context.Context, storeCtx string, key string) (v 
 // Delete - storage.DataStorage implementation
 func (ps *Connection) Delete(ctx context.Context, storeCtx string, keys ...string) (err error) {
 	if len(keys) > 0 {
-		err = AsNil(ps.HDel(ctx, PrefixKey+storeCtx, keys...).Err())
+		err = NoResultErr(ps.HDel(ctx, PrefixKey+storeCtx, keys...).Err())
 		if err != nil {
 			if strings.Contains(err.Error(), argNumErrorMsg) {
 				logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HDEL")
 				for _, k := range keys {
-					if err = AsNil(ps.HDel(ctx, PrefixKey+storeCtx, k).Err()); err != nil {
+					if err = NoResultErr(ps.HDel(ctx, PrefixKey+storeCtx, k).Err()); err != nil {
 						break
 					}
 				}
@@ -661,7 +666,7 @@ func (ps *store) gc(cutoff time.Time) {
 	cutoffNanos := cutoff.UnixNano()
 	// list all infoHashKeys in the group
 	infoHashKeys, err := ps.SMembers(context.Background(), IHKey).Result()
-	err = AsNil(err)
+	err = NoResultErr(err)
 	if err == nil {
 		for _, infoHashKey := range infoHashKeys {
 			var cntKey string
@@ -676,7 +681,7 @@ func (ps *store) gc(cutoff time.Time) {
 			}
 			// list all (peer, timeout) pairs for the ih
 			peerList, err := ps.HGetAll(context.Background(), infoHashKey).Result()
-			err = AsNil(err)
+			err = NoResultErr(err)
 			if err == nil {
 				peersToRemove := make([]string, 0)
 				for peerID, timeStamp := range peerList {
@@ -695,13 +700,13 @@ func (ps *store) gc(cutoff time.Time) {
 				}
 				if len(peersToRemove) > 0 {
 					removedPeerCount, err := ps.HDel(context.Background(), infoHashKey, peersToRemove...).Result()
-					err = AsNil(err)
+					err = NoResultErr(err)
 					if err != nil {
 						if strings.Contains(err.Error(), argNumErrorMsg) {
 							logger.Warn().Msg("This Redis version/implementation does not support variadic arguments for HDEL")
 							for _, k := range peersToRemove {
 								count, err := ps.HDel(context.Background(), infoHashKey, k).Result()
-								err = AsNil(err)
+								err = NoResultErr(err)
 								if err != nil {
 									logger.Error().Err(err).
 										Str("infoHashKey", infoHashKey).
@@ -728,14 +733,14 @@ func (ps *store) gc(cutoff time.Time) {
 					}
 				}
 
-				err = AsNil(ps.Watch(context.Background(), func(tx *redis.Tx) (err error) {
+				err = NoResultErr(ps.Watch(context.Background(), func(tx *redis.Tx) (err error) {
 					var infoHashCount uint64
 					infoHashCount, err = ps.HLen(context.Background(), infoHashKey).Uint64()
-					err = AsNil(err)
+					err = NoResultErr(err)
 					if err == nil && infoHashCount == 0 {
 						// Empty hashes are not shown among existing keys,
 						// in other words, it's removed automatically after `HDEL` the last field.
-						err = AsNil(ps.SRem(context.Background(), IHKey, infoHashKey).Err())
+						err = NoResultErr(ps.SRem(context.Background(), IHKey, infoHashKey).Err())
 					}
 					return err
 				}, infoHashKey))

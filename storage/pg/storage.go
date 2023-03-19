@@ -64,6 +64,15 @@ func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	return newStore(cfg)
 }
 
+// noResultErr returns nil if provided err is pgx.ErrNoRows
+// otherwise returns err
+func noResultErr(err error) error {
+	if err == nil || errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
 func newStore(cfg Config) (storage.PeerStorage, error) {
 	cfg, err := cfg.Validate()
 	if err != nil {
@@ -155,7 +164,7 @@ func (cfg Config) Validate() (Config, error) {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.DelQuery, "peer.aelQuery"); err != nil {
+	if err := fn(&validCfg.Peer.DelQuery, "peer.delQuery"); err != nil {
 		return cfg, err
 	}
 
@@ -266,9 +275,7 @@ func (s *store) Contains(ctx context.Context, storeCtx string, key string) (cont
 }
 
 func (s *store) Load(ctx context.Context, storeCtx string, key string) (out []byte, err error) {
-	if err = s.QueryRow(ctx, s.Data.GetQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(key)}).Scan(&out); errors.Is(err, pgx.ErrNoRows) {
-		err = nil
-	}
+	err = noResultErr(s.QueryRow(ctx, s.Data.GetQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(key)}).Scan(&out))
 	return
 }
 
@@ -332,9 +339,13 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 			case <-t.C:
 				if metrics.Enabled() {
 					before := time.Now()
-					sc, lc := s.countPeers(context.Background(), nil)
+					sc, lc, err := s.countPeers(context.Background(), nil)
+					if err = noResultErr(err); err != nil {
+						logger.Error().Err(err).Msg("error occurred while get peers count count")
+					}
 					var hc int
-					if err := s.QueryRow(context.Background(), s.InfoHashCountQuery).Scan(&hc); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					err = s.QueryRow(context.Background(), s.InfoHashCountQuery).Scan(&hc)
+					if err = noResultErr(err); err != nil {
 						logger.Error().Err(err).Msg("error occurred while get info hash count")
 					}
 
@@ -514,15 +525,14 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 	return
 }
 
-func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leechers uint32) {
+func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leechers uint32, err error) {
 	var rows pgx.Rows
-	var err error
 	if len(ih) == 0 {
 		rows, err = s.Query(ctx, s.Peer.CountQuery)
 	} else {
 		rows, err = s.Query(ctx, s.Peer.CountQuery+" "+s.Peer.ByInfoHashClause, pgx.NamedArgs{pInfoHash: ih})
 	}
-	if err == nil {
+	if err = noResultErr(err); err == nil {
 		defer rows.Close()
 		if rows.Next() {
 			si, li := -1, -1
@@ -547,26 +557,23 @@ func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leec
 				into := make([]any, mi+1)
 				into[si], into[li] = &seeders, &leechers
 
-				err = rows.Scan(into...)
+				err = noResultErr(rows.Scan(into...))
 			}
 		}
-	}
-	if err != nil {
-		logger.Error().Err(err).Hex("infoHash", ih).Msg("unable to get peers count")
 	}
 	return
 }
 
-func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
+func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
 	ihb := []byte(ih)
-	seeders, leechers = s.countPeers(ctx, ihb)
+	if seeders, leechers, err = s.countPeers(ctx, ihb); err != nil {
+		return
+	}
 	if len(s.Downloads.GetQuery) > 0 {
-		if err := s.QueryRow(ctx, s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			logger.Error().Stringer("infoHash", ih).Err(err).Msg("error occurred while get info downloads count")
-		}
+		err = noResultErr(s.QueryRow(ctx, s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched))
 	}
 
 	return

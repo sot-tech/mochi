@@ -298,14 +298,18 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
 		ctx, resp, err = f.logic.HandleAnnounce(ctx, req)
 		if err != nil {
-			writeErrorResponse(w, txID, err)
+			if !errors.Is(err, context.Canceled) {
+				writeErrorResponse(w, txID, err)
+			}
 			return
 		}
 
-		writeAnnounceResponse(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
+		if err = ctx.Err(); err == nil {
+			writeAnnounceResponse(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
 
-		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-		go f.logic.AfterAnnounce(ctx, req, resp)
+			ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
+			go f.logic.AfterAnnounce(ctx, req, resp)
+		}
 
 	case scrapeActionID:
 		actionName = "scrape"
@@ -321,14 +325,18 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
 		ctx, resp, err = f.logic.HandleScrape(ctx, req)
 		if err != nil {
-			writeErrorResponse(w, txID, err)
+			if !errors.Is(err, context.Canceled) {
+				writeErrorResponse(w, txID, err)
+			}
 			return
 		}
 
-		writeScrapeResponse(w, txID, resp)
+		if err = ctx.Err(); err == nil {
+			writeScrapeResponse(w, txID, resp)
 
-		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-		go f.logic.AfterScrape(ctx, req, resp)
+			ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
+			go f.logic.AfterScrape(ctx, req, resp)
+		}
 
 	default:
 		err = errUnknownAction
