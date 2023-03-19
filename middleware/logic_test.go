@@ -34,7 +34,6 @@ func (hooks hookList) handleAnnounce(ctx context.Context, req *bittorrent.Announ
 	resp = &bittorrent.AnnounceResponse{
 		Interval:    60,
 		MinInterval: 60,
-		Compact:     true,
 	}
 
 	for _, h := range []Hook(hooks) {

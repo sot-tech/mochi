@@ -3,17 +3,13 @@ package frontend
 import (
 	"errors"
 	"net"
-	"time"
+
+	"github.com/sot-tech/mochi/pkg/log"
 
 	"github.com/libp2p/go-reuseport"
-	"github.com/sot-tech/mochi/pkg/log"
 )
 
-const (
-	defaultReadTimeout   = 2 * time.Second
-	defaultWriteTimeout  = 2 * time.Second
-	defaultListenAddress = ":6969"
-)
+const defaultListenAddress = ":6969"
 
 var errUnexpectedListenerType = errors.New("unexpected listener type")
 
@@ -22,14 +18,12 @@ type ListenOptions struct {
 	Addr                string
 	ReusePort           bool `cfg:"reuse_port"`
 	Workers             uint
-	ReadTimeout         time.Duration `cfg:"read_timeout"`
-	WriteTimeout        time.Duration `cfg:"write_timeout"`
-	EnableRequestTiming bool          `cfg:"enable_request_timing"`
+	EnableRequestTiming bool `cfg:"enable_request_timing"`
 }
 
 // Validate checks if listen address provided and sets default
 // timeout options if needed
-func (lo ListenOptions) Validate(ignoreTimeouts bool, logger *log.Logger) (validOptions ListenOptions) {
+func (lo ListenOptions) Validate(logger *log.Logger) (validOptions ListenOptions) {
 	validOptions = lo
 	if len(lo.Addr) == 0 {
 		validOptions.Addr = defaultListenAddress
@@ -38,32 +32,6 @@ func (lo ListenOptions) Validate(ignoreTimeouts bool, logger *log.Logger) (valid
 			Str("provided", lo.Addr).
 			Str("default", validOptions.Addr).
 			Msg("falling back to default configuration")
-	}
-	if lo.Workers == 0 {
-		validOptions.Workers = 1
-	}
-	if lo.Workers > 1 && !lo.ReusePort {
-		validOptions.ReusePort = true
-		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
-	}
-	if !ignoreTimeouts {
-		if lo.ReadTimeout <= 0 {
-			validOptions.ReadTimeout = defaultReadTimeout
-			logger.Warn().
-				Str("name", "ReadTimeout").
-				Dur("provided", lo.ReadTimeout).
-				Dur("default", validOptions.ReadTimeout).
-				Msg("falling back to default configuration")
-		}
-
-		if lo.WriteTimeout <= 0 {
-			validOptions.WriteTimeout = defaultWriteTimeout
-			logger.Warn().
-				Str("name", "WriteTimeout").
-				Dur("provided", lo.WriteTimeout).
-				Dur("default", validOptions.WriteTimeout).
-				Msg("falling back to default configuration")
-		}
 	}
 	return
 }

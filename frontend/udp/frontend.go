@@ -54,7 +54,15 @@ type Config struct {
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config) {
 	validCfg = cfg
-	validCfg.ListenOptions = cfg.ListenOptions.Validate(true, logger)
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
+
+	if cfg.Workers == 0 {
+		cfg.Workers = 1
+	}
+	if cfg.Workers > 1 && !cfg.ReusePort {
+		cfg.ReusePort = true
+		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
+	}
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
@@ -260,7 +268,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 	// invalid, then fail.
 	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now()) {
 		err = errBadConnectionID
-		WriteError(w, txID, err)
+		writeErrorResponse(w, txID, err)
 		return
 	}
 
@@ -274,15 +282,15 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 			return
 		}
 
-		WriteConnectionID(w, txID, gen.Generate(r.IP, timecache.Now()))
+		writeConnectionID(w, txID, gen.Generate(r.IP, timecache.Now()))
 
 	case announceActionID, announceV6ActionID:
 		actionName = "announce"
 
 		var req *bittorrent.AnnounceRequest
-		req, err = ParseAnnounce(r, actionID == announceV6ActionID, f.ParseOptions)
+		req, err = parseAnnounce(r, actionID == announceV6ActionID, f.ParseOptions)
 		if err != nil {
-			WriteError(w, txID, err)
+			writeErrorResponse(w, txID, err)
 			return
 		}
 
@@ -290,11 +298,11 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
 		ctx, resp, err = f.logic.HandleAnnounce(ctx, req)
 		if err != nil {
-			WriteError(w, txID, err)
+			writeErrorResponse(w, txID, err)
 			return
 		}
 
-		WriteAnnounce(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
+		writeAnnounceResponse(w, txID, resp, actionID == announceV6ActionID, r.IP.Is6())
 
 		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 		go f.logic.AfterAnnounce(ctx, req, resp)
@@ -303,9 +311,9 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		actionName = "scrape"
 
 		var req *bittorrent.ScrapeRequest
-		req, err = ParseScrape(r, f.ParseOptions)
+		req, err = parseScrape(r, f.ParseOptions)
 		if err != nil {
-			WriteError(w, txID, err)
+			writeErrorResponse(w, txID, err)
 			return
 		}
 
@@ -313,18 +321,18 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		ctx := bittorrent.InjectRouteParamsToContext(ctx, bittorrent.RouteParams{})
 		ctx, resp, err = f.logic.HandleScrape(ctx, req)
 		if err != nil {
-			WriteError(w, txID, err)
+			writeErrorResponse(w, txID, err)
 			return
 		}
 
-		WriteScrape(w, txID, resp)
+		writeScrapeResponse(w, txID, resp)
 
 		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
 		go f.logic.AfterScrape(ctx, req, resp)
 
 	default:
 		err = errUnknownAction
-		WriteError(w, txID, err)
+		writeErrorResponse(w, txID, err)
 	}
 
 	return

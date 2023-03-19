@@ -36,11 +36,12 @@ frontends:
             # Enable SO_REUSEPORT to allow starting multiple mochi instances with the same HTTP(S) port.
             # You can also use this parameter to define two or more listeners or separate processes
             # for the same address and port, and (possibly) increase throughput (faster queue processing
-            # because of multiple 'workers').
+            # because of multiple processes).
             reuse_port: true
 
-            # Number of connection listeners to start. See reuse_port, default is 1.
-            workers: 1
+            # For http frontend it's number of concurrent connections.
+            # Default is 262144.
+            workers: 0
 
             # The timeout durations for HTTP requests.
             read_timeout: 5s
@@ -119,7 +120,8 @@ frontends:
             # because of multiple 'workers').
             reuse_port: true
 
-            # Number of connection listeners to start. See reuse_port, default is 1.
+            # For udp frontend it's number of listen goroutines to be used with reuse_port option.
+            # Default is 1.
             workers: 1
 
             # The leeway for a timestamp on a connection ID.

@@ -14,7 +14,6 @@ frontends:
             tls_cert_path: ""
             tls_key_path: ""
             reuse_port: true
-            workers: 1
             read_timeout: 5s
             write_timeout: 5s
             enable_keepalive: false

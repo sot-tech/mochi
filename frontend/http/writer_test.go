@@ -26,7 +26,7 @@ func TestWriteError(t *testing.T) {
 	for _, tt := range table {
 		t.Run(fmt.Sprintf("%s expecting %s", tt.reason, tt.expected), func(t *testing.T) {
 			r := httptest.NewRecorder()
-			WriteError(r, bittorrent.ClientError(tt.reason))
+			writeErrorResponse(r, bittorrent.ClientError(tt.reason))
 			require.Equal(t, r.Body.String(), tt.expected)
 		})
 	}
@@ -42,7 +42,7 @@ func TestWriteStatus(t *testing.T) {
 	for _, tt := range table {
 		t.Run(fmt.Sprintf("%s expecting %s", tt.reason, tt.expected), func(t *testing.T) {
 			r := httptest.NewRecorder()
-			WriteError(r, bittorrent.ClientError(tt.reason))
+			writeErrorResponse(r, bittorrent.ClientError(tt.reason))
 			require.Equal(t, r.Body.String(), tt.expected)
 		})
 	}

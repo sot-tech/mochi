@@ -9,8 +9,8 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 )
 
-// WriteError writes the failure reason as a null-terminated string.
-func WriteError(w io.Writer, txID []byte, err error) {
+// writeErrorResponse writes the failure reason as a null-terminated string.
+func writeErrorResponse(w io.Writer, txID []byte, err error) {
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 	writeHeader(buf, txID, errorActionID)
@@ -23,12 +23,12 @@ func WriteError(w io.Writer, txID []byte, err error) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// WriteAnnounce encodes an announce response according to BEP 15.
+// writeAnnounceResponse encodes an announce response according to BEP 15.
 // The peers returned will be resp.IPv6Peers or resp.IPv4Peers, depending on
 // whether v6Peers is set.
 // If v6Action is set, the action will be 4, according to
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
-func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, v6Action, v6Peers bool) {
+func writeAnnounceResponse(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, v6Action, v6Peers bool) {
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 
@@ -54,8 +54,8 @@ func WriteAnnounce(w io.Writer, txID []byte, resp *bittorrent.AnnounceResponse, 
 	_, _ = w.Write(buf.Bytes())
 }
 
-// WriteScrape encodes a scrape response according to BEP 15.
-func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
+// writeScrapeResponse encodes a scrape response according to BEP 15.
+func writeScrapeResponse(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 
@@ -70,8 +70,8 @@ func WriteScrape(w io.Writer, txID []byte, resp *bittorrent.ScrapeResponse) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// WriteConnectionID encodes a new connection response according to BEP 15.
-func WriteConnectionID(w io.Writer, txID, connID []byte) {
+// writeConnectionID encodes a new connection response according to BEP 15.
+func writeConnectionID(w io.Writer, txID, connID []byte) {
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 

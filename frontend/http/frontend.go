@@ -3,16 +3,15 @@
 package http
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
-	"io"
 	"net/http"
 	"net/netip"
+	"path"
 	"sync"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/valyala/fasthttp"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
@@ -37,6 +36,8 @@ func init() {
 // Config represents all configurable options for an HTTP BitTorrent Frontend
 type Config struct {
 	frontend.ListenOptions
+	ReadTimeout     time.Duration `cfg:"read_timeout"`
+	WriteTimeout    time.Duration `cfg:"write_timeout"`
 	IdleTimeout     time.Duration `cfg:"idle_timeout"`
 	EnableKeepAlive bool          `cfg:"enable_keepalive"`
 	UseTLS          bool          `cfg:"tls"`
@@ -49,6 +50,8 @@ type Config struct {
 }
 
 const (
+	defaultReadTimeout   = 2 * time.Second
+	defaultWriteTimeout  = 2 * time.Second
 	defaultIdleTimeout   = 30 * time.Second
 	defaultAnnounceRoute = "/announce"
 	defaultScrapeRoute   = "/scrape"
@@ -58,11 +61,30 @@ const (
 // default values replacing anything that is invalid.
 func (cfg Config) Validate() (validCfg Config, err error) {
 	validCfg = cfg
-	validCfg.ListenOptions = cfg.ListenOptions.Validate(false, logger)
+	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
 	if cfg.UseTLS && (len(cfg.TLSCertPath) == 0 || len(cfg.TLSKeyPath) == 0) {
 		err = errTLSNotProvided
 		return
 	}
+
+	if cfg.ReadTimeout <= 0 {
+		validCfg.ReadTimeout = defaultReadTimeout
+		logger.Warn().
+			Str("name", "ReadTimeout").
+			Dur("provided", cfg.ReadTimeout).
+			Dur("default", validCfg.ReadTimeout).
+			Msg("falling back to default configuration")
+	}
+
+	if cfg.WriteTimeout <= 0 {
+		validCfg.WriteTimeout = defaultWriteTimeout
+		logger.Warn().
+			Str("name", "WriteTimeout").
+			Dur("provided", cfg.WriteTimeout).
+			Dur("default", validCfg.WriteTimeout).
+			Msg("falling back to default configuration")
+	}
+
 	if cfg.IdleTimeout <= 0 {
 		validCfg.IdleTimeout = defaultIdleTimeout
 		if cfg.EnableKeepAlive {
@@ -94,20 +116,8 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 	return
 }
 
-// httpServer replaces http.Close method with http.Shutdown
-type httpServer struct {
-	*http.Server
-}
-
-func (c httpServer) Close() (err error) {
-	if c.Server != nil {
-		err = c.Shutdown(context.Background())
-	}
-	return
-}
-
 type httpFE struct {
-	servers        []httpServer
+	*fasthttp.Server
 	logic          *middleware.Logic
 	collectTimings bool
 	onceCloser     sync.Once
@@ -128,20 +138,17 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 
 	f := &httpFE{
 		logic:          logic,
-		servers:        make([]httpServer, cfg.Workers),
 		collectTimings: cfg.EnableRequestTiming,
 		ParseOptions:   cfg.ParseOptions,
-	}
-
-	for i := range f.servers {
-		f.servers[i] = httpServer{
-			&http.Server{
-				ReadTimeout:       cfg.ReadTimeout,
-				ReadHeaderTimeout: cfg.ReadTimeout,
-				WriteTimeout:      cfg.WriteTimeout,
-				IdleTimeout:       cfg.IdleTimeout,
-			},
-		}
+		Server: &fasthttp.Server{
+			ReadTimeout:      cfg.ReadTimeout,
+			WriteTimeout:     cfg.WriteTimeout,
+			IdleTimeout:      cfg.IdleTimeout,
+			Concurrency:      int(cfg.Workers),
+			DisableKeepalive: !cfg.EnableKeepAlive,
+			GetOnly:          true,
+			Logger:           logger,
+		},
 	}
 
 	// If TLS is enabled, create a key pair.
@@ -151,36 +158,50 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 			return nil, err
 		}
 		certs := []tls.Certificate{cert}
-		for i := range f.servers {
-			f.servers[i].TLSConfig = &tls.Config{
-				Certificates: certs,
-				MinVersion:   tls.VersionTLS12,
-			}
+		f.Server.TLSConfig = &tls.Config{
+			Certificates: certs,
+			MinVersion:   tls.VersionTLS12,
 		}
 	}
 
-	router := httprouter.New()
+	pathRouting := make(map[string]func(*fasthttp.RequestCtx),
+		len(cfg.AnnounceRoutes)+len(cfg.ScrapeRoutes)+len(cfg.PingRoutes))
+
 	for _, route := range cfg.AnnounceRoutes {
-		router.GET(route, f.announceRoute)
+		route = path.Clean(route)
+		if !path.IsAbs(route) {
+			route = "/" + route
+		}
+		pathRouting[route] = f.announceRoute
 	}
 	for _, route := range cfg.ScrapeRoutes {
-		router.GET(route, f.scrapeRoute)
+		route = path.Clean(route)
+		if !path.IsAbs(route) {
+			route = "/" + route
+		}
+		pathRouting[path.Clean(route)] = f.scrapeRoute
 	}
 	for _, route := range cfg.PingRoutes {
-		router.GET(route, f.ping)
-		router.HEAD(route, f.ping)
+		route = path.Clean(route)
+		if !path.IsAbs(route) {
+			route = "/" + route
+		}
+		pathRouting[path.Clean(route)] = f.ping
 	}
 
-	for _, srv := range f.servers {
-		srv.Handler = router
-		srv.SetKeepAlivesEnabled(cfg.EnableKeepAlive)
-		go runServer(srv, &cfg)
+	f.Server.Handler = func(ctx *fasthttp.RequestCtx) {
+		if route, exists := pathRouting[string(ctx.Path())]; exists {
+			route(ctx)
+		} else {
+			ctx.NotFound()
+		}
 	}
+	go runServer(f.Server, &cfg)
 
 	return f, nil
 }
 
-func runServer(s httpServer, cfg *Config) {
+func runServer(s *fasthttp.Server, cfg *Config) {
 	ln, err := cfg.ListenTCP()
 	if err == nil {
 		if s.TLSConfig == nil {
@@ -197,30 +218,20 @@ func runServer(s httpServer, cfg *Config) {
 // Close provides a thread-safe way to gracefully shut down a currently running Frontend.
 func (f *httpFE) Close() (err error) {
 	f.onceCloser.Do(func() {
-		cls := make([]io.Closer, len(f.servers))
-		for i, s := range f.servers {
-			cls[i] = s
+		if f.Server != nil {
+			err = f.Server.Shutdown()
 		}
-		err = frontend.CloseGroup(cls)
 	})
 
 	return
 }
 
-func httpParamsToRouteParams(in httprouter.Params) (out bittorrent.RouteParams) {
-	out = make([]bittorrent.RouteParam, 0, len(in))
-	for _, p := range in {
-		out = append(out, bittorrent.RouteParam{Key: p.Key, Value: p.Value})
-	}
-	return
-}
-
 // announceRoute parses and responds to an Announce.
-func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) announceRoute(reqCtx *fasthttp.RequestCtx) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
-	var req *bittorrent.AnnounceRequest
+	var aReq *bittorrent.AnnounceRequest
 	if f.collectTimings && metrics.Enabled() {
 		start = time.Now()
 		defer func() {
@@ -228,34 +239,37 @@ func (f *httpFE) announceRoute(w http.ResponseWriter, r *http.Request, ps httpro
 		}()
 	}
 
-	req, err = ParseAnnounce(r, f.ParseOptions)
+	aReq, err = parseAnnounce(reqCtx, f.ParseOptions)
 	if err != nil {
-		WriteError(w, err)
+		writeErrorResponse(reqCtx, err)
 		return
 	}
-	addr = req.GetFirst()
+	addr = aReq.GetFirst()
 
-	ctx := bittorrent.InjectRouteParamsToContext(r.Context(), httpParamsToRouteParams(ps))
-	ctx, resp, err := f.logic.HandleAnnounce(ctx, req)
+	ctx := bittorrent.InjectRouteParamsToContext(reqCtx, nil)
+	ctx, aResp, err := f.logic.HandleAnnounce(ctx, aReq)
 	if err != nil {
-		WriteError(w, err)
+		writeErrorResponse(reqCtx, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	err = WriteAnnounceResponse(w, resp)
-	if err != nil {
-		WriteError(w, err)
-		return
-	}
+	reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	qArgs := reqCtx.QueryArgs()
+	// `compact` means that tracker should return addresses in
+	// binary (single concatenated string) mode instead of dictionary.
+	// `no_peer_id` means, that tracker may omit PeerID field in response dictionary.
+	// see https://wiki.theory.org/BitTorrentSpecification#Tracker_Request_Parameters
+	writeAnnounceResponse(reqCtx, aResp, qArgs.GetBool("compact"), !qArgs.GetBool("no_peer_id"))
 
 	// next actions are background and should not be canceled after http writer closed
 	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-	go f.logic.AfterAnnounce(ctx, req, resp)
+	// params mapped from fasthttp.QueryArgs will be reused in the next request
+	aReq.Params = nil
+	go f.logic.AfterAnnounce(ctx, aReq, aResp)
 }
 
 // scrapeRoute parses and responds to a Scrape.
-func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (f *httpFE) scrapeRoute(reqCtx *fasthttp.RequestCtx) {
 	var err error
 	var start time.Time
 	var addr netip.Addr
@@ -266,47 +280,42 @@ func (f *httpFE) scrapeRoute(w http.ResponseWriter, r *http.Request, ps httprout
 		}()
 	}
 
-	req, err := ParseScrape(r, f.ParseOptions)
+	req, err := parseScrape(reqCtx, f.ParseOptions)
 	if err != nil {
-		WriteError(w, err)
+		writeErrorResponse(reqCtx, err)
 		return
 	}
 	addr = req.GetFirst()
 
-	ctx := bittorrent.InjectRouteParamsToContext(r.Context(), httpParamsToRouteParams(ps))
+	ctx := bittorrent.InjectRouteParamsToContext(reqCtx, nil)
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)
 	if err != nil {
-		WriteError(w, err)
+		writeErrorResponse(reqCtx, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	err = WriteScrapeResponse(w, resp)
-	if err != nil {
-		WriteError(w, err)
-		return
-	}
+	reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	writeScrapeResponse(reqCtx, resp)
 
 	// next actions are background and should not be canceled after http writer closed
 	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
+	// params mapped from fasthttp.QueryArgs will in the next request
+	req.Params = nil
 	go f.logic.AfterScrape(ctx, req, resp)
 }
 
-func (f *httpFE) ping(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (f *httpFE) ping(ctx *fasthttp.RequestCtx) {
 	var err error
 	status := http.StatusOK
-	ctx := r.Context()
-	if r.Method == http.MethodGet {
-		err = f.logic.Ping(ctx)
-	}
+	err = f.logic.Ping(ctx)
 
 	if err != nil {
 		logger.Error().Err(err).Msg("ping completed with error")
 		status = http.StatusServiceUnavailable
 	}
 	if ctxErr := ctx.Err(); ctxErr == nil {
-		w.WriteHeader(status)
+		ctx.SetStatusCode(status)
 	} else {
-		logger.Info().Err(ctxErr).Str("ip", r.RemoteAddr).Msg("ping request cancelled")
+		logger.Info().Err(ctxErr).Stringer("addr", ctx.RemoteAddr()).Msg("ping request cancelled")
 	}
 }

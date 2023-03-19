@@ -13,7 +13,6 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/sot-tech/mochi/pkg/log"
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/stretchr/testify/require"
 )
 

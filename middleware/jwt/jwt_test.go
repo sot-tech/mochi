@@ -22,7 +22,6 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 const (
@@ -58,14 +57,6 @@ type params map[string]string
 
 func (p params) String(key string) (out string, found bool) {
 	out, found = p[key]
-	return
-}
-
-func (params) RawPath() (s string) {
-	return
-}
-
-func (params) RawQuery() (s string) {
 	return
 }
 

@@ -1,13 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"errors"
-	"net/http"
 	"net/netip"
-	"strings"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
+
+	"github.com/valyala/fasthttp"
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.
@@ -30,17 +31,15 @@ var (
 	errInvalidParameterNumWant    = bittorrent.ClientError("parameter 'num want' invalid or not provided")
 )
 
-// ParseAnnounce parses an bittorrent.AnnounceRequest from an http.Request.
-func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
-	qp, err := bittorrent.ParseURLData(r.RequestURI)
-	if err != nil {
-		return nil, err
-	}
+// parseAnnounce parses an bittorrent.AnnounceRequest from an http.Request.
+func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
+	qp := &queryParams{r.QueryArgs()}
 
 	request := &bittorrent.AnnounceRequest{Params: qp}
 
 	// Attempt to parse the event from the request.
 	var eventStr string
+	var err error
 	eventStr, request.EventProvided = qp.String("event")
 	if request.EventProvided {
 		if request.Event, err = bittorrent.NewEvent(eventStr); err != nil {
@@ -50,10 +49,6 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 		request.Event = bittorrent.None
 	}
 
-	// Determine if the client expects a compact response.
-	compactStr, _ := qp.String("compact")
-	request.Compact = compactStr != "" && compactStr != "0"
-
 	// Parse the info hash from the request.
 	infoHashes := qp.InfoHashes()
 	if len(infoHashes) < 1 {
@@ -62,50 +57,50 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	if len(infoHashes) > 1 {
 		return nil, errMultipleInfoHashes
 	}
+	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash = infoHashes[0]
 
 	// Parse the PeerID from the request.
-	peerID, ok := qp.String("peer_id")
-	if !ok {
-		return nil, errInvalidPeerID
-	}
-	request.ID, err = bittorrent.NewPeerID([]byte(peerID))
+	request.ID, err = bittorrent.NewPeerID(qp.Peek("peer_id"))
 	if err != nil {
 		return nil, errInvalidPeerID
 	}
 	// Determine the number of remaining bytes for the client.
-	request.Left, err = qp.Uint("left", 64)
+	n, err := qp.GetUint("left")
 	if err != nil {
 		return nil, errInvalidParameterLeft
 	}
+	request.Left = uint64(n)
 
 	// Determine the number of bytes downloaded by the client.
-	request.Downloaded, err = qp.Uint("downloaded", 64)
+	n, err = qp.GetUint("downloaded")
 	if err != nil {
 		return nil, errInvalidParameterDownloaded
 	}
+	request.Downloaded = uint64(n)
 
 	// Determine the number of bytes shared by the client.
-	request.Uploaded, err = qp.Uint("uploaded", 64)
+	n, err = qp.GetUint("uploaded")
 	if err != nil {
 		return nil, errInvalidParameterUploaded
 	}
+	request.Uploaded = uint64(n)
 
 	// Determine the number of peers the client wants in the response.
-	numWant, err := qp.Uint("numwant", 32)
-	if err != nil && !errors.Is(err, bittorrent.ErrKeyNotFound) {
+	n, err = qp.GetUint("numwant")
+	if err != nil && !errors.Is(err, fasthttp.ErrNoArgValue) {
 		return nil, errInvalidParameterNumWant
 	}
 	// If there were no errors, the user actually provided the numWant.
 	request.NumWantProvided = err == nil
-	request.NumWant = uint32(numWant)
+	request.NumWant = uint32(n)
 
 	// Parse the port where the client is listening.
-	port, err := qp.Uint("port", 16)
+	n, err = qp.GetUint("port")
 	if err != nil {
 		return nil, bittorrent.ErrInvalidPort
 	}
-	request.Port = uint16(port)
+	request.Port = uint16(n)
 
 	// Parse the IP address where the client is listening.
 	request.RequestAddresses = requestedIPs(r, qp, opts)
@@ -117,12 +112,9 @@ func ParseAnnounce(r *http.Request, opts ParseOptions) (*bittorrent.AnnounceRequ
 	return request, err
 }
 
-// ParseScrape parses an bittorrent.ScrapeRequest from an http.Request.
-func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest, error) {
-	qp, err := bittorrent.ParseURLData(r.RequestURI)
-	if err != nil {
-		return nil, err
-	}
+// parseScrape parses an bittorrent.ScrapeRequest from an http.Request.
+func parseScrape(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.ScrapeRequest, error) {
+	qp := &queryParams{r.QueryArgs()}
 
 	infoHashes := qp.InfoHashes()
 	if len(infoHashes) < 1 {
@@ -130,18 +122,19 @@ func ParseScrape(r *http.Request, opts ParseOptions) (*bittorrent.ScrapeRequest,
 	}
 
 	request := &bittorrent.ScrapeRequest{
+		// FIXME: make sure that we have a copy of InfoHashes
 		InfoHashes:       infoHashes,
 		Params:           qp,
 		RequestAddresses: requestedIPs(r, qp, opts),
 	}
 
-	err = bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes, opts.FilterPrivateIPs)
+	err := bittorrent.SanitizeScrape(request, opts.MaxScrapeInfoHashes, opts.FilterPrivateIPs)
 
 	return request, err
 }
 
 // requestedIPs determines the IP address for a BitTorrent client request.
-func requestedIPs(r *http.Request, p bittorrent.Params, opts ParseOptions) (addresses bittorrent.RequestAddresses) {
+func requestedIPs(r *fasthttp.RequestCtx, p *queryParams, opts ParseOptions) (addresses bittorrent.RequestAddresses) {
 	if opts.AllowIPSpoofing {
 		for _, f := range []string{"ip", "ipv4", "ipv6"} {
 			if ipStr, ok := p.String(f); ok {
@@ -150,16 +143,16 @@ func requestedIPs(r *http.Request, p bittorrent.Params, opts ParseOptions) (addr
 		}
 	}
 
-	if ipValues := r.Header.Values(opts.RealIPHeader); len(ipValues) > 0 && opts.RealIPHeader != "" {
+	if ipValues := r.Request.Header.PeekAll(opts.RealIPHeader); len(ipValues) > 0 && opts.RealIPHeader != "" {
 		for _, ipStr := range ipValues {
-			for _, ipStr := range strings.Split(ipStr, ",") {
-				if ipStr = strings.TrimSpace(ipStr); len(ipStr) > 0 {
-					addresses.Add(parseRequestAddress(ipStr, false))
+			for _, ipStr := range bytes.Split(ipStr, []byte{','}) {
+				if ipStr = bytes.TrimSpace(ipStr); len(ipStr) > 0 {
+					addresses.Add(parseRequestAddress(string(ipStr), false))
 				}
 			}
 		}
 	} else {
-		addrPort, _ := netip.ParseAddrPort(r.RemoteAddr)
+		addrPort, _ := netip.ParseAddrPort(r.RemoteAddr().String())
 		addresses.Add(bittorrent.RequestAddress{
 			Addr:     addrPort.Addr(),
 			Provided: false,

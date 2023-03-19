@@ -51,12 +51,12 @@ var (
 	reqRespBufferPool = bytepool.NewBufferPool()
 )
 
-// ParseAnnounce parses an AnnounceRequest from a UDP request.
+// parseAnnounce parses an AnnounceRequest from a UDP request.
 //
 // If v6Action is true, the announce is parsed the
 // "old opentracker way":
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
-func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bittorrent.AnnounceRequest, error) {
+func parseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bittorrent.AnnounceRequest, error) {
 	var err error
 	ipEnd := 84 + net.IPv4len
 	if v6Action {
@@ -71,6 +71,7 @@ func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bitto
 
 	// XXX: pure V2 hashes will cause invalid parsing,
 	// but BEP-52 says, that V2 hashes SHOULD be truncated
+	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash, err = bittorrent.NewInfoHash(r.Packet[16:36])
 	if err != nil {
 		return nil, errInvalidInfoHash
@@ -116,7 +117,7 @@ func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bitto
 // 41 and updates an announce with the values parsed.
 func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 	if len(packet) == 0 {
-		return bittorrent.ParseURLData("")
+		return parseQuery(nil)
 	}
 
 	buf := reqRespBufferPool.Get()
@@ -126,7 +127,7 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 		option := packet[i]
 		switch option {
 		case optionEndOfOptions:
-			return bittorrent.ParseURLData(buf.String())
+			return parseQuery(buf.Bytes())
 		case optionNOP:
 			i++
 		case optionURLData:
@@ -153,11 +154,11 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 		}
 	}
 
-	return bittorrent.ParseURLData(buf.String())
+	return parseQuery(buf.Bytes())
 }
 
-// ParseScrape parses a ScrapeRequest from a UDP request.
-func ParseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeRequest, error) {
+// parseScrape parses a ScrapeRequest from a UDP request.
+func parseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeRequest, error) {
 	// If a scrape isn't at least 36 bytes long, it's malformed.
 	if len(r.Packet) < 36 {
 		return nil, errMalformedPacket
@@ -177,6 +178,7 @@ func ParseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeReque
 	var request *bittorrent.ScrapeRequest
 	for len(r.Packet) >= bittorrent.InfoHashV1Len {
 		var ih bittorrent.InfoHash
+		// FIXME: make sure that we have a copy of InfoHash
 		if ih, err = bittorrent.NewInfoHash(r.Packet[:bittorrent.InfoHashV1Len]); err == nil {
 			infoHashes = append(infoHashes, ih)
 			r.Packet = r.Packet[bittorrent.InfoHashV1Len:]

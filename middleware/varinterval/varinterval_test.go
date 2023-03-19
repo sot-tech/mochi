@@ -9,8 +9,6 @@ import (
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
-
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 var configTests = []struct {

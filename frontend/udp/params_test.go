@@ -1,4 +1,4 @@
-package bittorrent
+package udp
 
 import (
 	"net/url"
@@ -24,14 +24,14 @@ var (
 		{"peer_id": {""}, "compact": {""}},
 	}
 
-	InvalidQueries = []string{
-		"/announce?" + "info_hash=%0%a",
+	InvalidQueries = [][]byte{
+		[]byte("/announce?info_hash=%0%a"),
 	}
 
 	// See https://github.com/chihaya/chihaya/issues/334.
-	shouldNotPanicQueries = []string{
-		"/annnounce?" + "info_hash=" + testPeerID + "&a",
-		"/annnounce?" + "info_hash=" + testPeerID + "&=b?",
+	shouldNotPanicQueries = [][]byte{
+		[]byte("/annnounce?info_hash=" + testPeerID + "&a"),
+		[]byte("/annnounce?info_hash=" + testPeerID + "&=b?"),
 	}
 )
 
@@ -51,7 +51,7 @@ func mapArrayEqual(boxed map[string][]string, unboxed map[string]string) bool {
 }
 
 func TestParseEmptyURLData(t *testing.T) {
-	parsedQuery, err := ParseURLData("")
+	parsedQuery, err := parseQuery(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestParseEmptyURLData(t *testing.T) {
 
 func TestParseValidURLData(t *testing.T) {
 	for parseIndex, parseVal := range ValidAnnounceArguments {
-		parsedQueryObj, err := ParseURLData("/announce?" + parseVal.Encode())
+		parsedQueryObj, err := parseQuery([]byte("/announce?" + parseVal.Encode()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,16 +70,12 @@ func TestParseValidURLData(t *testing.T) {
 		if !mapArrayEqual(parseVal, parsedQueryObj.params) {
 			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, parsedQueryObj.params)
 		}
-
-		if parsedQueryObj.path != "/announce" {
-			t.Fatalf("Incorrect path, expected %q, got %q", "/announce", parsedQueryObj.path)
-		}
 	}
 }
 
 func TestParseInvalidURLData(t *testing.T) {
 	for parseIndex, parseStr := range InvalidQueries {
-		parsedQueryObj, err := ParseURLData(parseStr)
+		parsedQueryObj, err := parseQuery(parseStr)
 		if err == nil {
 			t.Fatal("Should have produced error", parseIndex)
 		}
@@ -92,14 +88,16 @@ func TestParseInvalidURLData(t *testing.T) {
 
 func TestParseShouldNotPanicURLData(t *testing.T) {
 	for _, parseStr := range shouldNotPanicQueries {
-		_, _ = ParseURLData(parseStr)
+		if _, err := parseQuery(parseStr); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
 func BenchmarkParseQuery(b *testing.B) {
-	announceStrings := make([]string, 0)
+	announceStrings := make([][]byte, 0)
 	for i := range ValidAnnounceArguments {
-		announceStrings = append(announceStrings, ValidAnnounceArguments[i].Encode())
+		announceStrings = append(announceStrings, []byte(ValidAnnounceArguments[i].Encode()))
 	}
 	b.ResetTimer()
 	for bCount := 0; bCount < b.N; bCount++ {
