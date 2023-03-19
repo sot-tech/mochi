@@ -22,7 +22,6 @@ import (
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 )
 
 const (

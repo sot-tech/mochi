@@ -13,8 +13,6 @@ import (
 	"testing"
 
 	"github.com/sot-tech/mochi/bittorrent"
-	// used for seeding global math.Rand
-	_ "github.com/sot-tech/mochi/pkg/randseed"
 	"github.com/sot-tech/mochi/storage"
 )
 

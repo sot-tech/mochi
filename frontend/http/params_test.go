@@ -68,21 +68,18 @@ func mapArrayEqual(boxed map[string][]string, unboxed *queryParams) (bool, strin
 // Also note that any error that is encountered during parsing is returned as a
 // ClientError, as this method is expected to be used to parse client-provided
 // data.
-func parseURLData(urlData []byte) (*queryParams, error) {
+func parseURLData(urlData []byte) *queryParams {
 	i := bytes.IndexByte(urlData, '?')
 	if i >= 0 {
 		urlData = urlData[i+1:]
 	}
 	q := &queryParams{new(fasthttp.Args)}
 	q.ParseBytes(urlData)
-	return q, nil
+	return q
 }
 
 func TestParseEmptyURLData(t *testing.T) {
-	parsedQuery, err := parseURLData(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	parsedQuery := parseURLData(nil)
 	if parsedQuery == nil {
 		t.Fatal("Parsed query must not be nil")
 	}
@@ -90,10 +87,7 @@ func TestParseEmptyURLData(t *testing.T) {
 
 func TestParseValidURLData(t *testing.T) {
 	for parseIndex, parseVal := range ValidAnnounceArguments {
-		parsedQueryObj, err := parseURLData([]byte("/announce?" + parseVal.Encode()))
-		if err != nil {
-			t.Fatal(err)
-		}
+		parsedQueryObj := parseURLData([]byte("/announce?" + parseVal.Encode()))
 
 		if eq, exp := mapArrayEqual(parseVal, parsedQueryObj); !eq {
 			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, exp)
@@ -101,9 +95,9 @@ func TestParseValidURLData(t *testing.T) {
 	}
 }
 
-func TestParseShouldNotPanicURLData(t *testing.T) {
+func TestParseShouldNotPanicURLData(_ *testing.T) {
 	for _, parseStr := range shouldNotPanicQueries {
-		_, _ = parseURLData(parseStr)
+		_ = parseURLData(parseStr)
 	}
 }
 
@@ -115,11 +109,7 @@ func BenchmarkParseQuery(b *testing.B) {
 	b.ResetTimer()
 	for bCount := 0; bCount < b.N; bCount++ {
 		i := bCount % len(announceStrings)
-		parsedQueryObj, err := parseURLData(announceStrings[i])
-		if err != nil {
-			b.Error(err, i)
-			b.Log(parsedQueryObj)
-		}
+		_ = parseURLData(announceStrings[i])
 	}
 }
 
