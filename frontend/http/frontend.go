@@ -3,6 +3,7 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net/http"
@@ -249,23 +250,27 @@ func (f *httpFE) announceRoute(reqCtx *fasthttp.RequestCtx) {
 	ctx := bittorrent.InjectRouteParamsToContext(reqCtx, nil)
 	ctx, aResp, err := f.logic.HandleAnnounce(ctx, aReq)
 	if err != nil {
-		writeErrorResponse(reqCtx, err)
+		if !errors.Is(err, context.Canceled) {
+			writeErrorResponse(reqCtx, err)
+		}
 		return
 	}
 
-	reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
-	qArgs := reqCtx.QueryArgs()
-	// `compact` means that tracker should return addresses in
-	// binary (single concatenated string) mode instead of dictionary.
-	// `no_peer_id` means, that tracker may omit PeerID field in response dictionary.
-	// see https://wiki.theory.org/BitTorrentSpecification#Tracker_Request_Parameters
-	writeAnnounceResponse(reqCtx, aResp, qArgs.GetBool("compact"), !qArgs.GetBool("no_peer_id"))
+	if err = reqCtx.Err(); err == nil {
+		reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
+		qArgs := reqCtx.QueryArgs()
+		// `compact` means that tracker should return addresses in
+		// binary (single concatenated string) mode instead of dictionary.
+		// `no_peer_id` means, that tracker may omit PeerID field in response dictionary.
+		// see https://wiki.theory.org/BitTorrentSpecification#Tracker_Request_Parameters
+		writeAnnounceResponse(reqCtx, aResp, qArgs.GetBool("compact"), !qArgs.GetBool("no_peer_id"))
 
-	// next actions are background and should not be canceled after http writer closed
-	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-	// params mapped from fasthttp.QueryArgs will be reused in the next request
-	aReq.Params = nil
-	go f.logic.AfterAnnounce(ctx, aReq, aResp)
+		// next actions are background and should not be canceled after http writer closed
+		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
+		// params mapped from fasthttp.QueryArgs will be reused in the next request
+		aReq.Params = nil
+		go f.logic.AfterAnnounce(ctx, aReq, aResp)
+	}
 }
 
 // scrapeRoute parses and responds to a Scrape.
@@ -290,32 +295,35 @@ func (f *httpFE) scrapeRoute(reqCtx *fasthttp.RequestCtx) {
 	ctx := bittorrent.InjectRouteParamsToContext(reqCtx, nil)
 	ctx, resp, err := f.logic.HandleScrape(ctx, req)
 	if err != nil {
-		writeErrorResponse(reqCtx, err)
+		if !errors.Is(err, context.Canceled) {
+			writeErrorResponse(reqCtx, err)
+		}
 		return
 	}
 
-	reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
-	writeScrapeResponse(reqCtx, resp)
+	if err = reqCtx.Err(); err == nil {
+		reqCtx.SetContentType("text/plain; charset=utf-8")
+		writeScrapeResponse(reqCtx, resp)
 
-	// next actions are background and should not be canceled after http writer closed
-	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-	// params mapped from fasthttp.QueryArgs will in the next request
-	req.Params = nil
-	go f.logic.AfterScrape(ctx, req, resp)
+		// next actions are background and should not be canceled after http writer closed
+		ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
+		// params mapped from fasthttp.QueryArgs will in the next request
+		req.Params = nil
+		go f.logic.AfterScrape(ctx, req, resp)
+	}
 }
 
 func (f *httpFE) ping(ctx *fasthttp.RequestCtx) {
-	var err error
 	status := http.StatusOK
-	err = f.logic.Ping(ctx)
-
+	err := f.logic.Ping(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		logger.Error().Err(err).Msg("ping completed with error")
 		status = http.StatusServiceUnavailable
 	}
-	if ctxErr := ctx.Err(); ctxErr == nil {
+	if err = ctx.Err(); err == nil {
 		ctx.SetStatusCode(status)
-	} else {
-		logger.Info().Err(ctxErr).Stringer("addr", ctx.RemoteAddr()).Msg("ping request cancelled")
 	}
 }

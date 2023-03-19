@@ -82,7 +82,7 @@ func (th *testHolder) AnnouncePeers(t *testing.T) {
 
 func (th *testHolder) ScrapeSwarm(t *testing.T) {
 	for _, c := range testData {
-		l, s, n := th.st.ScrapeSwarm(context.TODO(), c.ih)
+		l, s, n, _ := th.st.ScrapeSwarm(context.TODO(), c.ih)
 		require.Equal(t, uint32(0), s)
 		require.Equal(t, uint32(0), l)
 		require.Equal(t, uint32(0), n)
@@ -104,7 +104,7 @@ func (th *testHolder) LeecherPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		l, s, _ := th.st.ScrapeSwarm(context.TODO(), c.ih)
+		l, s, _, _ := th.st.ScrapeSwarm(context.TODO(), c.ih)
 		require.Equal(t, uint32(2), l)
 		require.Equal(t, uint32(0), s)
 
@@ -131,7 +131,7 @@ func (th *testHolder) SeederPutAnnounceDeleteAnnounce(t *testing.T) {
 		require.Nil(t, err)
 		require.True(t, containsPeer(peers, c.peer))
 
-		l, s, _ := th.st.ScrapeSwarm(context.TODO(), c.ih)
+		l, s, _, _ := th.st.ScrapeSwarm(context.TODO(), c.ih)
 		require.Equal(t, uint32(1), l)
 		require.Equal(t, uint32(1), s)
 

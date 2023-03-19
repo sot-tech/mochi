@@ -102,10 +102,17 @@ type responseHook struct {
 	store storage.PeerStorage
 }
 
-func (h *responseHook) scrape(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32) {
-	leechers, seeders, snatched = h.store.ScrapeSwarm(ctx, ih)
+func (h *responseHook) scrape(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
+	leechers, seeders, snatched, err = h.store.ScrapeSwarm(ctx, ih)
+	if err != nil {
+		return
+	}
 	if len(ih) == bittorrent.InfoHashV2Len {
-		l, s, n := h.store.ScrapeSwarm(ctx, ih.TruncateV1())
+		var l, s, n uint32
+		l, s, n, err = h.store.ScrapeSwarm(ctx, ih.TruncateV1())
+		if err != nil {
+			return
+		}
 		leechers, seeders, snatched = leechers+l, seeders+s, snatched+n
 	}
 	return
@@ -117,7 +124,10 @@ func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.Annou
 	}
 
 	// Add the Scrape data to the response.
-	resp.Incomplete, resp.Complete, _ = h.scrape(ctx, req.InfoHash)
+	resp.Incomplete, resp.Complete, _, err = h.scrape(ctx, req.InfoHash)
+	if err != nil {
+		return
+	}
 
 	err = h.appendPeers(ctx, req, resp)
 	return ctx, err
@@ -202,14 +212,17 @@ func (h *responseHook) appendPeers(ctx context.Context, req *bittorrent.Announce
 	return
 }
 
-func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (_ context.Context, err error) {
 	if ctx.Value(SkipResponseHookKey) != nil {
 		return ctx, nil
 	}
 
 	for _, infoHash := range req.InfoHashes {
 		scr := bittorrent.Scrape{InfoHash: infoHash}
-		scr.Incomplete, scr.Complete, scr.Snatches = h.scrape(ctx, infoHash)
+		scr.Incomplete, scr.Complete, scr.Snatches, err = h.scrape(ctx, infoHash)
+		if err != nil {
+			return
+		}
 		resp.Files = append(resp.Files, scr)
 	}
 
