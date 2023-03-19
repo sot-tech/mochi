@@ -147,7 +147,6 @@ func (rp RequestPeer) MarshalZerologObject(e *zerolog.Event) {
 type AnnounceRequest struct {
 	Event           Event
 	InfoHash        InfoHash
-	Compact         bool
 	EventProvided   bool
 	NumWantProvided bool
 	NumWant         uint32
@@ -163,7 +162,6 @@ type AnnounceRequest struct {
 func (r AnnounceRequest) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("event", r.Event).
 		Stringer("infoHash", r.InfoHash).
-		Bool("compact", r.Compact).
 		Bool("eventProvided", r.EventProvided).
 		Bool("numWantProvided", r.NumWantProvided).
 		Uint32("numWant", r.NumWant).
@@ -177,7 +175,6 @@ func (r AnnounceRequest) MarshalZerologObject(e *zerolog.Event) {
 // AnnounceResponse represents the parameters used to create an announce
 // response.
 type AnnounceResponse struct {
-	Compact     bool
 	Complete    uint32
 	Incomplete  uint32
 	Interval    time.Duration
@@ -188,8 +185,7 @@ type AnnounceResponse struct {
 
 // MarshalZerologObject writes fields into zerolog event
 func (r AnnounceResponse) MarshalZerologObject(e *zerolog.Event) {
-	e.Bool("compact", r.Compact).
-		Uint32("complete", r.Complete).
+	e.Uint32("complete", r.Complete).
 		Uint32("incomplete", r.Incomplete).
 		Dur("interval", r.Interval).
 		Dur("minInterval", r.MinInterval).

@@ -239,7 +239,7 @@ func (f *httpFE) announceRoute(reqCtx *fasthttp.RequestCtx) {
 		}()
 	}
 
-	aReq, err = ParseAnnounce(reqCtx, f.ParseOptions)
+	aReq, err = parseAnnounce(reqCtx, f.ParseOptions)
 	if err != nil {
 		writeErrorResponse(reqCtx, err)
 		return
@@ -254,11 +254,16 @@ func (f *httpFE) announceRoute(reqCtx *fasthttp.RequestCtx) {
 	}
 
 	reqCtx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
-	writeAnnounceResponse(reqCtx, aResp)
+	qArgs := reqCtx.QueryArgs()
+	// `compact` means that tracker should return addresses in
+	// binary (single concatenated string) mode instead of dictionary.
+	// `no_peer_id` means, that tracker may omit PeerID field in response dictionary.
+	// see https://wiki.theory.org/BitTorrentSpecification#Tracker_Request_Parameters
+	writeAnnounceResponse(reqCtx, aResp, qArgs.GetBool("compact"), !qArgs.GetBool("no_peer_id"))
 
 	// next actions are background and should not be canceled after http writer closed
 	ctx = bittorrent.RemapRouteParamsToBgContext(ctx)
-	// params mapped from fasthttp.QueryArgs will in the next request
+	// params mapped from fasthttp.QueryArgs will be reused in the next request
 	aReq.Params = nil
 	go f.logic.AfterAnnounce(ctx, aReq, aResp)
 }
@@ -275,7 +280,7 @@ func (f *httpFE) scrapeRoute(reqCtx *fasthttp.RequestCtx) {
 		}()
 	}
 
-	req, err := ParseScrape(reqCtx, f.ParseOptions)
+	req, err := parseScrape(reqCtx, f.ParseOptions)
 	if err != nil {
 		writeErrorResponse(reqCtx, err)
 		return

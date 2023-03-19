@@ -39,7 +39,7 @@ func parseQuery(query []byte) (q *queryParams, err error) {
 	if queryDelim != -1 {
 		query = query[queryDelim+1:]
 	}
-	// This is basically url.parseQuery, but with a map[string]string
+	// This is basically url.ParseQuery, but with a map[string]string
 	// instead of map[string][]string for the values.
 	q = &queryParams{
 		params: make(map[string]string),

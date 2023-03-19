@@ -27,7 +27,7 @@ func writeErrorResponse(w io.StringWriter, err error) {
 	_, _ = w.WriteString("d14:failure reason" + strconv.Itoa(len(message)) + ":" + message + "e")
 }
 
-func writeAnnounceResponse(w io.Writer, resp *bittorrent.AnnounceResponse) {
+func writeAnnounceResponse(w io.Writer, resp *bittorrent.AnnounceResponse, compact, includePeerID bool) {
 	bb := respBufferPool.Get()
 	defer respBufferPool.Put(bb)
 
@@ -49,7 +49,7 @@ func writeAnnounceResponse(w io.Writer, resp *bittorrent.AnnounceResponse) {
 	bb.WriteByte('e')
 
 	// Add the peers to the dictionary in the compact format.
-	if resp.Compact {
+	if compact {
 		// Add the IPv4 peers to the dictionary.
 		compactAddresses(bb, resp.IPv4Peers, false)
 		// Add the IPv6 peers to the dictionary.
@@ -58,10 +58,10 @@ func writeAnnounceResponse(w io.Writer, resp *bittorrent.AnnounceResponse) {
 		// Add the peers to the dictionary.
 		bb.WriteString("5:peersl")
 		for _, peer := range resp.IPv4Peers {
-			dictAddress(bb, peer)
+			dictAddress(bb, peer, includePeerID)
 		}
 		for _, peer := range resp.IPv6Peers {
-			dictAddress(bb, peer)
+			dictAddress(bb, peer, includePeerID)
 		}
 		bb.WriteByte('e')
 	}
@@ -88,14 +88,16 @@ func compactAddresses(bb *bytes.Buffer, peers bittorrent.Peers, v6 bool) {
 	}
 }
 
-func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer) {
+func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer, includePeerID bool) {
 	bb.WriteString("d2:ip")
 	addr := peer.Addr().String()
 	bb.Write(fasthttp.AppendUint(nil, len(addr)))
 	bb.WriteByte(':')
 	bb.WriteString(addr)
-	bb.WriteString("7:peer id20:")
-	bb.Write(peer.ID[:])
+	if includePeerID {
+		bb.WriteString("7:peer id20:")
+		bb.Write(peer.ID[:])
+	}
 	bb.WriteString("4:porti")
 	bb.Write(fasthttp.AppendUint(nil, int(peer.Port())))
 	bb.Write([]byte{'e', 'e'})

@@ -31,8 +31,8 @@ var (
 	errInvalidParameterNumWant    = bittorrent.ClientError("parameter 'num want' invalid or not provided")
 )
 
-// ParseAnnounce parses an bittorrent.AnnounceRequest from an http.Request.
-func ParseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
+// parseAnnounce parses an bittorrent.AnnounceRequest from an http.Request.
+func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.AnnounceRequest, error) {
 	qp := &queryParams{r.QueryArgs()}
 
 	request := &bittorrent.AnnounceRequest{Params: qp}
@@ -59,9 +59,6 @@ func ParseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	}
 	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash = infoHashes[0]
-
-	// Determine if the client expects a compact response.
-	request.Compact = qp.GetBool("compact")
 
 	// Parse the PeerID from the request.
 	request.ID, err = bittorrent.NewPeerID(qp.Peek("peer_id"))
@@ -115,8 +112,8 @@ func ParseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	return request, err
 }
 
-// ParseScrape parses an bittorrent.ScrapeRequest from an http.Request.
-func ParseScrape(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.ScrapeRequest, error) {
+// parseScrape parses an bittorrent.ScrapeRequest from an http.Request.
+func parseScrape(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.ScrapeRequest, error) {
 	qp := &queryParams{r.QueryArgs()}
 
 	infoHashes := qp.InfoHashes()

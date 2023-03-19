@@ -47,7 +47,6 @@ func (l *Logic) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequ
 	resp = &bittorrent.AnnounceResponse{
 		Interval:    l.announceInterval,
 		MinInterval: l.minAnnounceInterval,
-		Compact:     req.Compact,
 	}
 	for _, h := range l.preHooks {
 		if ctx, err = h.HandleAnnounce(ctx, req, resp); err != nil {

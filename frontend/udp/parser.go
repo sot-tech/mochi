@@ -51,12 +51,12 @@ var (
 	reqRespBufferPool = bytepool.NewBufferPool()
 )
 
-// ParseAnnounce parses an AnnounceRequest from a UDP request.
+// parseAnnounce parses an AnnounceRequest from a UDP request.
 //
 // If v6Action is true, the announce is parsed the
 // "old opentracker way":
 // https://web.archive.org/web/20170503181830/http://opentracker.blog.h3q.com/2007/12/28/the-ipv6-situation/
-func ParseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bittorrent.AnnounceRequest, error) {
+func parseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bittorrent.AnnounceRequest, error) {
 	var err error
 	ipEnd := 84 + net.IPv4len
 	if v6Action {
@@ -157,8 +157,8 @@ func handleOptionalParameters(packet []byte) (bittorrent.Params, error) {
 	return parseQuery(buf.Bytes())
 }
 
-// ParseScrape parses a ScrapeRequest from a UDP request.
-func ParseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeRequest, error) {
+// parseScrape parses a ScrapeRequest from a UDP request.
+func parseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeRequest, error) {
 	// If a scrape isn't at least 36 bytes long, it's malformed.
 	if len(r.Packet) < 36 {
 		return nil, errMalformedPacket
