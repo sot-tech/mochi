@@ -31,7 +31,6 @@ jobs:
             -   uses: "golangci/golangci-lint-action@v3"
                 with:
                     version: "latest"
-                    args: -v
     
     codeql:
         name: "Analyze with CodeQL"
