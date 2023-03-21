@@ -57,7 +57,6 @@ func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	if len(infoHashes) > 1 {
 		return nil, errMultipleInfoHashes
 	}
-	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash = infoHashes[0]
 
 	// Parse the PeerID from the request.

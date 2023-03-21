@@ -71,7 +71,6 @@ func parseAnnounce(r Request, v6Action bool, opts frontend.ParseOptions) (*bitto
 
 	// XXX: pure V2 hashes will cause invalid parsing,
 	// but BEP-52 says, that V2 hashes SHOULD be truncated
-	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash, err = bittorrent.NewInfoHash(r.Packet[16:36])
 	if err != nil {
 		return nil, errInvalidInfoHash
@@ -178,7 +177,6 @@ func parseScrape(r Request, opts frontend.ParseOptions) (*bittorrent.ScrapeReque
 	var request *bittorrent.ScrapeRequest
 	for len(r.Packet) >= bittorrent.InfoHashV1Len {
 		var ih bittorrent.InfoHash
-		// FIXME: make sure that we have a copy of InfoHash
 		if ih, err = bittorrent.NewInfoHash(r.Packet[:bittorrent.InfoHashV1Len]); err == nil {
 			infoHashes = append(infoHashes, ih)
 			r.Packet = r.Packet[bittorrent.InfoHashV1Len:]

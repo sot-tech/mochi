@@ -160,7 +160,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 			err = ErrInvalidJWT
 		} else {
 			var claimIH bittorrent.InfoHash
-			if claimIH, err = bittorrent.NewInfoHash(claims.InfoHash); err != nil {
+			if claimIH, err = bittorrent.NewInfoHashString(claims.InfoHash); err != nil {
 				logger.Info().
 					Err(err).
 					Object("source", req.RequestPeer).
@@ -206,7 +206,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 		} else {
 			var claimIHs bittorrent.InfoHashes
 			for _, s := range claims.InfoHashes {
-				if providedIh, err := bittorrent.NewInfoHash(s); err == nil {
+				if providedIh, err := bittorrent.NewInfoHashString(s); err == nil {
 					claimIHs = append(claimIHs, providedIh)
 				} else {
 					logger.Info().

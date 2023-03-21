@@ -1,11 +1,11 @@
 module github.com/sot-tech/mochi
 
-go 1.19
+go 1.20
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20230317203753-49f1af6d2f1a
 	github.com/MicahParks/keyfunc v1.9.0
-	github.com/anacrolix/torrent v1.48.0
+	github.com/anacrolix/torrent v1.49.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/jackc/pgx/v5 v5.3.1
