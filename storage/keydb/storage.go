@@ -160,7 +160,7 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return s.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return s.GetPeers(ctx, ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return s.SRandMemberN(ctx, infoHashKey, int64(maxCount))
 	})
 }

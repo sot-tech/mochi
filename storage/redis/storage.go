@@ -498,13 +498,13 @@ func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers [
 	return
 }
 
-type getPeersFn func(string, int) *redis.StringSliceCmd
+type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
 
 // GetPeers retrieves peers for provided info hash by calling membersFn and
 // converts result to bittorrent.Peer array.
 // If forSeeder set to true - returns only leechers, if false -
 // seeders and if maxCount not reached - leechers.
-func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
+func (ps *Connection) GetPeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
 	infoHash := ih.RawString()
 
 	infoHashKeys := make([]string, 1, 2)
@@ -518,7 +518,7 @@ func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount 
 
 	for _, infoHashKey := range infoHashKeys {
 		var peers []bittorrent.Peer
-		peers, err = ps.parsePeersList(membersFn(infoHashKey, maxCount))
+		peers, err = ps.parsePeersList(membersFn(ctx, infoHashKey, maxCount))
 		maxCount -= len(peers)
 		out = append(out, peers...)
 		if err != nil || maxCount <= 0 {
@@ -546,9 +546,7 @@ func (ps *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forS
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return ps.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
-		return ps.HRandField(ctx, infoHashKey, maxCount)
-	})
+	return ps.GetPeers(ctx, ih, forSeeder, numWant, v6, ps.HRandField)
 }
 
 type getPeerCountFn func(context.Context, string) *redis.IntCmd
