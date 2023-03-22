@@ -20,23 +20,21 @@ func init() {
 	middleware.RegisterBuilder(Name, build)
 }
 
-var (
-	// ErrClientUnapproved is the error returned when a client's PeerID is invalid.
-	ErrClientUnapproved = bittorrent.ClientError("unapproved client")
-
-	errBothListsProvided = errors.New("using both whitelist and blacklist is invalid")
-)
+// ErrClientUnapproved is the error returned when a client's PeerID is invalid.
+var ErrClientUnapproved = bittorrent.ClientError("client not allowed by mochi")
 
 // Config represents all the values required by this middleware to validate
 // peers based on their BitTorrent client ID.
 type Config struct {
-	Whitelist []string
-	Blacklist []string
+	// Static list of client IDs.
+	ClientIDList []string `cfg:"client_id_list"`
+	// If Invert set to true, all client IDs stored in ClientIDList should be blacklisted.
+	Invert bool
 }
 
 type hook struct {
-	approved   map[ClientID]struct{}
-	unapproved map[ClientID]struct{}
+	clientIDs map[ClientID]any
+	invert    bool
 }
 
 func build(config conf.MapConfig, _ storage.PeerStorage) (middleware.Hook, error) {
@@ -47,53 +45,31 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (middleware.Hook, error
 	}
 
 	h := &hook{
-		approved:   make(map[ClientID]struct{}),
-		unapproved: make(map[ClientID]struct{}),
+		clientIDs: make(map[ClientID]any, len(cfg.ClientIDList)),
+		invert:    cfg.Invert,
 	}
 
-	if len(cfg.Whitelist) > 0 && len(cfg.Blacklist) > 0 {
-		return nil, errBothListsProvided
-	}
-
-	for _, cidString := range cfg.Whitelist {
+	for _, cidString := range cfg.ClientIDList {
 		cidBytes := []byte(cidString)
 		if len(cidBytes) != 6 {
 			return nil, errors.New("client ID " + cidString + " must be 6 bytes")
 		}
-		var cid ClientID
-		copy(cid[:], cidBytes)
-		h.approved[cid] = struct{}{}
-	}
-
-	for _, cidString := range cfg.Blacklist {
-		cidBytes := []byte(cidString)
-		if len(cidBytes) != 6 {
-			return nil, errors.New("client ID " + cidString + " must be 6 bytes")
-		}
-		var cid ClientID
-		copy(cid[:], cidBytes)
-		h.unapproved[cid] = struct{}{}
+		h.clientIDs[ClientID(cidBytes)] = true
 	}
 
 	return h, nil
 }
 
+// HandleAnnounce checks if specified ClientID is approved or not.
+// If Config.Invert set to true and hash found in provided list, function will return ErrClientUnapproved,
+// that means that ClientID is blacklisted.
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
-	clientID := NewClientID(req.ID)
-
-	if len(h.approved) > 0 {
-		if _, found := h.approved[clientID]; !found {
-			return ctx, ErrClientUnapproved
-		}
+	var err error
+	if _, contains := h.clientIDs[NewClientID(req.ID)]; contains == h.invert {
+		err = ErrClientUnapproved
 	}
 
-	if len(h.unapproved) > 0 {
-		if _, found := h.unapproved[clientID]; found {
-			return ctx, ErrClientUnapproved
-		}
-	}
-
-	return ctx, nil
+	return ctx, err
 }
 
 func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {

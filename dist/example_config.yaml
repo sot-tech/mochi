@@ -190,10 +190,10 @@ prehooks:
 #
 #        -   name: client approval
 #            config:
-#                whitelist:
+#                client_id_list:
 #                    - "OP1011"
-#                blacklist:
-#                    - "OP1012"
+# true - whitelist mode, false - blacklist
+#                invert: true
 #
 #        -   name: interval variation
 #            config:

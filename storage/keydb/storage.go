@@ -114,19 +114,19 @@ func (s *store) delPeer(ctx context.Context, infoHashKey, peerID string) error {
 }
 
 func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), r.PackPeer(peer))
 }
 
 func (s *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), peer.RawString())
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), r.PackPeer(peer))
 }
 
 func (s *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), r.PackPeer(peer))
 }
 
 func (s *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), peer.RawString())
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), r.PackPeer(peer))
 }
 
 func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
@@ -134,18 +134,18 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 		Stringer("infoHash", ih).
 		Object("peer", peer).
 		Msg("graduate leecher")
-	infoHash, peerID := ih.RawString(), peer.RawString()
+	infoHash, peerID := ih.RawString(), r.PackPeer(peer)
 	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6())
 	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
 	var moved bool
 	if moved, err = s.SMove(ctx, ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
-		if moved {
-			err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, ihSeederKey, peerID, s.peerTTL))
-		} else {
-			err = s.addPeer(ctx, ihSeederKey, peerID)
+		if !moved {
+			err = s.SAdd(ctx, ihSeederKey, peerID).Err()
 		}
-		if err == nil {
-			err = s.HIncrBy(ctx, r.CountDownloadsKey, infoHash, 1).Err()
+		if err != nil {
+			if err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, ihSeederKey, peerID, s.peerTTL)); err == nil {
+				err = s.HIncrBy(ctx, r.CountDownloadsKey, infoHash, 1).Err()
+			}
 		}
 	}
 	return err
@@ -160,7 +160,7 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return s.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
+	return s.GetPeers(ctx, ih, forSeeder, numWant, v6, func(ctx context.Context, infoHashKey string, maxCount int) *redis.StringSliceCmd {
 		return s.SRandMemberN(ctx, infoHashKey, int64(maxCount))
 	})
 }

@@ -56,7 +56,7 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	if len(c.HashList) > 0 {
 		init := make([]storage.Entry, 0, len(c.HashList))
 		for _, hashString := range c.HashList {
-			ih, err := bittorrent.NewInfoHash(hashString)
+			ih, err := bittorrent.NewInfoHashString(hashString)
 			if err != nil {
 				return nil, fmt.Errorf("whitelist : %s : %w", hashString, err)
 			}

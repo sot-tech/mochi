@@ -177,14 +177,15 @@ func (p *peers) len() int {
 	return len(p.m)
 }
 
-func (p *peers) keys(fn func(k bittorrent.Peer) bool) {
+func (p *peers) keys(fn func(k bittorrent.Peer) bool) bool {
 	p.RLock()
+	defer p.RUnlock()
 	for k := range p.m {
 		if !fn(k) {
-			break
+			return false
 		}
 	}
-	p.RUnlock()
+	return true
 }
 
 func (p *peers) forEach(fn func(k bittorrent.Peer, v int64) bool) {
@@ -268,7 +269,7 @@ func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, v6 bool) uint32 {
 	// There are twice the amount of shards specified by the user, the first
 	// half is dedicated to IPv4 swarms and the second half is dedicated to
 	// IPv6 swarms.
-	idx := binary.BigEndian.Uint32([]byte(infoHash[:4])) % (uint32(len(ps.shards)) / 2)
+	idx := binary.BigEndian.Uint32(infoHash.Bytes()[:4]) % (uint32(len(ps.shards)) / 2)
 	if v6 {
 		idx += uint32(len(ps.shards) / 2)
 	}
@@ -417,8 +418,7 @@ func (ps *peerStore) AnnouncePeers(_ context.Context, ih bittorrent.InfoHash, fo
 		if forSeeder {
 			sw.leechers.keys(rangeFn)
 		} else {
-			sw.seeders.keys(rangeFn)
-			if numWant > 0 {
+			if sw.seeders.keys(rangeFn) {
 				sw.leechers.keys(rangeFn)
 			}
 		}
@@ -446,8 +446,8 @@ func (ps *peerStore) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (lee
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
 
-	leechers, seeders = ps.countPeers(ih, true)
-	l, s := ps.countPeers(ih, false)
+	leechers, seeders = ps.countPeers(ih, false)
+	l, s := ps.countPeers(ih, true)
 	leechers, seeders = leechers+l, seeders+s
 
 	return

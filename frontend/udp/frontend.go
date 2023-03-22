@@ -34,7 +34,7 @@ const (
 
 var (
 	logger                          = log.NewLogger("frontend/udp")
-	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+	allowedGeneratedPrivateKeyRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 )
 
 func init() {
@@ -57,16 +57,16 @@ func (cfg Config) Validate() (validCfg Config) {
 	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
 
 	if cfg.Workers == 0 {
-		cfg.Workers = 1
+		validCfg.Workers = 1
 	}
-	if cfg.Workers > 1 && !cfg.ReusePort {
-		cfg.ReusePort = true
+	if validCfg.Workers > 1 && !validCfg.ReusePort {
+		validCfg.ReusePort = true
 		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
 	}
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
-		pkeyRunes := make([]rune, defaultKeyLen)
+		pkeyRunes := make([]byte, defaultKeyLen)
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
 		}

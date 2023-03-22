@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/rs/zerolog"
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 	"github.com/valyala/fasthttp"
 )
 
@@ -12,11 +13,11 @@ type queryParams struct {
 	*fasthttp.Args
 }
 
-// String returns a string parsed from a query. Every key can be returned as a
+// GetString returns a string parsed from a query. Every key can be returned as a
 // string because they are encoded in the URL as strings.
-func (qp queryParams) String(key string) (string, bool) {
+func (qp queryParams) GetString(key string) (string, bool) {
 	v := qp.Peek(key)
-	return string(v), v != nil
+	return str2bytes.BytesToString(v), v != nil
 }
 
 // InfoHashes returns a list of requested infohashes.

@@ -65,7 +65,7 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 }
 
 // ErrTorrentUnapproved is the error returned when a torrent hash is invalid.
-var ErrTorrentUnapproved = bittorrent.ClientError("unapproved torrent")
+var ErrTorrentUnapproved = bittorrent.ClientError("torrent not allowed by mochi")
 
 type hook struct {
 	hashContainer container.Container

@@ -13,9 +13,9 @@ import (
 //
 // See ParseURLData for specifics on parsing and limitations.
 type Params interface {
-	// String returns a string parsed from a query. Every key can be
+	// GetString returns a string parsed from a query. Every key can be
 	// returned as a string because they are encoded in the URL as strings.
-	String(key string) (string, bool)
+	GetString(key string) (string, bool)
 
 	zerolog.LogObjectMarshaler
 }

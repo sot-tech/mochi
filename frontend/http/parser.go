@@ -5,10 +5,11 @@ import (
 	"errors"
 	"net/netip"
 
+	"github.com/valyala/fasthttp"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/frontend"
-
-	"github.com/valyala/fasthttp"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 )
 
 // ParseOptions is the configuration used to parse an Announce Request.
@@ -40,7 +41,7 @@ func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	// Attempt to parse the event from the request.
 	var eventStr string
 	var err error
-	eventStr, request.EventProvided = qp.String("event")
+	eventStr, request.EventProvided = qp.GetString("event")
 	if request.EventProvided {
 		if request.Event, err = bittorrent.NewEvent(eventStr); err != nil {
 			return nil, err
@@ -57,7 +58,6 @@ func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	if len(infoHashes) > 1 {
 		return nil, errMultipleInfoHashes
 	}
-	// FIXME: make sure that we have a copy of InfoHash
 	request.InfoHash = infoHashes[0]
 
 	// Parse the PeerID from the request.
@@ -137,7 +137,7 @@ func parseScrape(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.ScrapeR
 func requestedIPs(r *fasthttp.RequestCtx, p *queryParams, opts ParseOptions) (addresses bittorrent.RequestAddresses) {
 	if opts.AllowIPSpoofing {
 		for _, f := range []string{"ip", "ipv4", "ipv6"} {
-			if ipStr, ok := p.String(f); ok {
+			if ipStr, ok := p.GetString(f); ok {
 				addresses.Add(parseRequestAddress(ipStr, true))
 			}
 		}
@@ -147,7 +147,7 @@ func requestedIPs(r *fasthttp.RequestCtx, p *queryParams, opts ParseOptions) (ad
 		for _, ipStr := range ipValues {
 			for _, ipStr := range bytes.Split(ipStr, []byte{','}) {
 				if ipStr = bytes.TrimSpace(ipStr); len(ipStr) > 0 {
-					addresses.Add(parseRequestAddress(string(ipStr), false))
+					addresses.Add(parseRequestAddress(str2bytes.BytesToString(ipStr), false))
 				}
 			}
 		}

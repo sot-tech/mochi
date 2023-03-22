@@ -24,13 +24,18 @@ package redis
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -389,20 +394,30 @@ func (ps *store) delPeer(ctx context.Context, infoHashKey, peerCountKey, peerID 
 	return err
 }
 
+// PackPeer generates concatenation of PeerID, net port and IP-address
+func PackPeer(p bittorrent.Peer) string {
+	ip := p.Addr()
+	b := make([]byte, bittorrent.PeerIDLen+2+(ip.BitLen()/8))
+	copy(b[:bittorrent.PeerIDLen], p.ID.Bytes())
+	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port())
+	copy(b[bittorrent.PeerIDLen+2:], ip.AsSlice())
+	return str2bytes.BytesToString(b)
+}
+
 func (ps *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, PackPeer(peer))
 }
 
 func (ps *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, peer.RawString())
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, PackPeer(peer))
 }
 
 func (ps *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, PackPeer(peer))
 }
 
 func (ps *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, peer.RawString())
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, PackPeer(peer))
 }
 
 func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -411,7 +426,7 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 		Object("peer", peer).
 		Msg("graduate leecher")
 
-	infoHash, peerID, isV6 := ih.RawString(), peer.RawString(), peer.Addr().Is6()
+	infoHash, peerID, isV6 := ih.RawString(), PackPeer(peer), peer.Addr().Is6()
 	ihSeederKey, ihLeecherKey := InfoHashKey(infoHash, true, isV6), InfoHashKey(infoHash, false, isV6)
 
 	return ps.tx(ctx, func(tx redis.Pipeliner) error {
@@ -438,12 +453,42 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 	})
 }
 
+// peerMinimumLen is the least allowed length of string serialized Peer
+const peerMinimumLen = bittorrent.PeerIDLen + 2 + net.IPv4len
+
+var errInvalidPeerDataSize = fmt.Errorf("invalid peer data (must be at least %d bytes (InfoHash + Port + IPv4))", peerMinimumLen)
+
+// UnpackPeer constructs Peer from serialized by Peer.PackPeer data: PeerID[20by]Port[2by]net.IP[4/16by]
+func UnpackPeer(data string) (bittorrent.Peer, error) {
+	var peer bittorrent.Peer
+	if len(data) < peerMinimumLen {
+		return peer, errInvalidPeerDataSize
+	}
+	b := str2bytes.StringToBytes(data)
+	peerID, err := bittorrent.NewPeerID(b[:bittorrent.PeerIDLen])
+	if err == nil {
+		if addr, isOk := netip.AddrFromSlice(b[bittorrent.PeerIDLen+2:]); isOk {
+			peer = bittorrent.Peer{
+				ID: peerID,
+				AddrPort: netip.AddrPortFrom(
+					addr.Unmap(),
+					binary.BigEndian.Uint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2]),
+				),
+			}
+		} else {
+			err = bittorrent.ErrInvalidIP
+		}
+	}
+
+	return peer, err
+}
+
 func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
 	var peerIds []string
 	peerIds, err = peersResult.Result()
 	if err = NoResultErr(err); err == nil {
 		for _, peerID := range peerIds {
-			if p, err := bittorrent.NewPeer(peerID); err == nil {
+			if p, err := UnpackPeer(peerID); err == nil {
 				peers = append(peers, p)
 			} else {
 				logger.Error().Err(err).Str("peerID", peerID).Msg("unable to decode peer")
@@ -453,13 +498,13 @@ func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers [
 	return
 }
 
-type getPeersFn func(string, int) *redis.StringSliceCmd
+type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
 
 // GetPeers retrieves peers for provided info hash by calling membersFn and
 // converts result to bittorrent.Peer array.
 // If forSeeder set to true - returns only leechers, if false -
 // seeders and if maxCount not reached - leechers.
-func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
+func (ps *Connection) GetPeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, maxCount int, isV6 bool, membersFn getPeersFn) (out []bittorrent.Peer, err error) {
 	infoHash := ih.RawString()
 
 	infoHashKeys := make([]string, 1, 2)
@@ -473,7 +518,7 @@ func (ps *Connection) GetPeers(ih bittorrent.InfoHash, forSeeder bool, maxCount 
 
 	for _, infoHashKey := range infoHashKeys {
 		var peers []bittorrent.Peer
-		peers, err = ps.parsePeersList(membersFn(infoHashKey, maxCount))
+		peers, err = ps.parsePeersList(membersFn(ctx, infoHashKey, maxCount))
 		maxCount -= len(peers)
 		out = append(out, peers...)
 		if err != nil || maxCount <= 0 {
@@ -501,9 +546,7 @@ func (ps *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forS
 		Bool("v6", v6).
 		Msg("announce peers")
 
-	return ps.GetPeers(ih, forSeeder, numWant, v6, func(infoHashKey string, maxCount int) *redis.StringSliceCmd {
-		return ps.HRandField(ctx, infoHashKey, maxCount)
-	})
+	return ps.GetPeers(ctx, ih, forSeeder, numWant, v6, ps.HRandField)
 }
 
 type getPeerCountFn func(context.Context, string) *redis.IntCmd

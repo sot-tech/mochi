@@ -223,7 +223,7 @@ func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeR
 		if err != nil {
 			return
 		}
-		resp.Files = append(resp.Files, scr)
+		resp.Data = append(resp.Data, scr)
 	}
 
 	return ctx, nil

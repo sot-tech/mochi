@@ -17,8 +17,6 @@ import (
 	"github.com/sot-tech/mochi/pkg/log"
 )
 
-const iterations = 10000
-
 var (
 	addr   = fmt.Sprintf("127.0.0.1:%d", rand.Int63n(10000)+16384)
 	hashes = make([]string, 10)
@@ -87,7 +85,7 @@ func BenchmarkPing(b *testing.B) {
 		Path:   "ping",
 	}
 	us := u.String()
-	for i := 0; i < iterations; i++ {
+	for i := 0; i < b.N; i++ {
 		if err := runGet(us, false); err != nil {
 			b.Error(err)
 		}
@@ -95,11 +93,11 @@ func BenchmarkPing(b *testing.B) {
 }
 
 func BenchmarkAnnounce(b *testing.B) {
-	for i := 0; i < iterations; i++ {
+	for i := 0; i < b.N; i++ {
 		u := url.URL{
 			Scheme: "http",
 			Host:   addr,
-			Path:   defaultAnnounceRoute,
+			Path:   DefaultAnnounceRoute,
 			RawQuery: url.Values{
 				"event":      []string{bittorrent.StartedStr},
 				"compact":    []string{"1"},
@@ -119,11 +117,11 @@ func BenchmarkAnnounce(b *testing.B) {
 }
 
 func BenchmarkScrape(b *testing.B) {
-	for i := 0; i < iterations; i++ {
+	for i := 0; i < b.N; i++ {
 		u := url.URL{
 			Scheme:   "http",
 			Host:     addr,
-			Path:     defaultScrapeRoute,
+			Path:     DefaultScrapeRoute,
 			RawQuery: url.Values{"info_hash": hashes[:len(hashes)/2]}.Encode(),
 		}
 		if err := runGet(u.String(), true); err != nil {

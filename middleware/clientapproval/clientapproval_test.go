@@ -19,7 +19,7 @@ var cases = []struct {
 	// Client ID is whitelisted
 	{
 		Config{
-			Whitelist: []string{"010203"},
+			ClientIDList: []string{"010203"},
 		},
 		"01020304050607080900",
 		true,
@@ -27,7 +27,7 @@ var cases = []struct {
 	// Client ID is not whitelisted
 	{
 		Config{
-			Whitelist: []string{"010203"},
+			ClientIDList: []string{"010203"},
 		},
 		"10203040506070809000",
 		false,
@@ -35,7 +35,8 @@ var cases = []struct {
 	// Client ID is not blacklisted
 	{
 		Config{
-			Blacklist: []string{"010203"},
+			ClientIDList: []string{"010203"},
+			Invert:       true,
 		},
 		"00000000001234567890",
 		true,
@@ -43,7 +44,8 @@ var cases = []struct {
 	// Client ID is blacklisted
 	{
 		Config{
-			Blacklist: []string{"123456"},
+			ClientIDList: []string{"123456"},
+			Invert:       true,
 		},
 		"12345678900000000000",
 		false,
@@ -53,7 +55,7 @@ var cases = []struct {
 func TestHandleAnnounce(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing peerid %s", tt.peerID), func(t *testing.T) {
-			c := conf.MapConfig{"whitelist": tt.cfg.Whitelist, "blacklist": tt.cfg.Blacklist}
+			c := conf.MapConfig{"client_id_list": tt.cfg.ClientIDList, "invert": tt.cfg.Invert}
 			h, err := build(c, nil)
 			require.Nil(t, err)
 
@@ -67,7 +69,7 @@ func TestHandleAnnounce(t *testing.T) {
 
 			nctx, err := h.HandleAnnounce(ctx, req, resp)
 			require.Equal(t, ctx, nctx)
-			if tt.approved == true {
+			if tt.approved {
 				require.NotEqual(t, err, ErrClientUnapproved)
 			} else {
 				require.Equal(t, err, ErrClientUnapproved)

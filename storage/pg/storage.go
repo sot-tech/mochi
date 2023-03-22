@@ -359,15 +359,15 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 	}()
 }
 
-func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
+func (s *store) putPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, seeder bool) (err error) {
 	logger.Trace().
-		Stringer("infoHash", ih).
+		Hex("infoHash", ih).
 		Object("peer", peer).
 		Bool("seeder", seeder).
 		Msg("put peer")
 	_, err = s.Exec(ctx, s.Peer.AddQuery, pgx.NamedArgs{
-		pInfoHash: []byte(ih),
-		pPeerID:   peer.ID[:],
+		pInfoHash: ih,
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
@@ -377,14 +377,14 @@ func (s *store) putPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittor
 	return
 }
 
-func (s *store) delPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (err error) {
+func (s *store) delPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, seeder bool) (err error) {
 	logger.Trace().
-		Stringer("infoHash", ih).
+		Hex("infoHash", ih).
 		Object("peer", peer).
 		Msg("del peer")
 	_, err = s.Exec(ctx, s.Peer.DelQuery, pgx.NamedArgs{
-		pInfoHash: []byte(ih),
-		pPeerID:   peer.ID[:],
+		pInfoHash: ih,
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
@@ -393,19 +393,19 @@ func (s *store) delPeer(ctx context.Context, ih bittorrent.InfoHash, peer bittor
 }
 
 func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.putPeer(ctx, ih, peer, true)
+	return s.putPeer(ctx, ih.Bytes(), peer, true)
 }
 
 func (s *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, ih, peer, true)
+	return s.delPeer(ctx, ih.Bytes(), peer, true)
 }
 
 func (s *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.putPeer(ctx, ih, peer, false)
+	return s.putPeer(ctx, ih.Bytes(), peer, false)
 }
 
 func (s *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, ih, peer, false)
+	return s.delPeer(ctx, ih.Bytes(), peer, false)
 }
 
 func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -414,10 +414,10 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 		Object("peer", peer).
 		Msg("graduate leecher")
 	var batch pgx.Batch
-	ihb := []byte(ih)
+	ihb := ih.Bytes()
 	batch.Queue(s.Peer.GraduateQuery, pgx.NamedArgs{
 		pInfoHash: ihb,
-		pPeerID:   peer.ID[:],
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 	})
@@ -425,10 +425,10 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 	return s.txBatch(ctx, &batch)
 }
 
-func (s *store) getPeers(ctx context.Context, ih bittorrent.InfoHash, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
+func (s *store) getPeers(ctx context.Context, ih []byte, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
 	var rows pgx.Rows
 	if rows, err = s.Query(ctx, s.Announce.Query, pgx.NamedArgs{
-		pInfoHash: []byte(ih),
+		pInfoHash: ih,
 		pSeeder:   seeders,
 		pV6:       isV6,
 		pCount:    maxCount,
@@ -503,12 +503,13 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 		Int("numWant", numWant).
 		Bool("v6", v6).
 		Msg("announce peers")
+	ihb := ih.Bytes()
 	if forSeeder {
-		peers, err = s.getPeers(ctx, ih, false, numWant, v6)
+		peers, err = s.getPeers(ctx, ihb, false, numWant, v6)
 	} else {
-		if peers, err = s.getPeers(ctx, ih, true, numWant, v6); err == nil {
+		if peers, err = s.getPeers(ctx, ihb, true, numWant, v6); err == nil {
 			var addPeers []bittorrent.Peer
-			addPeers, err = s.getPeers(ctx, ih, false, numWant-len(peers), v6)
+			addPeers, err = s.getPeers(ctx, ihb, false, numWant-len(peers), v6)
 			peers = append(peers, addPeers...)
 		}
 	}
@@ -568,7 +569,7 @@ func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leeche
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
-	ihb := []byte(ih)
+	ihb := ih.Bytes()
 	if seeders, leechers, err = s.countPeers(ctx, ihb); err != nil {
 		return
 	}
