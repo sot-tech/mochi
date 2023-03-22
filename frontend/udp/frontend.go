@@ -57,10 +57,10 @@ func (cfg Config) Validate() (validCfg Config) {
 	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
 
 	if cfg.Workers == 0 {
-		cfg.Workers = 1
+		validCfg.Workers = 1
 	}
-	if cfg.Workers > 1 && !cfg.ReusePort {
-		cfg.ReusePort = true
+	if validCfg.Workers > 1 && !validCfg.ReusePort {
+		validCfg.ReusePort = true
 		logger.Warn().Msg("forcibly enabling ReusePort because Workers > 1")
 	}
 

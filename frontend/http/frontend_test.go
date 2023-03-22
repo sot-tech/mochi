@@ -97,7 +97,7 @@ func BenchmarkAnnounce(b *testing.B) {
 		u := url.URL{
 			Scheme: "http",
 			Host:   addr,
-			Path:   defaultAnnounceRoute,
+			Path:   DefaultAnnounceRoute,
 			RawQuery: url.Values{
 				"event":      []string{bittorrent.StartedStr},
 				"compact":    []string{"1"},
@@ -121,7 +121,7 @@ func BenchmarkScrape(b *testing.B) {
 		u := url.URL{
 			Scheme:   "http",
 			Host:     addr,
-			Path:     defaultScrapeRoute,
+			Path:     DefaultScrapeRoute,
 			RawQuery: url.Values{"info_hash": hashes[:len(hashes)/2]}.Encode(),
 		}
 		if err := runGet(u.String(), true); err != nil {

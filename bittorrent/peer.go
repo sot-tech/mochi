@@ -9,9 +9,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/netip"
-	"unsafe"
 
 	"github.com/rs/zerolog"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 )
 
 // PeerIDLen is length of peer id field in bytes
@@ -23,15 +23,21 @@ type PeerID [PeerIDLen]byte
 // ErrInvalidPeerIDSize holds error about invalid PeerID size
 var ErrInvalidPeerIDSize = fmt.Errorf("peer ID must be %d bytes", PeerIDLen)
 
+var zeroPeerID PeerID
+
 // NewPeerID creates a PeerID from a byte slice.
 //
 // It panics if b is not 20 bytes long.
 func NewPeerID(b []byte) (PeerID, error) {
-	var p PeerID
 	if len(b) != PeerIDLen {
-		return p, ErrInvalidPeerIDSize
+		return zeroPeerID, ErrInvalidPeerIDSize
 	}
 	return PeerID(b), nil
+}
+
+// Bytes returns slice of bytes represents this PeerID
+func (p PeerID) Bytes() []byte {
+	return p[:]
 }
 
 // String implements fmt.Stringer, returning the base16 encoded PeerID.
@@ -41,12 +47,7 @@ func (p PeerID) String() string {
 
 // RawString returns a 20-byte string of the raw bytes of the ID.
 func (p PeerID) RawString() string {
-	return unsafe.String(&p[0], PeerIDLen)
-}
-
-// Bytes returns slice of bytes represents this PeerID
-func (p PeerID) Bytes() []byte {
-	return p[:]
+	return str2bytes.BytesToString(p.Bytes())
 }
 
 // InfoHash represents an infohash.
@@ -62,16 +63,6 @@ const (
 // ErrInvalidHashSize holds error about invalid InfoHash size
 var ErrInvalidHashSize = fmt.Errorf("info hash must be either %d (for torrent V1) or %d (V2) bytes or same sizes x2 (if HEX encoded)", InfoHashV1Len, InfoHashV2Len)
 
-// TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
-// If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
-// according to BEP52.
-func (i InfoHash) TruncateV1() InfoHash {
-	if len(i) == InfoHashV2Len {
-		return i[:InfoHashV1Len]
-	}
-	return i
-}
-
 // NewInfoHash creates an InfoHash from raw/hex byte slice.
 func NewInfoHash(data []byte) (InfoHash, error) {
 	var ih InfoHash
@@ -83,7 +74,7 @@ func NewInfoHash(data []byte) (InfoHash, error) {
 		if _, err := hex.Decode(bb, data); err != nil {
 			return "", err
 		}
-		ih = InfoHash(unsafe.String(&bb[0], len(bb)))
+		ih = InfoHash(str2bytes.BytesToString(bb))
 	default:
 		return "", ErrInvalidHashSize
 	}
@@ -92,7 +83,22 @@ func NewInfoHash(data []byte) (InfoHash, error) {
 
 // NewInfoHashString creates an InfoHash from raw/hex string.
 func NewInfoHashString(data string) (InfoHash, error) {
-	return NewInfoHash(unsafe.Slice(unsafe.StringData(data), len(data)))
+	return NewInfoHash(str2bytes.StringToBytes(data))
+}
+
+// TruncateV1 returns truncated to 20-bytes length array of the corresponding InfoHash.
+// If InfoHash is V2 (32 bytes), it will be truncated to 20 bytes
+// according to BEP52.
+func (i InfoHash) TruncateV1() InfoHash {
+	if len(i) == InfoHashV2Len {
+		return i[:InfoHashV1Len]
+	}
+	return i
+}
+
+// Bytes returns slice of bytes represents this InfoHash
+func (i InfoHash) Bytes() []byte {
+	return str2bytes.StringToBytes(string(i))
 }
 
 // String implements fmt.Stringer, returning the base16 encoded InfoHash.
@@ -103,11 +109,6 @@ func (i InfoHash) String() string {
 // RawString returns a string of the raw bytes of the InfoHash.
 func (i InfoHash) RawString() string {
 	return string(i)
-}
-
-// Bytes returns slice of bytes represents this InfoHash
-func (i InfoHash) Bytes() []byte {
-	return unsafe.Slice(unsafe.StringData(string(i)), len(i))
 }
 
 // Peer represents the connection details of a peer that is returned in an

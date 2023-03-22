@@ -9,7 +9,9 @@ import (
 	"github.com/libp2p/go-reuseport"
 )
 
-const defaultListenAddress = ":6969"
+// DefaultListenAddress is the default net listen address
+// if nothing else provided
+const DefaultListenAddress = ":6969"
 
 var errUnexpectedListenerType = errors.New("unexpected listener type")
 
@@ -26,7 +28,7 @@ type ListenOptions struct {
 func (lo ListenOptions) Validate(logger *log.Logger) (validOptions ListenOptions) {
 	validOptions = lo
 	if len(lo.Addr) == 0 {
-		validOptions.Addr = defaultListenAddress
+		validOptions.Addr = DefaultListenAddress
 		logger.Warn().
 			Str("name", "Addr").
 			Str("provided", lo.Addr).

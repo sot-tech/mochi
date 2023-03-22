@@ -4,7 +4,10 @@
 // - https://github.com/webtorrent/bittorrent-peerid/blob/master/lib/utils.js
 package clientapproval
 
-import "github.com/sot-tech/mochi/bittorrent"
+import (
+	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
+)
 
 // ClientID represents the part of a PeerID that identifies a Peer's client
 // software.
@@ -23,5 +26,5 @@ func NewClientID(pid bittorrent.PeerID) ClientID {
 }
 
 func (cid ClientID) String() string {
-	return string(cid[:])
+	return str2bytes.BytesToString(cid[:])
 }

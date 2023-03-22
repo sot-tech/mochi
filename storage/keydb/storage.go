@@ -139,13 +139,13 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
 	var moved bool
 	if moved, err = s.SMove(ctx, ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
-		if moved {
-			err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, ihSeederKey, peerID, s.peerTTL))
-		} else {
-			err = s.addPeer(ctx, ihSeederKey, peerID)
+		if !moved {
+			err = s.SAdd(ctx, ihSeederKey, peerID).Err()
 		}
-		if err == nil {
-			err = s.HIncrBy(ctx, r.CountDownloadsKey, infoHash, 1).Err()
+		if err != nil {
+			if err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, ihSeederKey, peerID, s.peerTTL)); err == nil {
+				err = s.HIncrBy(ctx, r.CountDownloadsKey, infoHash, 1).Err()
+			}
 		}
 	}
 	return err

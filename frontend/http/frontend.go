@@ -51,11 +51,15 @@ type Config struct {
 }
 
 const (
-	defaultReadTimeout   = 2 * time.Second
-	defaultWriteTimeout  = 2 * time.Second
-	defaultIdleTimeout   = 30 * time.Second
-	defaultAnnounceRoute = "/announce"
-	defaultScrapeRoute   = "/scrape"
+	defaultReadTimeout  = 2 * time.Second
+	defaultWriteTimeout = 2 * time.Second
+	defaultIdleTimeout  = 30 * time.Second
+	// DefaultAnnounceRoute is the default url path to listen announce
+	// requests if nothing else provided
+	DefaultAnnounceRoute = "/announce"
+	// DefaultScrapeRoute is the default url path to listen scrape
+	// requests if nothing else provided
+	DefaultScrapeRoute = "/scrape"
 )
 
 // Validate sanity checks values set in a config and returns a new config with
@@ -98,7 +102,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 		}
 	}
 	if len(cfg.AnnounceRoutes) == 0 {
-		validCfg.AnnounceRoutes = []string{defaultAnnounceRoute}
+		validCfg.AnnounceRoutes = []string{DefaultAnnounceRoute}
 		logger.Warn().
 			Str("name", "AnnounceRoutes").
 			Strs("provided", cfg.AnnounceRoutes).
@@ -106,7 +110,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 			Msg("falling back to default configuration")
 	}
 	if len(cfg.ScrapeRoutes) == 0 {
-		validCfg.ScrapeRoutes = []string{defaultScrapeRoute}
+		validCfg.ScrapeRoutes = []string{DefaultScrapeRoute}
 		logger.Warn().
 			Str("name", "ScrapeRoutes").
 			Strs("provided", cfg.ScrapeRoutes).
@@ -211,7 +215,10 @@ func runServer(s *fasthttp.Server, cfg *Config) {
 			err = s.ServeTLS(ln, "", "")
 		}
 	}
-	if !errors.Is(err, http.ErrServerClosed) {
+	defer ln.Close()
+	if err == nil {
+		logger.Info().Msg("server stopped")
+	} else if !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatal().Err(err).Msg("server failed")
 	}
 }

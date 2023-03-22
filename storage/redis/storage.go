@@ -33,9 +33,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
@@ -401,7 +401,7 @@ func PackPeer(p bittorrent.Peer) string {
 	copy(b[:bittorrent.PeerIDLen], p.ID.Bytes())
 	binary.BigEndian.PutUint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2], p.Port())
 	copy(b[bittorrent.PeerIDLen+2:], ip.AsSlice())
-	return unsafe.String(&b[0], len(b))
+	return str2bytes.BytesToString(b)
 }
 
 func (ps *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -464,7 +464,7 @@ func UnpackPeer(data string) (bittorrent.Peer, error) {
 	if len(data) < peerMinimumLen {
 		return peer, errInvalidPeerDataSize
 	}
-	b := unsafe.Slice(unsafe.StringData(data), len(data))
+	b := str2bytes.StringToBytes(data)
 	peerID, err := bittorrent.NewPeerID(b[:bittorrent.PeerIDLen])
 	if err == nil {
 		if addr, isOk := netip.AddrFromSlice(b[bittorrent.PeerIDLen+2:]); isOk {

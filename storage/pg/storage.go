@@ -367,7 +367,7 @@ func (s *store) putPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, se
 		Msg("put peer")
 	_, err = s.Exec(ctx, s.Peer.AddQuery, pgx.NamedArgs{
 		pInfoHash: ih,
-		pPeerID:   peer.ID[:],
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
@@ -384,7 +384,7 @@ func (s *store) delPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, se
 		Msg("del peer")
 	_, err = s.Exec(ctx, s.Peer.DelQuery, pgx.NamedArgs{
 		pInfoHash: ih,
-		pPeerID:   peer.ID[:],
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
@@ -417,7 +417,7 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 	ihb := ih.Bytes()
 	batch.Queue(s.Peer.GraduateQuery, pgx.NamedArgs{
 		pInfoHash: ihb,
-		pPeerID:   peer.ID[:],
+		pPeerID:   peer.ID.Bytes(),
 		pAddress:  net.IP(peer.Addr().AsSlice()),
 		pPort:     peer.Port(),
 	})

@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	ihCount    = 1000
-	peersCount = 1000
+	ihCount    = 100
+	peersCount = 100
 )
 
 type benchData struct {

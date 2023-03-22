@@ -96,7 +96,7 @@ func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer, includePeerID bool) {
 	bb.WriteString(addr)
 	if includePeerID {
 		bb.WriteString("7:peer id20:")
-		bb.Write(peer.ID[:])
+		bb.Write(peer.ID.Bytes())
 	}
 	bb.WriteString("4:porti")
 	bb.Write(fasthttp.AppendUint(nil, int(peer.Port())))
