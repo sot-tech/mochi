@@ -55,7 +55,7 @@ type JWKSKeys struct {
 
 type params map[string]string
 
-func (p params) String(key string) (out string, found bool) {
+func (p params) GetString(key string) (out string, found bool) {
 	out, found = p[key]
 	return
 }

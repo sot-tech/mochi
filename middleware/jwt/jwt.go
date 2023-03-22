@@ -34,10 +34,10 @@ func init() {
 var (
 	logger = log.NewLogger("middleware/jwt")
 	// ErrMissingJWT is returned when a JWT is missing from a request.
-	ErrMissingJWT = bittorrent.ClientError("unapproved request: missing jwt")
+	ErrMissingJWT = bittorrent.ClientError("request not allowed by mochi: missing jwt")
 
 	// ErrInvalidJWT is returned when a JWT fails to verify.
-	ErrInvalidJWT = bittorrent.ClientError("unapproved request: invalid jwt")
+	ErrInvalidJWT = bittorrent.ClientError("request not allowed by mochi: invalid jwt")
 
 	errJWKsNotSet = errors.New("required parameters not provided: Issuer/Audience/JWKSetURL")
 
@@ -248,7 +248,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 func (h *hook) getJWTString(params bittorrent.Params) (jwt string) {
 	if params != nil {
 		var found bool
-		if jwt, found = params.String(h.cfg.Header); found {
+		if jwt, found = params.GetString(h.cfg.Header); found {
 			if strings.HasPrefix(strings.ToLower(jwt), bearerAuthPrefix) {
 				jwt = jwt[len(bearerAuthPrefix):]
 			}

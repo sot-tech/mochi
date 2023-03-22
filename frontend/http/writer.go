@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sort"
 	"strconv"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 var respBufferPool = bytepool.NewBufferPool()
 
 func writeErrorResponse(w io.StringWriter, err error) {
-	message := "internal server error"
+	message := "mochi internal error"
 	var clientErr bittorrent.ClientError
 	if errors.As(err, &clientErr) {
 		message = clientErr.Error()
@@ -99,25 +100,33 @@ func dictAddress(bb *bytes.Buffer, peer bittorrent.Peer, includePeerID bool) {
 		bb.Write(peer.ID.Bytes())
 	}
 	bb.WriteString("4:porti")
-	bb.Write(fasthttp.AppendUint(nil, int(peer.Port())))
-	bb.Write([]byte{'e', 'e'})
+	port := peer.Port()
+	bb.Write([]byte{byte(port >> 8), byte(port), 'e', 'e'})
 }
 
 func writeScrapeResponse(w io.Writer, resp *bittorrent.ScrapeResponse) {
 	bb := respBufferPool.Get()
 	defer respBufferPool.Put(bb)
 	bb.WriteString("d5:filesd")
-	for _, scrape := range resp.Files {
-		bb.Write(fasthttp.AppendUint(nil, len(scrape.InfoHash)))
-		bb.WriteByte(':')
-		bb.Write([]byte(scrape.InfoHash))
-		bb.WriteString("d8:completei")
-		bb.Write(fasthttp.AppendUint(nil, int(scrape.Complete)))
-		bb.WriteString("e10:downloadedi")
-		bb.Write(fasthttp.AppendUint(nil, int(scrape.Snatches)))
-		bb.WriteString("e10:incompletei")
-		bb.Write(fasthttp.AppendUint(nil, int(scrape.Incomplete)))
-		bb.WriteString("ee")
+	l := len(resp.Data)
+	if l > 0 {
+		if l > 1 {
+			sort.Slice(resp.Data, func(i, j int) bool {
+				return resp.Data[i].InfoHash < resp.Data[j].InfoHash
+			})
+		}
+		for _, scrape := range resp.Data {
+			bb.Write(fasthttp.AppendUint(nil, len(scrape.InfoHash)))
+			bb.WriteByte(':')
+			bb.Write([]byte(scrape.InfoHash))
+			bb.WriteString("d8:completei")
+			bb.Write(fasthttp.AppendUint(nil, int(scrape.Complete)))
+			bb.WriteString("e10:downloadedi")
+			bb.Write(fasthttp.AppendUint(nil, int(scrape.Snatches)))
+			bb.WriteString("e10:incompletei")
+			bb.Write(fasthttp.AppendUint(nil, int(scrape.Incomplete)))
+			bb.Write([]byte{'e', 'e'})
+		}
 	}
 	bb.Write([]byte{'e', 'e'})
 	_, _ = bb.WriteTo(w)

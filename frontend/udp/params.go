@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/sot-tech/mochi/bittorrent"
+	"github.com/sot-tech/mochi/pkg/str2bytes"
 )
 
 // ErrInvalidQueryEscape is returned when a query string contains invalid
@@ -60,7 +61,7 @@ func parseQuery(query []byte) (q *queryParams, err error) {
 			key, value = key[:i], key[i+1:]
 		}
 		var k, v string
-		k, err = url.QueryUnescape(string(key))
+		k, err = url.QueryUnescape(str2bytes.BytesToString(key))
 		if err != nil {
 			// QueryUnescape returns an error like "invalid escape: '%x'".
 			// But frontends record these errors to prometheus, which generates
@@ -68,7 +69,7 @@ func parseQuery(query []byte) (q *queryParams, err error) {
 			// We log it here for debugging instead.
 			return nil, ErrInvalidQueryEscape
 		}
-		v, err = url.QueryUnescape(string(value))
+		v, err = url.QueryUnescape(str2bytes.BytesToString(value))
 		if err != nil {
 			// QueryUnescape returns an error like "invalid escape: '%x'".
 			// But frontends record these errors to prometheus, which generates
@@ -83,9 +84,9 @@ func parseQuery(query []byte) (q *queryParams, err error) {
 	return q, nil
 }
 
-// String returns a string parsed from a query. Every key can be returned as a
+// GetString returns a string parsed from a query. Every key can be returned as a
 // string because they are encoded in the URL as strings.
-func (qp queryParams) String(key string) (string, bool) {
+func (qp queryParams) GetString(key string) (string, bool) {
 	value, ok := qp.params[strings.ToLower(key)]
 	return value, ok
 }

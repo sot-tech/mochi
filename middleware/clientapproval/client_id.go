@@ -6,7 +6,6 @@ package clientapproval
 
 import (
 	"github.com/sot-tech/mochi/bittorrent"
-	"github.com/sot-tech/mochi/pkg/str2bytes"
 )
 
 // ClientID represents the part of a PeerID that identifies a Peer's client
@@ -17,14 +16,9 @@ type ClientID [6]byte
 func NewClientID(pid bittorrent.PeerID) ClientID {
 	var cid ClientID
 	if pid[0] == '-' {
-		copy(cid[:], pid[1:7])
+		cid = ClientID(pid[1:7])
 	} else {
-		copy(cid[:], pid[:6])
+		cid = ClientID(pid[:6])
 	}
-
 	return cid
-}
-
-func (cid ClientID) String() string {
-	return str2bytes.BytesToString(cid[:])
 }

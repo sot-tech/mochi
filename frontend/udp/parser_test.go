@@ -64,7 +64,7 @@ func TestHandleOptionalParameters(t *testing.T) {
 					t.Fatalf("expected values %v for %x", tt.values, tt.data)
 				} else {
 					for key, want := range tt.values {
-						if got, ok := params.String(key); !ok {
+						if got, ok := params.GetString(key); !ok {
 							t.Fatalf("params missing entry %s for data %x", key, tt.data)
 						} else if got != want {
 							t.Fatalf("expected param %s=%s, but was %s for data %x", key, want, got, tt.data)

@@ -14,13 +14,17 @@ func writeErrorResponse(w io.Writer, txID []byte, err error) {
 	buf := reqRespBufferPool.Get()
 	defer reqRespBufferPool.Put(buf)
 	writeHeader(buf, txID, errorActionID)
+	message := "mochi internal error"
+	var clientErr bittorrent.ClientError
 	// If the client wasn't at fault, acknowledge it.
-	if !errors.As(err, new(bittorrent.ClientError)) {
-		buf.WriteString("internal error occurred: ")
+	if errors.As(err, &clientErr) {
+		message = clientErr.Error()
+	} else {
+		logger.Error().Err(err).Msg("internal error")
 	}
-	buf.WriteString(err.Error())
+	buf.WriteString(message)
 	buf.WriteByte('\000')
-	_, _ = w.Write(buf.Bytes())
+	_, _ = buf.WriteTo(w)
 }
 
 // writeAnnounceResponse encodes an announce response according to BEP 15.
@@ -51,7 +55,7 @@ func writeAnnounceResponse(w io.Writer, txID []byte, resp *bittorrent.AnnounceRe
 		_ = binary.Write(buf, binary.BigEndian, peer.Port())
 	}
 
-	_, _ = w.Write(buf.Bytes())
+	_, _ = buf.WriteTo(w)
 }
 
 // writeScrapeResponse encodes a scrape response according to BEP 15.
@@ -61,13 +65,12 @@ func writeScrapeResponse(w io.Writer, txID []byte, resp *bittorrent.ScrapeRespon
 
 	writeHeader(buf, txID, scrapeActionID)
 
-	for _, scrape := range resp.Files {
+	for _, scrape := range resp.Data {
 		_ = binary.Write(buf, binary.BigEndian, scrape.Complete)
 		_ = binary.Write(buf, binary.BigEndian, scrape.Snatches)
 		_ = binary.Write(buf, binary.BigEndian, scrape.Incomplete)
 	}
-
-	_, _ = w.Write(buf.Bytes())
+	_, _ = buf.WriteTo(w)
 }
 
 // writeConnectionID encodes a new connection response according to BEP 15.
@@ -77,7 +80,7 @@ func writeConnectionID(w io.Writer, txID, connID []byte) {
 
 	writeHeader(buf, txID, connectActionID)
 	buf.Write(connID)
-	_, _ = w.Write(buf.Bytes())
+	_, _ = buf.WriteTo(w)
 }
 
 // writeHeader writes the action and transaction ID to the provided response

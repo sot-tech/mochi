@@ -238,24 +238,10 @@ func (s Scrape) MarshalZerologObject(e *zerolog.Event) {
 // Scrapes wrapper of array of Scrape-s
 type Scrapes []Scrape
 
-func (s *Scrapes) Len() int {
-	return len(*s)
-}
-
-func (s *Scrapes) Less(i, j int) bool {
-	return (*s)[i].InfoHash < (*s)[j].InfoHash
-}
-
-func (s *Scrapes) Swap(i, j int) {
-	(*s)[i], (*s)[j] = (*s)[j], (*s)[i]
-}
-
 // MarshalZerologArray writes array elements to zerolog event
-func (s *Scrapes) MarshalZerologArray(a *zerolog.Array) {
-	if s != nil {
-		for _, scrape := range *s {
-			a.Object(scrape)
-		}
+func (s Scrapes) MarshalZerologArray(a *zerolog.Array) {
+	for _, scrape := range s {
+		a.Object(scrape)
 	}
 }
 
@@ -264,10 +250,10 @@ func (s *Scrapes) MarshalZerologArray(a *zerolog.Array) {
 // The Scrapes must be in the same order as the InfoHashes in the corresponding
 // ScrapeRequest.
 type ScrapeResponse struct {
-	Files Scrapes
+	Data Scrapes
 }
 
 // MarshalZerologObject writes fields into zerolog event
 func (sr ScrapeResponse) MarshalZerologObject(e *zerolog.Event) {
-	e.Array("scrapes", &sr.Files)
+	e.Array("scrapes", sr.Data)
 }

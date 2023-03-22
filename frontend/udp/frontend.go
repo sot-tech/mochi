@@ -34,7 +34,7 @@ const (
 
 var (
 	logger                          = log.NewLogger("frontend/udp")
-	allowedGeneratedPrivateKeyRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+	allowedGeneratedPrivateKeyRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 )
 
 func init() {
@@ -66,7 +66,7 @@ func (cfg Config) Validate() (validCfg Config) {
 
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
-		pkeyRunes := make([]rune, defaultKeyLen)
+		pkeyRunes := make([]byte, defaultKeyLen)
 		for i := range pkeyRunes {
 			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
 		}
