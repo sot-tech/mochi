@@ -42,7 +42,7 @@ func (lo ListenOptions) Validate(logger *log.Logger) (validOptions ListenOptions
 // with SO_REUSEPORT and SO_REUSEADDR options enabled if
 // ReusePort set to true
 func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
-	if lo.ReusePort {
+	if lo.ReusePort && reuseport.Available() {
 		var ln net.Listener
 		if ln, err = reuseport.Listen("tcp", lo.Addr); err == nil {
 			var ok bool
@@ -63,7 +63,7 @@ func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
 // with SO_REUSEPORT and SO_REUSEADDR options enabled if
 // ReusePort set to true
 func (lo ListenOptions) ListenUDP() (conn *net.UDPConn, err error) {
-	if lo.ReusePort {
+	if lo.ReusePort && reuseport.Available() {
 		var ln net.PacketConn
 		if ln, err = reuseport.ListenPacket("udp", lo.Addr); err == nil {
 			var ok bool
