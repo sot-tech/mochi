@@ -14,7 +14,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/redis/go-redis/v9 v9.0.2
-	github.com/rs/zerolog v1.29.0
+	github.com/rs/zerolog v1.29.1
 	github.com/stretchr/testify v1.8.2
 	github.com/valyala/fasthttp v1.45.0
 	gopkg.in/yaml.v3 v3.0.1
