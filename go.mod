@@ -16,7 +16,7 @@ require (
 	github.com/redis/go-redis/v9 v9.0.3
 	github.com/rs/zerolog v1.29.1
 	github.com/stretchr/testify v1.8.2
-	github.com/valyala/fasthttp v1.46.0
+	github.com/valyala/fasthttp v1.47.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
