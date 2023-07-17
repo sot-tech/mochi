@@ -520,6 +520,8 @@ func (ps *peerStore) gc(cutoff time.Time) {
 
 	cutoffUnix := cutoff.UnixNano()
 
+	toDel := make([]bittorrent.Peer, 0, len(ps.shards)/5)
+
 	for _, shard := range ps.shards {
 		infoHashes := make([]bittorrent.InfoHash, 0, shard.swarms.len())
 		shard.swarms.keys(func(ih bittorrent.InfoHash) bool {
@@ -537,19 +539,33 @@ func (ps *peerStore) gc(cutoff time.Time) {
 
 			sw.leechers.forEach(func(p bittorrent.Peer, mtime int64) bool {
 				if mtime <= cutoffUnix {
-					sw.leechers.del(p)
-					shard.numLeechers.Add(decrUint64)
+					toDel = append(toDel, p)
 				}
 				return true
 			})
 
+			for _, p := range toDel {
+				if sw.leechers.del(p) {
+					shard.numLeechers.Add(decrUint64)
+				}
+			}
+
+			toDel = toDel[:0]
+
 			sw.seeders.forEach(func(p bittorrent.Peer, mtime int64) bool {
 				if mtime <= cutoffUnix {
-					sw.seeders.del(p)
-					shard.numSeeders.Add(decrUint64)
+					toDel = append(toDel, p)
 				}
 				return true
 			})
+
+			for _, p := range toDel {
+				if sw.seeders.del(p) {
+					shard.numSeeders.Add(decrUint64)
+				}
+			}
+
+			toDel = toDel[:0]
 
 			if sw.leechers.len()|sw.seeders.len() == 0 {
 				shard.swarms.del(ih)
