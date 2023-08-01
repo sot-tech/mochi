@@ -5,7 +5,7 @@ go 1.20
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20230620200700-00403ca60896
 	github.com/MicahParks/keyfunc v1.9.0
-	github.com/anacrolix/torrent v1.52.3
+	github.com/anacrolix/torrent v1.52.4
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/jackc/pgx/v5 v5.4.2
