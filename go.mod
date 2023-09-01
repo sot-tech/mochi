@@ -9,14 +9,14 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/jackc/pgx/v5 v5.4.3
-	github.com/libp2p/go-reuseport v0.3.0
+	github.com/libp2p/go-reuseport v0.4.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/prometheus/client_golang v1.16.0
-	github.com/redis/go-redis/v9 v9.0.5
+	github.com/redis/go-redis/v9 v9.1.0
 	github.com/rs/zerolog v1.30.0
 	github.com/stretchr/testify v1.8.4
-	github.com/valyala/fasthttp v1.48.0
+	github.com/valyala/fasthttp v1.49.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
