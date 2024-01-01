@@ -9,11 +9,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
-	"github.com/MicahParks/keyfunc"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/MicahParks/jwkset"
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/middleware"
@@ -63,8 +65,9 @@ type Config struct {
 }
 
 type hook struct {
-	cfg  Config
-	jwks *keyfunc.JWKS
+	cfg    Config
+	jwks   keyfunc.Keyfunc
+	parser *jwt.Parser
 }
 
 func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err error) {
@@ -83,23 +86,32 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 				Msg("falling back to default configuration")
 		}
 
-		var jwks *keyfunc.JWKS
+		var jwks keyfunc.Keyfunc
 		if cfg.HandleAnnounce || cfg.HandleScrape {
-			jwks, err = keyfunc.Get(cfg.JWKSetURL, keyfunc.Options{
-				Ctx: context.Background(),
-				RefreshErrorHandler: func(err error) {
-					logger.Error().Err(err).Msg("error occurred while updating JWKs")
-				},
-				RefreshInterval:   cfg.JWKUpdateInterval,
-				RefreshUnknownKID: true,
-			})
+			var jwkURL *url.URL
+			jwkURL, err = url.Parse(cfg.JWKSetURL)
+			if err == nil {
+				var httpStorage jwkset.Storage
+				httpStorage, err = jwkset.NewStorageFromHTTP(jwkURL, jwkset.HTTPClientStorageOptions{
+					NoErrorReturnFirstHTTPReq: true,
+					RefreshErrorHandler: func(_ context.Context, err error) {
+						logger.Error().Err(err).Msg("error occurred while updating JWKs")
+					},
+					RefreshInterval: cfg.JWKUpdateInterval,
+					Storage:         nil,
+				})
+				if err == nil {
+					jwks, err = keyfunc.New(keyfunc.Options{Storage: httpStorage})
+				}
+			}
 		} else {
 			logger.Warn().Msg("both announce and scrape handle disabled")
 		}
 		if err == nil {
 			h = &hook{
-				cfg:  cfg,
-				jwks: jwks,
+				cfg:    cfg,
+				jwks:   jwks,
+				parser: jwt.NewParser(jwt.WithAudience(cfg.Audience), jwt.WithIssuer(cfg.Issuer), hmacAlgorithms),
 			}
 		}
 	} else {
@@ -109,36 +121,8 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 	return
 }
 
-func (h *hook) Close() error {
-	logger.Debug().Msg("attempting to shutdown JWT middleware")
-	if h.jwks != nil {
-		h.jwks.EndBackground()
-	}
-	return nil
-}
-
-type verifiableClaims interface {
-	jwt.Claims
-	VerifyIssuer(iss string, req bool) bool
-	GetIssuer() string
-	VerifyAudience(aud string, req bool) bool
-	GetAudience() []string
-}
-
-type registeredClaimsWrapper struct {
-	jwt.RegisteredClaims
-}
-
-func (rc registeredClaimsWrapper) GetIssuer() string {
-	return rc.Issuer
-}
-
-func (rc registeredClaimsWrapper) GetAudience() []string {
-	return rc.Audience
-}
-
 type announceClaims struct {
-	registeredClaimsWrapper
+	jwt.RegisteredClaims
 	InfoHash string `json:"infohash,omitempty"`
 }
 
@@ -152,13 +136,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 		err = ErrMissingJWT
 	} else {
 		claims := new(announceClaims)
-		if errs := h.validateBaseJWT(jwtParam, claims); len(errs) > 0 {
-			logger.Info().
-				Errs("errors", errs).
-				Object("source", req.RequestPeer).
-				Msg("JWT validation failed")
-			err = ErrInvalidJWT
-		} else {
+		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc); jwtErr == nil {
 			var claimIH bittorrent.InfoHash
 			if claimIH, err = bittorrent.NewInfoHashString(claims.InfoHash); err != nil {
 				logger.Info().
@@ -175,6 +153,12 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 					Msg("unequal 'infohash' claim when validating JWT")
 				err = ErrInvalidJWT
 			}
+		} else {
+			logger.Info().
+				Err(jwtErr).
+				Object("source", req.RequestPeer).
+				Msg("JWT validation failed")
+			err = ErrInvalidJWT
 		}
 	}
 
@@ -182,7 +166,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 }
 
 type scrapeClaims struct {
-	registeredClaimsWrapper
+	jwt.RegisteredClaims
 	InfoHashes []string `json:"infohashes,omitempty"`
 }
 
@@ -197,13 +181,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 		err = ErrMissingJWT
 	} else {
 		claims := new(scrapeClaims)
-		if errs := h.validateBaseJWT(jwtParam, claims); len(errs) > 0 {
-			logger.Info().
-				Errs("errors", errs).
-				Array("source", &req.RequestAddresses).
-				Msg("JWT validation failed")
-			err = ErrInvalidJWT
-		} else {
+		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc); jwtErr == nil {
 			var claimIHs bittorrent.InfoHashes
 			for _, s := range claims.InfoHashes {
 				if providedIh, err := bittorrent.NewInfoHashString(s); err == nil {
@@ -239,6 +217,12 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 					Msg("unequal 'infohashes' claim when validating JWT")
 				err = ErrInvalidJWT
 			}
+		} else {
+			logger.Info().
+				Err(jwtErr).
+				Array("source", &req.RequestAddresses).
+				Msg("JWT validation failed")
+			err = ErrInvalidJWT
 		}
 	}
 
@@ -253,31 +237,6 @@ func (h *hook) getJWTString(params bittorrent.Params) (jwt string) {
 				jwt = jwt[len(bearerAuthPrefix):]
 			}
 		}
-	}
-	return
-}
-
-func (h *hook) validateBaseJWT(jwtParam string, claims verifiableClaims) (errs []error) {
-	if _, err := jwt.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc, hmacAlgorithms); err != nil {
-		errs = append(errs, err)
-	}
-	if err := claims.Valid(); err != nil {
-		errs = append(errs, err)
-	}
-
-	if !claims.VerifyIssuer(h.cfg.Issuer, true) {
-		logger.Debug().
-			Str("provided", claims.GetIssuer()).
-			Str("required", h.cfg.Issuer).
-			Msg("unequal or missing issuer when validating JWT")
-		errs = append(errs, jwt.ErrTokenInvalidIssuer)
-	}
-	if !claims.VerifyAudience(h.cfg.Audience, true) {
-		logger.Debug().
-			Strs("provided", claims.GetAudience()).
-			Str("required", h.cfg.Audience).
-			Msg("unequal or missing audience when validating JWT")
-		errs = append(errs, jwt.ErrTokenInvalidAudience)
 	}
 	return
 }
