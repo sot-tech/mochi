@@ -4,6 +4,7 @@ go 1.21.5
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20231218170342-258647f3c6ec
+	github.com/MicahParks/jwkset v0.5.4
 	github.com/MicahParks/keyfunc/v3 v3.1.1
 	github.com/anacrolix/torrent v1.53.2
 	github.com/cespare/xxhash/v2 v2.2.0
@@ -21,7 +22,6 @@ require (
 )
 
 require (
-	github.com/MicahParks/jwkset v0.5.4 // indirect
 	github.com/anacrolix/dht/v2 v2.21.0 // indirect
 	github.com/anacrolix/generics v0.0.0-20230911070922-5dd7545c6b13 // indirect
 	github.com/anacrolix/log v0.14.5 // indirect
