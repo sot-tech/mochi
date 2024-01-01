@@ -1,6 +1,6 @@
 module github.com/sot-tech/mochi
 
-go 1.21.5
+go 1.21
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20231218170342-258647f3c6ec
