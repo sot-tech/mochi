@@ -75,7 +75,7 @@ func init() {
 		panic(err)
 	}
 	s2.Write(ecdhPubKey.Bytes())
-	//s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
+	// s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
 	jwksData = JWKSKeys{Keys: []JWKSKey{
 		{
 			KeyType:   "EC",
