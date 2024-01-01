@@ -3,7 +3,6 @@ package jwt
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	cr "crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -14,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/minio/sha256-simd"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -71,7 +70,12 @@ func init() {
 	}
 	infoHash, _ = bittorrent.NewInfoHash(ihBytes)
 	s2 := sha256.New()
-	s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
+	ecdhPubKey, err := privKey.PublicKey.ECDH()
+	if err != nil {
+		panic(err)
+	}
+	s2.Write(ecdhPubKey.Bytes())
+	// s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
 	jwksData = JWKSKeys{Keys: []JWKSKey{
 		{
 			KeyType:   "EC",
@@ -92,15 +96,13 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	defer s.Close()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, announceClaims{
-		registeredClaimsWrapper: registeredClaimsWrapper{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:    "CN=test",
-				Subject:   "CN=test",
-				Audience:  []string{"test"},
-				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-				ID:        strconv.FormatInt(rand.Int63(), 16),
-			},
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "CN=test",
+			Subject:   "CN=test",
+			Audience:  []string{"test"},
+			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+			ID:        strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -137,15 +139,13 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 	// now we wll use HMAC-SHA256 with invalid random key
 	// all errors should be nil except announce request
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, announceClaims{
-		registeredClaimsWrapper: registeredClaimsWrapper{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:    "CN=test",
-				Subject:   "CN=test",
-				Audience:  []string{"test"},
-				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-				ID:        strconv.FormatInt(rand.Int63(), 16),
-			},
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "CN=test",
+			Subject:   "CN=test",
+			Audience:  []string{"test"},
+			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+			ID:        strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -194,15 +194,13 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, scrapeClaims{
-		registeredClaimsWrapper: registeredClaimsWrapper{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:    "CN=test",
-				Subject:   "CN=test",
-				Audience:  []string{"test"},
-				ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-				NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-				ID:        strconv.FormatInt(rand.Int63(), 16),
-			},
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "CN=test",
+			Subject:   "CN=test",
+			Audience:  []string{"test"},
+			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+			ID:        strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHashes: ihss,
 	})
