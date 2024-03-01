@@ -6,7 +6,7 @@ require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20240124183017-31ac915ce912
 	github.com/MicahParks/jwkset v0.5.12
 	github.com/MicahParks/keyfunc/v3 v3.2.5
-	github.com/anacrolix/torrent v1.53.3
+	github.com/anacrolix/torrent v1.55.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/jackc/pgx/v5 v5.5.3
