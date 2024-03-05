@@ -102,7 +102,8 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 			Audience:  []string{"test"},
 			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
 			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+			// nolint:gosec
+			ID: strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -145,7 +146,8 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 			Audience:  []string{"test"},
 			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
 			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+			// nolint:gosec
+			ID: strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHash: infoHash.String(),
 	})
@@ -184,6 +186,7 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 	}))
 	defer s.Close()
 
+	// nolint:gosec
 	ihs := make(bittorrent.InfoHashes, rand.Intn(10)+1)
 	ihss := make([]string, len(ihs))
 	for i := range ihs {
@@ -200,7 +203,8 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 			Audience:  []string{"test"},
 			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
 			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			ID:        strconv.FormatInt(rand.Int63(), 16),
+			// nolint:gosec
+			ID: strconv.FormatInt(rand.Int63(), 16),
 		},
 		InfoHashes: ihss,
 	})

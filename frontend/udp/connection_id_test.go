@@ -50,6 +50,7 @@ func simpleNewConnectionID(ip netip.Addr, now time.Time, key []byte) []byte {
 	mac := hmac.New(func() hash.Hash {
 		return xxhash.New()
 	}, key)
+	// nolint:gosec
 	buffer[0] = byte(rand.Int())
 	binary.BigEndian.PutUint64(buffer[1:], uint64(now.Unix()))
 	mac.Write(buffer)

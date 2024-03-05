@@ -48,6 +48,7 @@ func generatePeers() (a [peersCount]bittorrent.Peer) {
 		if !ok {
 			panic("unable to create ip from random bytes")
 		}
+		// nolint:gosec
 		port := uint16(rand.Int63())
 		a[i] = bittorrent.Peer{
 			ID:       randPeerID(),
