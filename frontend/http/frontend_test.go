@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	// nolint:gosec
 	addr   = fmt.Sprintf("127.0.0.1:%d", rand.Int63n(10000)+16384)
 	hashes = make([]string, 10)
 	peers  = make([]string, 10)
@@ -27,6 +28,7 @@ func init() {
 	_ = log.ConfigureLogger("", "error", false, false)
 	for i := range hashes {
 		var bb []byte
+		// nolint:gosec
 		if rand.Int()%2 == 0 {
 			bb = make([]byte, bittorrent.InfoHashV1Len)
 		} else {
@@ -106,8 +108,10 @@ func BenchmarkAnnounce(b *testing.B) {
 				"uploaded":   []string{"0"},
 				"numwant":    []string{"1"},
 				"port":       []string{"12345"},
-				"info_hash":  []string{hashes[rand.Intn(len(hashes))]},
-				"peer_id":    []string{peers[rand.Intn(len(peers))]},
+				// nolint:gosec
+				"info_hash": []string{hashes[rand.Intn(len(hashes))]},
+				// nolint:gosec
+				"peer_id": []string{peers[rand.Intn(len(peers))]},
 			}.Encode(),
 		}
 		if err := runGet(u.String(), true); err != nil {

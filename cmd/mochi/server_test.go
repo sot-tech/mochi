@@ -67,6 +67,7 @@ func buildUDPConnReq() []byte {
 	copy(req, udpConnectHeader)
 
 	// TxID
+	// nolint:gosec
 	binary.BigEndian.PutUint32(req[12:16], rand.Uint32())
 	return req
 }
@@ -127,12 +128,15 @@ func buildAnnounceUDPReq(txID, connID []byte) []byte {
 	copy(req[12:16], txID)
 
 	// InfoHash
+	// nolint:gosec
 	copy(req[16:36], hashes[rand.Intn(len(hashes))])
 
 	// PeerID
+	// nolint:gosec
 	copy(req[36:56], peers[rand.Intn(len(peers))])
 
 	var down, left uint64
+	// nolint:gosec
 	if rand.Intn(2) == 0 {
 		down, left = 1, 0
 	} else {
@@ -150,6 +154,7 @@ func buildAnnounceUDPReq(txID, connID []byte) []byte {
 	req[92], req[95] = byte(announceNumWant>>24), byte(announceNumWant>>16)
 
 	// Port
+	// nolint:gosec
 	p := rand.Intn(math.MaxInt16) + 1
 	req[96], req[97] = byte(p>>8), byte(p)
 	return req
@@ -251,6 +256,7 @@ func BenchmarkServerHTTPAnnounce(b *testing.B) {
 	addr := "127.0.0.1" + frontend.DefaultListenAddress
 	for i := range reqs {
 		var down, left string
+		// nolint:gosec
 		if rand.Intn(2) == 0 {
 			down, left = "1", "0"
 		} else {
@@ -267,9 +273,12 @@ func BenchmarkServerHTTPAnnounce(b *testing.B) {
 				"downloaded": []string{down},
 				"uploaded":   []string{"0"},
 				"numwant":    []string{"1"},
-				"port":       []string{strconv.FormatInt(int64(rand.Intn(math.MaxInt16)+1), 10)},
-				"info_hash":  []string{str2bytes.BytesToString(hashes[rand.Intn(len(hashes))])},
-				"peer_id":    []string{str2bytes.BytesToString(peers[rand.Intn(len(peers))])},
+				// nolint:gosec
+				"port": []string{strconv.FormatInt(int64(rand.Intn(math.MaxInt16)+1), 10)},
+				// nolint:gosec
+				"info_hash": []string{str2bytes.BytesToString(hashes[rand.Intn(len(hashes))])},
+				// nolint:gosec
+				"peer_id": []string{str2bytes.BytesToString(peers[rand.Intn(len(peers))])},
 			}.Encode(),
 		}
 		reqs[i] = u.String()

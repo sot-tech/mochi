@@ -5,10 +5,10 @@ package udp
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"io"
-	"math/rand"
 	"net"
 	"net/netip"
 	"sync"
@@ -26,16 +26,14 @@ import (
 
 const (
 	// Name - registered name of the frontend
-	Name                = "udp"
-	defaultKeyLen       = 32
-	maxAllowedClockSkew = 30 * time.Second
-	defaultMaxClockSkew = 10 * time.Second
-)
-
-var (
-	logger                          = log.NewLogger("frontend/udp")
+	Name                            = "udp"
+	defaultKeyLen                   = 32
+	maxAllowedClockSkew             = 30 * time.Second
+	defaultMaxClockSkew             = 10 * time.Second
 	allowedGeneratedPrivateKeyRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 )
+
+var logger = log.NewLogger("frontend/udp")
 
 func init() {
 	frontend.RegisterBuilder(Name, NewFrontend)
@@ -67,8 +65,12 @@ func (cfg Config) Validate() (validCfg Config) {
 	// Generate a private key if one isn't provided by the user.
 	if cfg.PrivateKey == "" {
 		pkeyRunes := make([]byte, defaultKeyLen)
+		if _, err := rand.Read(pkeyRunes); err != nil {
+			panic(err)
+		}
+		l := len(allowedGeneratedPrivateKeyRunes)
 		for i := range pkeyRunes {
-			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[rand.Intn(len(allowedGeneratedPrivateKeyRunes))]
+			pkeyRunes[i] = allowedGeneratedPrivateKeyRunes[int(pkeyRunes[i])%l]
 		}
 		validCfg.PrivateKey = string(pkeyRunes)
 
