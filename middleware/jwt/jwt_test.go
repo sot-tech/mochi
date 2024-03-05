@@ -90,7 +90,7 @@ func init() {
 }
 
 func TestHook_HandleAnnounceValid(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(jwksData)
 	}))
 	defer s.Close()
@@ -131,7 +131,7 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 }
 
 func TestHook_HandleAnnounceInvalid(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(jwksData)
 	}))
 	defer s.Close()
@@ -179,7 +179,7 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 }
 
 func TestHook_HandleScrapeValid(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(jwksData)
 	}))
 	defer s.Close()

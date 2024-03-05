@@ -484,10 +484,10 @@ func UnpackPeer(data string) (bittorrent.Peer, error) {
 }
 
 func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
-	var peerIds []string
-	peerIds, err = peersResult.Result()
+	var peerIDs []string
+	peerIDs, err = peersResult.Result()
 	if err = NoResultErr(err); err == nil {
-		for _, peerID := range peerIds {
+		for _, peerID := range peerIDs {
 			if p, err := UnpackPeer(peerID); err == nil {
 				peers = append(peers, p)
 			} else {
@@ -776,7 +776,7 @@ func (ps *store) gc(cutoff time.Time) {
 					}
 				}
 
-				err = NoResultErr(ps.Watch(context.Background(), func(tx *redis.Tx) (err error) {
+				err = NoResultErr(ps.Watch(context.Background(), func(_ *redis.Tx) (err error) {
 					var infoHashCount uint64
 					infoHashCount, err = ps.HLen(context.Background(), infoHashKey).Uint64()
 					err = NoResultErr(err)
