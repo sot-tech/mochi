@@ -25,7 +25,7 @@ func (a RequestAddress) IsValid() bool {
 
 // MarshalZerologObject writes fields into zerolog event
 func (a RequestAddress) MarshalZerologObject(e *zerolog.Event) {
-	e.Stringer("address", a.Addr).Bool("provided", a.Provided)
+	e.Stringer("addr", a.Addr).Bool("provided", a.Provided)
 }
 
 // RequestAddresses is an array of RequestAddress used mainly for
@@ -168,7 +168,7 @@ func (r AnnounceRequest) MarshalZerologObject(e *zerolog.Event) {
 		Uint64("left", r.Left).
 		Uint64("downloaded", r.Downloaded).
 		Uint64("uploaded", r.Uploaded).
-		Object("peers", r.RequestPeer).
+		Object("source", r.RequestPeer).
 		Object("params", r.Params)
 }
 

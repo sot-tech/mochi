@@ -82,6 +82,7 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 			cfg.Header = authorizationHeader
 			logger.Warn().
 				Str("name", "Header").
+				Str("provided", "").
 				Str("default", cfg.Header).
 				Msg("falling back to default configuration")
 		}
@@ -149,7 +150,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 				logger.Info().
 					Stringer("claimInfoHash", claimIH).
 					Stringer("requestInfoHash", req.InfoHash).
-					Object("peer", req.RequestPeer).
+					Object("source", req.RequestPeer).
 					Msg("unequal 'infohash' claim when validating JWT")
 				err = ErrInvalidJWT
 			}
@@ -220,7 +221,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 		} else {
 			logger.Info().
 				Err(jwtErr).
-				Array("source", &req.RequestAddresses).
+				Array("addresses", &req.RequestAddresses).
 				Msg("JWT validation failed")
 			err = ErrInvalidJWT
 		}

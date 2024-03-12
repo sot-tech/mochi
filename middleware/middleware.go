@@ -48,7 +48,7 @@ func NewHooks(configs []conf.NamedMapConfig, storage storage.PeerStorage) (hooks
 	buildersMU.RLock()
 	defer buildersMU.RUnlock()
 	for _, c := range configs {
-		logger.Debug().Object("hook", c).Msg("starting hook")
+		logger.Debug().Str("name", c.Name).Object("hook", c).Msg("starting hook")
 		newHook, ok := builders[c.Name]
 		if !ok {
 			err = fmt.Errorf("hook with name '%s' does not exists", c.Name)

@@ -207,6 +207,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 }
 
 func runServer(s *fasthttp.Server, cfg *Config) {
+	logger.Debug().Str("addr", cfg.Addr).Msg("starting listener")
 	ln, err := cfg.ListenTCP()
 	if err == nil {
 		if s.TLSConfig == nil {
@@ -217,9 +218,9 @@ func runServer(s *fasthttp.Server, cfg *Config) {
 	}
 	defer ln.Close()
 	if err == nil {
-		logger.Info().Msg("server stopped")
+		logger.Info().Str("addr", cfg.Addr).Msg("listener stopped")
 	} else if !errors.Is(err, http.ErrServerClosed) {
-		logger.Fatal().Err(err).Msg("server failed")
+		logger.Fatal().Str("addr", cfg.Addr).Err(err).Msg("listener failed")
 	}
 }
 

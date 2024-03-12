@@ -27,7 +27,7 @@ type Server struct {
 // creation of a new one.
 func (r *Server) Run(cfg *Config) (err error) {
 	if len(cfg.MetricsAddr) > 0 {
-		log.Info().Str("address", cfg.MetricsAddr).Msg("starting metrics server")
+		log.Info().Str("addr", cfg.MetricsAddr).Msg("starting metrics server")
 		r.frontends = append(r.frontends, metrics.NewServer(cfg.MetricsAddr))
 	} else {
 		log.Info().Msg("metrics disabled because of empty address")

@@ -140,7 +140,7 @@ type fetchArgs struct {
 
 func (h *responseHook) appendPeers(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (err error) {
 	seeding := req.Left == 0
-	max := int(req.NumWant)
+	maxPeers := int(req.NumWant)
 	peers := make([]bittorrent.Peer, 0, len(resp.IPv4Peers)+len(resp.IPv6Peers))
 	primaryIP := req.GetFirst()
 	v6First := primaryIP.Is6()
@@ -158,24 +158,24 @@ func (h *responseHook) appendPeers(ctx context.Context, req *bittorrent.Announce
 		peers = append(peers, resp.IPv4Peers...)
 		peers = append(peers, resp.IPv6Peers...)
 	}
-	if l := len(peers); l > max {
-		peers, max = peers[:max], 0
+	if l := len(peers); l > maxPeers {
+		peers, maxPeers = peers[:maxPeers], 0
 	} else {
-		max -= l
+		maxPeers -= l
 	}
 
 	for _, a := range args {
-		if max <= 0 {
+		if maxPeers <= 0 {
 			break
 		}
 		var storePeers []bittorrent.Peer
-		storePeers, err = h.store.AnnouncePeers(ctx, a.ih, seeding, max, a.v6)
+		storePeers, err = h.store.AnnouncePeers(ctx, a.ih, seeding, maxPeers, a.v6)
 		if err != nil && !errors.Is(err, storage.ErrResourceDoesNotExist) {
 			return err
 		}
 		err = nil
 		peers = append(peers, storePeers...)
-		max -= len(storePeers)
+		maxPeers -= len(storePeers)
 	}
 
 	// Some clients expect a minimum of their own peer representation returned to

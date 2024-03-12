@@ -137,12 +137,15 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 
 	var ctx context.Context
 	ctx, f.ctxCancel = context.WithCancel(context.Background())
+	logger.Debug().Str("addr", cfg.Addr).Msg("starting listener")
 	for i := range f.sockets {
 		if f.sockets[i], err = cfg.ListenUDP(); err == nil {
 			f.wg.Add(1)
 			go func(socket *net.UDPConn, ctx context.Context) {
 				if err := f.serve(ctx, socket); err != nil {
-					logger.Fatal().Err(err).Msg("server failed")
+					logger.Fatal().Str("addr", cfg.Addr).Err(err).Msg("listener failed")
+				} else {
+					logger.Info().Str("addr", cfg.Addr).Msg("listener stopped")
 				}
 			}(f.sockets[i], ctx)
 		}

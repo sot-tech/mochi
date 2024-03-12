@@ -58,7 +58,7 @@ func NewFrontends(configs []conf.NamedMapConfig, logic *middleware.Logic) (fs []
 	buildersMU.RLock()
 	defer buildersMU.RUnlock()
 	for _, c := range configs {
-		logger.Debug().Object("frontend", c).Msg("starting frontend")
+		logger.Debug().Str("name", c.Name).Object("config", c).Msg("starting frontend")
 		newFrontend, ok := builders[c.Name]
 		if !ok {
 			err = fmt.Errorf("hook with name '%s' does not exists", c.Name)

@@ -236,7 +236,7 @@ func RegisterDriver(name string, d Driver) {
 func NewStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
 	driversMU.RLock()
 	defer driversMU.RUnlock()
-	logger.Debug().Object("cfg", cfg).Msg("staring storage")
+	logger.Debug().Object("config", cfg).Msg("staring storage")
 
 	var b Driver
 	b, ok := drivers[cfg.Name]

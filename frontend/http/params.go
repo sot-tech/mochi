@@ -33,5 +33,5 @@ func (qp queryParams) InfoHashes() bittorrent.InfoHashes {
 
 // MarshalZerologObject writes fields into zerolog event
 func (qp queryParams) MarshalZerologObject(e *zerolog.Event) {
-	e.Stringer("query", qp.Args)
+	e.Str("query", str2bytes.BytesToString(qp.Args.QueryString()))
 }

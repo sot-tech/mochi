@@ -126,7 +126,7 @@ func (p Peer) Addr() netip.Addr {
 // MarshalZerologObject writes fields into zerolog event
 func (p Peer) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("id", p.ID).
-		Stringer("address", p.Addr()).
+		Stringer("addr", p.Addr()).
 		Uint16("port", p.Port())
 }
 
