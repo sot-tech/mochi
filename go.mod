@@ -4,8 +4,8 @@ go 1.21.5
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20240311165541-d185017eb6db
-	github.com/MicahParks/jwkset v0.5.16
-	github.com/MicahParks/keyfunc/v3 v3.2.9
+	github.com/MicahParks/jwkset v0.5.17
+	github.com/MicahParks/keyfunc/v3 v3.3.2
 	github.com/anacrolix/torrent v1.55.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
