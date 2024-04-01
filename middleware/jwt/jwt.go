@@ -137,7 +137,7 @@ func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceReque
 		err = ErrMissingJWT
 	} else {
 		claims := new(announceClaims)
-		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc); jwtErr == nil {
+		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.KeyfuncCtx(ctx)); jwtErr == nil {
 			var claimIH bittorrent.InfoHash
 			if claimIH, err = bittorrent.NewInfoHashString(claims.InfoHash); err != nil {
 				logger.Info().
@@ -182,7 +182,7 @@ func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, 
 		err = ErrMissingJWT
 	} else {
 		claims := new(scrapeClaims)
-		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.Keyfunc); jwtErr == nil {
+		if _, jwtErr := h.parser.ParseWithClaims(jwtParam, claims, h.jwks.KeyfuncCtx(ctx)); jwtErr == nil {
 			var claimIHs bittorrent.InfoHashes
 			for _, s := range claims.InfoHashes {
 				if providedIh, err := bittorrent.NewInfoHashString(s); err == nil {
