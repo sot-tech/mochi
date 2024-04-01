@@ -3,9 +3,9 @@ module github.com/sot-tech/mochi
 go 1.21.5
 
 require (
-	code.cloudfoundry.org/go-diodes v0.0.0-20240311165541-d185017eb6db
-	github.com/MicahParks/jwkset v0.5.16
-	github.com/MicahParks/keyfunc/v3 v3.2.9
+	code.cloudfoundry.org/go-diodes v0.0.0-20240325171903-fa19631aa7ba
+	github.com/MicahParks/jwkset v0.5.17
+	github.com/MicahParks/keyfunc/v3 v3.3.2
 	github.com/anacrolix/torrent v1.55.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -34,7 +34,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/google/pprof v0.0.0-20240319011627-a57c5dfe54fd // indirect
+	github.com/google/pprof v0.0.0-20240327155427-868f304927ed // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20231201235250-de7065d80cb9 // indirect
@@ -45,11 +45,11 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.0 // indirect
-	github.com/prometheus/common v0.50.0 // indirect
+	github.com/prometheus/common v0.51.1 // indirect
 	github.com/prometheus/procfs v0.13.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81 // indirect
+	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
