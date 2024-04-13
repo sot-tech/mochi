@@ -87,6 +87,11 @@ CREATE TABLE mo_kv
 _Note: CockroachDB currently does not support index
 over `inet` type, but it is possible to use `bytea` instead._
 
+_Note 2: you can add keyword `UNLOGGED` while creating tables 
+`mo_peers` and `mo_downloads` to increase speed, since these tables 
+contain semi-temporary data and may be lost if DB emergency stops.
+NB: `UNLOGGED` tables not replicated across cluster._
+
 ```yaml
 storage:
     name: pg
