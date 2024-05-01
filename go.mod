@@ -7,7 +7,7 @@ require (
 	github.com/MicahParks/jwkset v0.5.17
 	github.com/MicahParks/keyfunc/v3 v3.3.2
 	github.com/anacrolix/torrent v1.55.0
-	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/libp2p/go-reuseport v0.4.0
