@@ -8,7 +8,7 @@ import (
 )
 
 func createNew() storage.PeerStorage {
-	ps, err := NewPeerStorage(Config{ShardCount: 1024})
+	ps, err := peerStorage(config{ShardCount: 1024})
 	if err != nil {
 		panic(err)
 	}

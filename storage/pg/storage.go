@@ -51,13 +51,37 @@ var (
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterDriver("pg", builder)
+	storage.RegisterDriver("pg", builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
-	var cfg Config
+type builder struct{}
 
-	if err := icfg.Unmarshal(&cfg); err != nil {
+func (builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
+	var cfg config
+
+	err := icfg.Unmarshal(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = cfg.validateDataStore()
+	if err != nil {
+		return nil, err
+	}
+
+	return newStore(cfg)
+}
+
+func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+	var cfg config
+
+	err := icfg.Unmarshal(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = cfg.validateFull()
+	if err != nil {
 		return nil, err
 	}
 
@@ -73,19 +97,14 @@ func noResultErr(err error) error {
 	return err
 }
 
-func newStore(cfg Config) (storage.PeerStorage, error) {
-	cfg, err := cfg.Validate()
-	if err != nil {
-		return nil, err
-	}
-
+func newStore(cfg config) (storage.PeerStorage, error) {
 	con, err := pgxpool.New(context.Background(), cfg.ConnectionString)
 	if err != nil {
 		return nil, err
 	}
 
 	return &store{
-		Config:     cfg,
+		config:     cfg,
 		Pool:       con,
 		wg:         sync.WaitGroup{},
 		closed:     make(chan any),
@@ -121,8 +140,14 @@ type downloadQueryConf struct {
 	IncrementQuery string `cfg:"inc_query"`
 }
 
-// Config holds the configuration of a redis PeerStorage.
-type Config struct {
+func checkParameter(p *string, name string) (err error) {
+	if *p = strings.TrimSpace(*p); len(*p) == 0 {
+		err = fmt.Errorf(errRequiredParameterNotSetMsg, name)
+	}
+	return
+}
+
+type config struct {
 	ConnectionString   string `cfg:"connection_string"`
 	PingQuery          string `cfg:"ping_query"`
 	Peer               peerQueryConf
@@ -133,11 +158,7 @@ type Config struct {
 	InfoHashCountQuery string `cfg:"info_hash_count_query"`
 }
 
-// Validate sanity checks values set in a config and returns a new config with
-// default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg Config) Validate() (Config, error) {
+func (cfg config) validateDataStore() (config, error) {
 	validCfg := cfg
 	validCfg.ConnectionString = strings.TrimSpace(validCfg.ConnectionString)
 	if len(validCfg.ConnectionString) == 0 {
@@ -153,66 +174,68 @@ func (cfg Config) Validate() (Config, error) {
 			Msg("falling back to default configuration")
 	}
 
-	fn := func(p *string, name string) (err error) {
-		if *p = strings.TrimSpace(*p); len(*p) == 0 {
-			err = fmt.Errorf(errRequiredParameterNotSetMsg, name)
-		}
-		return
-	}
-
-	if err := fn(&validCfg.Peer.AddQuery, "peer.addQuery"); err != nil {
+	if err := checkParameter(&validCfg.Data.AddQuery, "data.addQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.DelQuery, "peer.delQuery"); err != nil {
+	if err := checkParameter(&validCfg.Data.GetQuery, "data.getQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.GraduateQuery, "peer.graduateQuery"); err != nil {
+	if err := checkParameter(&validCfg.Data.DelQuery, "data.delQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountQuery, "peer.countQuery"); err != nil {
+	return validCfg, nil
+}
+
+func (cfg config) validateFull() (config, error) {
+	validCfg, err := cfg.validateDataStore()
+	if err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountSeedersColumn, "peer.countSeedersColumn"); err != nil {
+	if err = checkParameter(&validCfg.Peer.AddQuery, "peer.addQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.CountLeechersColumn, "peer.countLeechersColumn"); err != nil {
+	if err = checkParameter(&validCfg.Peer.DelQuery, "peer.delQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Peer.ByInfoHashClause, "peer.byInfoHashClause"); err != nil {
+	if err = checkParameter(&validCfg.Peer.GraduateQuery, "peer.graduateQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.Query, "announce.query"); err != nil {
+	if err = checkParameter(&validCfg.Peer.CountQuery, "peer.countQuery"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.PeerIDColumn, "announce.peerIDColumn"); err != nil {
+	if err = checkParameter(&validCfg.Peer.CountSeedersColumn, "peer.countSeedersColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.AddressColumn, "announce.addressColumn"); err != nil {
+	if err = checkParameter(&validCfg.Peer.CountLeechersColumn, "peer.countLeechersColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Announce.PortColumn, "announce.portColumn"); err != nil {
+	if err = checkParameter(&validCfg.Peer.ByInfoHashClause, "peer.byInfoHashClause"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.AddQuery, "data.addQuery"); err != nil {
+	if err = checkParameter(&validCfg.Announce.Query, "announce.query"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.GetQuery, "data.getQuery"); err != nil {
+	if err = checkParameter(&validCfg.Announce.PeerIDColumn, "announce.peerIDColumn"); err != nil {
 		return cfg, err
 	}
 
-	if err := fn(&validCfg.Data.DelQuery, "data.delQuery"); err != nil {
+	if err = checkParameter(&validCfg.Announce.AddressColumn, "announce.addressColumn"); err != nil {
+		return cfg, err
+	}
+
+	if err = checkParameter(&validCfg.Announce.PortColumn, "announce.portColumn"); err != nil {
 		return cfg, err
 	}
 
@@ -227,7 +250,7 @@ func (cfg Config) Validate() (Config, error) {
 }
 
 type store struct {
-	Config
+	config
 	*pgxpool.Pool
 	wg         sync.WaitGroup
 	closed     chan any

@@ -33,10 +33,12 @@ var (
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver("keydb", builder)
+	storage.RegisterDriver("keydb", builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
+type builder struct{}
+
+func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg r.Config
 	var err error
 
@@ -45,6 +47,16 @@ func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	}
 
 	return newStore(cfg)
+}
+
+func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
+	var cfg r.Config
+
+	if err := icfg.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+
+	return r.NewStore(cfg)
 }
 
 func newStore(cfg r.Config) (*store, error) {

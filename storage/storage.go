@@ -82,9 +82,12 @@ type Entry struct {
 	Value []byte
 }
 
-// Driver is the function used to initialize a new PeerStorage
+// Driver is the interface used to initialize a new DataStorage or PeerStorage
 // with provided configuration.
-type Driver func(conf.MapConfig) (PeerStorage, error)
+type Driver interface {
+	NewDataStorage(cfg conf.MapConfig) (DataStorage, error)
+	NewPeerStorage(cfg conf.MapConfig) (PeerStorage, error)
+}
 
 // ErrResourceDoesNotExist is the error returned by all delete methods and the
 // AnnouncePeers method of the PeerStorage interface if the requested resource
@@ -231,15 +234,31 @@ func RegisterDriver(name string, d Driver) {
 	drivers[name] = d
 }
 
-// NewStorage attempts to initialize a new PeerStorage instance from
+// NewDataStorage attempts to initialize a new DataStorage instance from
 // the list of registered drivers.
-func NewStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
+func NewDataStorage(cfg conf.NamedMapConfig) (DataStorage, error) {
 	driversMU.RLock()
 	defer driversMU.RUnlock()
-	logger.Debug().Object("config", cfg).Msg("staring storage")
+	logger.Debug().Object("config", cfg).Msg("starting peer storage")
 
-	var b Driver
-	b, ok := drivers[cfg.Name]
+	var d Driver
+	d, ok := drivers[cfg.Name]
+	if !ok {
+		return nil, fmt.Errorf("storage with name '%s' does not exists", cfg.Name)
+	}
+
+	return d.NewPeerStorage(cfg.Config)
+}
+
+// NewPeerStorage attempts to initialize a new PeerStorage instance from
+// the list of registered drivers.
+func NewPeerStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
+	driversMU.RLock()
+	defer driversMU.RUnlock()
+	logger.Debug().Object("config", cfg).Msg("starting peer storage")
+
+	var d Driver
+	d, ok := drivers[cfg.Name]
 	if !ok {
 		return nil, fmt.Errorf("storage with name '%s' does not exists", cfg.Name)
 	}
@@ -249,7 +268,7 @@ func NewStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
 		return
 	}
 
-	if ps, err = b(cfg.Config); err != nil {
+	if ps, err = d.NewPeerStorage(cfg.Config); err != nil {
 		return
 	}
 

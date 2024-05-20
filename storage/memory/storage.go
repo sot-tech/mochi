@@ -32,19 +32,24 @@ var logger = log.NewLogger("storage/memory")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver(Name, Builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
-	var cfg Config
+type Builder struct{}
+
+func (Builder) NewDataStorage(conf.MapConfig) (storage.DataStorage, error) {
+	return dataStorage(), nil
+}
+
+func (Builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+	var cfg config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	return NewPeerStorage(cfg)
+	return peerStorage(cfg)
 }
 
-// Config holds the configuration of a memory PeerStorage.
-type Config struct {
+type config struct {
 	ShardCount int `cfg:"shard_count"`
 }
 
@@ -52,7 +57,7 @@ type Config struct {
 // default values replacing anything that is invalid.
 //
 // This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
+func (cfg config) Validate() config {
 	validcfg := cfg
 
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
@@ -67,12 +72,11 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// NewPeerStorage creates a new PeerStorage backed by memory.
-func NewPeerStorage(provided Config) (storage.PeerStorage, error) {
+func peerStorage(provided config) (storage.PeerStorage, error) {
 	cfg := provided.Validate()
 	ps := &peerStore{
 		shards:      make([]*peerShard, cfg.ShardCount*2),
-		DataStorage: NewDataStorage(),
+		DataStorage: dataStorage(),
 		closed:      make(chan any),
 	}
 
@@ -453,8 +457,7 @@ func (ps *peerStore) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (lee
 	return
 }
 
-// NewDataStorage creates new in-memory data store
-func NewDataStorage() storage.DataStorage {
+func dataStorage() storage.DataStorage {
 	return new(dataStore)
 }
 

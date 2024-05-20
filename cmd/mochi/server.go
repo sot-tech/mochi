@@ -33,7 +33,7 @@ func (r *Server) Run(cfg *Config) (err error) {
 		log.Info().Msg("metrics disabled because of empty address")
 	}
 
-	r.storage, err = storage.NewStorage(cfg.Storage)
+	r.storage, err = storage.NewPeerStorage(cfg.Storage)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}

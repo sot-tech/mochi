@@ -4,6 +4,7 @@ package torrentapproval
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -11,8 +12,6 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/conf"
-	"github.com/sot-tech/mochi/storage/memory"
-
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
 
@@ -24,6 +23,8 @@ import (
 // Name is the name by which this middleware is registered with Conf.
 const Name = "torrent approval"
 
+const internalStore = "internal"
+
 func init() {
 	middleware.RegisterBuilder(Name, build)
 }
@@ -31,9 +32,10 @@ func init() {
 type baseConfig struct {
 	// Source - name of container for initial values
 	Source string `cfg:"initial_source"`
-	// Preserve - if true, container will receive real registered storage if it is NOT `memory`
-	// if false - temporary in-memory storage will be used or created
+	// Deprecated: use Store parameter
 	Preserve bool
+	// Store where to hold provided data by Source
+	Store conf.NamedMapConfig
 	// Configuration depends on used container
 	Configuration conf.MapConfig
 }
@@ -52,9 +54,15 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 		return nil, fmt.Errorf("invalid config for middleware %s: config not provided", Name)
 	}
 
-	var ds storage.DataStorage = st
-	if !cfg.Preserve && ds.Preservable() {
-		ds = memory.NewDataStorage()
+	if cfg.Preserve {
+		return nil, errors.New("preserve option is deprecated, use store parameter")
+	}
+
+	var ds storage.DataStorage
+	if len(cfg.Store.Name) == 0 || cfg.Store.Name == internalStore {
+		ds = st
+	} else if ds, err = storage.NewDataStorage(cfg.Store); err != nil {
+		return
 	}
 
 	var c container.Container

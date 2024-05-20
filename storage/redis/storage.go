@@ -79,21 +79,27 @@ var (
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterDriver("redis", builder)
+	storage.RegisterDriver("redis", builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
-	// Unmarshal the bytes into the proper config type.
-	var cfg Config
+type builder struct{}
 
-	if err := icfg.Unmarshal(&cfg); err != nil {
+func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+	var cfg Config
+	var err error
+
+	if err = icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 
-	return newStore(cfg)
+	return NewStore(cfg)
 }
 
-func newStore(cfg Config) (*store, error) {
+func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
+	return b.NewPeerStorage(icfg)
+}
+
+func NewStore(cfg Config) (storage.PeerStorage, error) {
 	cfg, err := cfg.Validate()
 	if err != nil {
 		return nil, err

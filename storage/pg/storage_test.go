@@ -42,7 +42,7 @@ CREATE TABLE mo_kv (
 `
 )
 
-var cfg = Config{
+var cfg = config{
 	ConnectionString: "host=127.0.0.1 database=test user=postgres pool_max_conns=50",
 	PingQuery:        "SELECT 1",
 	Peer: peerQueryConf{
@@ -76,6 +76,10 @@ var cfg = Config{
 func createNew() s.PeerStorage {
 	var ps s.PeerStorage
 	var err error
+	cfg, err = cfg.validateFull()
+	if err != nil {
+		panic(fmt.Sprint("invalid configuration: ", err))
+	}
 	ps, err = newStore(cfg)
 	if err != nil {
 		panic(fmt.Sprint("Unable to create PostgreSQL connection: ", err, "\nThis driver needs real PostgreSQL instance"))
