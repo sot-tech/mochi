@@ -53,11 +53,7 @@ type config struct {
 	ShardCount int `cfg:"shard_count"`
 }
 
-// Validate sanity checks values set in a config and returns a new config with
-// default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg config) Validate() config {
+func (cfg config) validate() config {
 	validcfg := cfg
 
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
@@ -73,7 +69,7 @@ func (cfg config) Validate() config {
 }
 
 func peerStorage(provided config) (storage.PeerStorage, error) {
-	cfg := provided.Validate()
+	cfg := provided.validate()
 	ps := &peerStore{
 		shards:      make([]*peerShard, cfg.ShardCount*2),
 		DataStorage: dataStorage(),
