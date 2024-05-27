@@ -30,15 +30,15 @@ func init() {
 type builder struct{}
 
 func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
-	return b.NewPeerStorage(icfg)
-}
-
-func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 	return newStorage(cfg)
+}
+
+func (builder) NewPeerStorage(_ conf.MapConfig) (storage.PeerStorage, error) {
+	panic("lmdb peer storage not implemented")
 }
 
 type config struct {
@@ -120,9 +120,10 @@ func newStorage(cfg config) (*mdb, error) {
 			return
 		}
 		if len(cfg.PeersDBName) > 0 {
-			peersDB, err = txn.CreateDBI(cfg.PeersDBName)
+			peersDB, err = txn.OpenDBI(cfg.PeersDBName, lmdb.Create|lmdb.DupSort|lmdb.DupFixed)
+
 		} else {
-			peersDB, err = txn.OpenRoot(0)
+			peersDB, err = txn.OpenRoot(lmdb.DupSort | lmdb.DupFixed)
 		}
 		return
 	}); err != nil {
@@ -155,14 +156,31 @@ func composeKey(ctx, key string) []byte {
 	return res
 }
 
-func (m *mdb) Put(ctx context.Context, storeCtx string, values ...storage.Entry) error {
-	//TODO implement me
-	panic("implement me")
+func (m *mdb) Put(_ context.Context, storeCtx string, values ...storage.Entry) (err error) {
+	if len(values) > 0 {
+		err = m.Update(func(txn *lmdb.Txn) (err error) {
+			for _, kv := range values {
+				if err = txn.Put(m.dataDB, composeKey(storeCtx, kv.Key), kv.Value, 0); err != nil {
+					break
+				}
+			}
+			return
+		})
+	}
+	return
 }
 
-func (m *mdb) Contains(ctx context.Context, storeCtx string, key string) (bool, error) {
-	//TODO implement me
-	panic("implement me")
+func (m *mdb) Contains(_ context.Context, storeCtx string, key string) (contains bool, err error) {
+	err = m.View(func(txn *lmdb.Txn) (err error) {
+		_, err = txn.Get(m.dataDB, composeKey(storeCtx, key))
+		return
+	})
+	if err == nil {
+		contains = true
+	} else if lmdb.IsNotFound(err) {
+		err = nil
+	}
+	return
 }
 
 func ignoreNotFound(data []byte, err error) ([]byte, error) {
@@ -173,54 +191,63 @@ func ignoreNotFound(data []byte, err error) ([]byte, error) {
 }
 
 func (m *mdb) Load(_ context.Context, storeCtx string, key string) (v []byte, err error) {
-	err = m.Env.View(func(txn *lmdb.Txn) (err error) {
+	err = m.View(func(txn *lmdb.Txn) (err error) {
 		v, err = ignoreNotFound(txn.Get(m.dataDB, composeKey(storeCtx, key)))
 		return
 	})
 	return
 }
 
-func (m *mdb) Delete(ctx context.Context, storeCtx string, keys ...string) error {
+func (m *mdb) Delete(_ context.Context, storeCtx string, keys ...string) (err error) {
+	if len(keys) > 0 {
+		err = m.Update(func(txn *lmdb.Txn) (err error) {
+			for _, k := range keys {
+				if err = txn.Del(m.dataDB, composeKey(storeCtx, k), nil); err != nil {
+					break
+				}
+			}
+			return
+		})
+	}
+	return
+}
+
+func (m *mdb) PutSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (m *mdb) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (m *mdb) PutLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (m *mdb) DeleteLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (m *mdb) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+func (m *mdb) AnnouncePeers(_ context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (m *mdb) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mdb) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *mdb) Ping(ctx context.Context) error {
+func (m *mdb) Ping(_ context.Context) error {
 	//TODO implement me
 	panic("implement me")
 }

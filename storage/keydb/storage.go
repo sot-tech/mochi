@@ -126,19 +126,19 @@ func (s *store) delPeer(ctx context.Context, infoHashKey, peerID string) error {
 }
 
 func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), r.PackPeer(peer))
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6(), ""), r.PackPeer(peer))
 }
 
 func (s *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), r.PackPeer(peer))
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), true, peer.Addr().Is6(), ""), r.PackPeer(peer))
 }
 
 func (s *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), r.PackPeer(peer))
+	return s.addPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6(), ""), r.PackPeer(peer))
 }
 
 func (s *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), r.PackPeer(peer))
+	return s.delPeer(ctx, r.InfoHashKey(ih.RawString(), false, peer.Addr().Is6(), ""), r.PackPeer(peer))
 }
 
 func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) (err error) {
@@ -147,8 +147,8 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 		Object("peer", peer).
 		Msg("graduate leecher")
 	infoHash, peerID := ih.RawString(), r.PackPeer(peer)
-	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6())
-	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6())
+	ihSeederKey := r.InfoHashKey(infoHash, true, peer.Addr().Is6(), "")
+	ihLeecherKey := r.InfoHashKey(infoHash, false, peer.Addr().Is6(), "")
 	var moved bool
 	if moved, err = s.SMove(ctx, ihLeecherKey, ihSeederKey, peerID).Result(); err == nil {
 		if !moved {

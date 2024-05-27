@@ -343,7 +343,7 @@ func NoResultErr(err error) error {
 }
 
 // InfoHashKey generates redis key for provided hash and flags
-func InfoHashKey(infoHash string, seeder, v6 bool) (infoHashKey string) {
+func InfoHashKey(infoHash string, seeder, v6 bool, suffix string) (infoHashKey string) {
 	var bm int
 	if seeder {
 		bm = 0b01
@@ -361,7 +361,7 @@ func InfoHashKey(infoHash string, seeder, v6 bool) (infoHashKey string) {
 	case 0b00:
 		infoHashKey = IH4LeecherKey
 	}
-	infoHashKey += infoHash
+	infoHashKey += infoHash + suffix
 	return
 }
 
@@ -411,19 +411,19 @@ func PackPeer(p bittorrent.Peer) string {
 }
 
 func (ps *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, PackPeer(peer))
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6(), ""), CountSeederKey, PackPeer(peer))
 }
 
 func (ps *store) DeleteSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6()), CountSeederKey, PackPeer(peer))
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), true, peer.Addr().Is6(), ""), CountSeederKey, PackPeer(peer))
 }
 
 func (ps *store) PutLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, PackPeer(peer))
+	return ps.putPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6(), ""), CountLeecherKey, PackPeer(peer))
 }
 
 func (ps *store) DeleteLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6()), CountLeecherKey, PackPeer(peer))
+	return ps.delPeer(ctx, InfoHashKey(ih.RawString(), false, peer.Addr().Is6(), ""), CountLeecherKey, PackPeer(peer))
 }
 
 func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -433,7 +433,7 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 		Msg("graduate leecher")
 
 	infoHash, peerID, isV6 := ih.RawString(), PackPeer(peer), peer.Addr().Is6()
-	ihSeederKey, ihLeecherKey := InfoHashKey(infoHash, true, isV6), InfoHashKey(infoHash, false, isV6)
+	ihSeederKey, ihLeecherKey := InfoHashKey(infoHash, true, isV6, ""), InfoHashKey(infoHash, false, isV6, "")
 
 	return ps.tx(ctx, func(tx redis.Pipeliner) error {
 		deleted, err := tx.HDel(ctx, ihLeecherKey, peerID).Uint64()
@@ -516,10 +516,10 @@ func (ps *Connection) GetPeers(ctx context.Context, ih bittorrent.InfoHash, forS
 	infoHashKeys := make([]string, 1, 2)
 
 	if forSeeder {
-		infoHashKeys[0] = InfoHashKey(infoHash, false, isV6)
+		infoHashKeys[0] = InfoHashKey(infoHash, false, isV6, "")
 	} else {
-		infoHashKeys[0] = InfoHashKey(infoHash, true, isV6)
-		infoHashKeys = append(infoHashKeys, InfoHashKey(infoHash, false, isV6))
+		infoHashKeys[0] = InfoHashKey(infoHash, true, isV6, "")
+		infoHashKeys = append(infoHashKeys, InfoHashKey(infoHash, false, isV6, ""))
 	}
 
 	for _, infoHashKey := range infoHashKeys {
@@ -564,19 +564,19 @@ func (ps *Connection) ScrapeIH(ctx context.Context, ih bittorrent.InfoHash, coun
 	infoHash := ih.RawString()
 	var lc4, lc6, sc4, sc6, dc int64
 
-	lc4, err = countFn(ctx, InfoHashKey(infoHash, false, false)).Result()
+	lc4, err = countFn(ctx, InfoHashKey(infoHash, false, false, "")).Result()
 	if err = NoResultErr(err); err != nil {
 		return
 	}
-	lc6, err = countFn(ctx, InfoHashKey(infoHash, false, true)).Result()
+	lc6, err = countFn(ctx, InfoHashKey(infoHash, false, true, "")).Result()
 	if err = NoResultErr(err); err != nil {
 		return
 	}
-	sc4, err = countFn(ctx, InfoHashKey(infoHash, true, false)).Result()
+	sc4, err = countFn(ctx, InfoHashKey(infoHash, true, false, "")).Result()
 	if err = NoResultErr(err); err != nil {
 		return
 	}
-	sc6, err = countFn(ctx, InfoHashKey(infoHash, true, true)).Result()
+	sc6, err = countFn(ctx, InfoHashKey(infoHash, true, true, "")).Result()
 	if err = NoResultErr(err); err != nil {
 		return
 	}
