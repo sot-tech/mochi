@@ -4,8 +4,8 @@ go 1.21.5
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20240325171903-fa19631aa7ba
-	github.com/MicahParks/jwkset v0.5.17
-	github.com/MicahParks/keyfunc/v3 v3.3.2
+	github.com/MicahParks/jwkset v0.5.18
+	github.com/MicahParks/keyfunc/v3 v3.3.3
 	github.com/anacrolix/torrent v1.55.0
 	github.com/bmatsuo/lmdb-go v1.8.0
 	github.com/cespare/xxhash/v2 v2.3.0
@@ -14,11 +14,11 @@ require (
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/prometheus/client_golang v1.19.0
-	github.com/redis/go-redis/v9 v9.5.1
+	github.com/prometheus/client_golang v1.19.1
+	github.com/redis/go-redis/v9 v9.5.2
 	github.com/rs/zerolog v1.32.0
 	github.com/stretchr/testify v1.9.0
-	github.com/valyala/fasthttp v1.52.0
+	github.com/valyala/fasthttp v1.54.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
