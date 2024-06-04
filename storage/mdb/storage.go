@@ -1,15 +1,18 @@
-//go:build lmdb && cgo
+//go:build cgo
 
 package mdb
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
+	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
+	"net/netip"
 	"os"
 )
 
@@ -120,10 +123,9 @@ func newStorage(cfg config) (*mdb, error) {
 			return
 		}
 		if len(cfg.PeersDBName) > 0 {
-			peersDB, err = txn.OpenDBI(cfg.PeersDBName, lmdb.Create|lmdb.DupSort|lmdb.DupFixed)
-
+			peersDB, err = txn.CreateDBI(cfg.PeersDBName)
 		} else {
-			peersDB, err = txn.OpenRoot(lmdb.DupSort | lmdb.DupFixed)
+			peersDB, err = txn.OpenRoot(0)
 		}
 		return
 	}); err != nil {
@@ -147,6 +149,20 @@ func (m *mdb) Close() (err error) {
 
 const keySeparator = '_'
 
+func ignoreNotFound(err error) error {
+	if lmdb.IsNotFound(err) {
+		err = nil
+	}
+	return err
+}
+
+func ignoreNotFoundData(data []byte, err error) ([]byte, error) {
+	if lmdb.IsNotFound(err) {
+		err = nil
+	}
+	return data, err
+}
+
 func composeKey(ctx, key string) []byte {
 	ctxLen := len(ctx)
 	res := make([]byte, ctxLen+len(key)+1)
@@ -159,8 +175,12 @@ func composeKey(ctx, key string) []byte {
 func (m *mdb) Put(_ context.Context, storeCtx string, values ...storage.Entry) (err error) {
 	if len(values) > 0 {
 		err = m.Update(func(txn *lmdb.Txn) (err error) {
+			var data []byte
 			for _, kv := range values {
-				if err = txn.Put(m.dataDB, composeKey(storeCtx, kv.Key), kv.Value, 0); err != nil {
+				vl := len(kv.Value)
+				if data, err = txn.PutReserve(m.dataDB, composeKey(storeCtx, kv.Key), vl, 0); err == nil {
+					copy(data, kv.Value)
+				} else {
 					break
 				}
 			}
@@ -183,16 +203,9 @@ func (m *mdb) Contains(_ context.Context, storeCtx string, key string) (contains
 	return
 }
 
-func ignoreNotFound(data []byte, err error) ([]byte, error) {
-	if err != nil && lmdb.IsNotFound(err) {
-		err = nil
-	}
-	return data, err
-}
-
 func (m *mdb) Load(_ context.Context, storeCtx string, key string) (v []byte, err error) {
 	err = m.View(func(txn *lmdb.Txn) (err error) {
-		v, err = ignoreNotFound(txn.Get(m.dataDB, composeKey(storeCtx, key)))
+		v, err = ignoreNotFoundData(txn.Get(m.dataDB, composeKey(storeCtx, key)))
 		return
 	})
 	return
@@ -202,7 +215,7 @@ func (m *mdb) Delete(_ context.Context, storeCtx string, keys ...string) (err er
 	if len(keys) > 0 {
 		err = m.Update(func(txn *lmdb.Txn) (err error) {
 			for _, k := range keys {
-				if err = txn.Del(m.dataDB, composeKey(storeCtx, k), nil); err != nil {
+				if err = ignoreNotFound(txn.Del(m.dataDB, composeKey(storeCtx, k), nil)); err != nil {
 					break
 				}
 			}
@@ -212,9 +225,53 @@ func (m *mdb) Delete(_ context.Context, storeCtx string, keys ...string) (err er
 	return
 }
 
+const (
+	ipLen         = 16
+	packedPeerLen = bittorrent.PeerIDLen + ipLen + 2
+	seederPrefix  = 'S'
+	leecherPrefix = 'L'
+)
+
+func packPeer(peer bittorrent.Peer, out []byte) {
+	_ = out[packedPeerLen-1]
+	copy(out, peer.ID.Bytes())
+	a := peer.Addr().As16()
+	copy(out[bittorrent.PeerIDLen:], a[:])
+	binary.BigEndian.PutUint16(out[bittorrent.PeerIDLen+ipLen:], peer.Port())
+	return
+}
+
+func unpackPeer(arr []byte) (peer bittorrent.Peer) {
+	_ = arr[packedPeerLen-1]
+	peerID, _ := bittorrent.NewPeerID(arr[:bittorrent.PeerIDLen])
+	peer = bittorrent.Peer{
+		ID: peerID,
+		AddrPort: netip.AddrPortFrom(netip.AddrFrom16([ipLen]byte(arr[bittorrent.PeerIDLen:])).Unmap(),
+			binary.BigEndian.Uint16(arr[bittorrent.PeerIDLen+ipLen:])),
+	}
+	return
+}
+
+func composeIHKey(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (ihKey []byte) {
+	ihLen := len(ih)
+	ihKey = make([]byte, ihLen+3+packedPeerLen)
+	if seeder {
+		ihKey[0] = seederPrefix
+	} else {
+		ihKey[0] = leecherPrefix
+	}
+	ihKey[1], ihKey[ihLen+2] = keySeparator, keySeparator
+	copy(ihKey[2:], ih)
+	packPeer(peer, ihKey[ihLen+3:])
+	return
+}
+
 func (m *mdb) PutSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	//TODO implement me
-	panic("implement me")
+	return m.Update(func(txn *lmdb.Txn) error {
+		return txn.Put(m.peersDB, composeIHKey(ih, peer, true),
+			binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())),
+			0)
+	})
 }
 
 func (m *mdb) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -223,8 +280,11 @@ func (m *mdb) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, peer bitto
 }
 
 func (m *mdb) PutLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	//TODO implement me
-	panic("implement me")
+	return m.Update(func(txn *lmdb.Txn) error {
+		return txn.Put(m.peersDB, composeIHKey(ih, peer, false),
+			binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())),
+			0)
+	})
 }
 
 func (m *mdb) DeleteLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {

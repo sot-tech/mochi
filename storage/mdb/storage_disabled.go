@@ -1,3 +1,3 @@
-//go:build !lmdb || !cgo
+//go:build !cgo
 
 package mdb
