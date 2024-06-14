@@ -3,10 +3,12 @@
 package mdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"github.com/bmatsuo/lmdb-go/lmdb"
+	"github.com/bmatsuo/lmdb-go/lmdbscan"
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -14,13 +16,14 @@ import (
 	"github.com/sot-tech/mochi/storage"
 	"net/netip"
 	"os"
+	"time"
 )
 
 const (
 	// Name - registered name of the storage
 	Name           = "lmdb"
 	defaultMode    = 0o640
-	defaultMapSize = 1 << 28
+	defaultMapSize = 1 << 30
 )
 
 var logger = log.NewLogger("storage/memory")
@@ -33,15 +36,15 @@ func init() {
 type builder struct{}
 
 func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
+	return b.NewPeerStorage(icfg)
+}
+
+func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 	return newStorage(cfg)
-}
-
-func (builder) NewPeerStorage(_ conf.MapConfig) (storage.PeerStorage, error) {
-	panic("lmdb peer storage not implemented")
 }
 
 type config struct {
@@ -76,7 +79,7 @@ func (cfg config) validate() (config, error) {
 			Stringer("default", os.FileMode(validCfg.Mode)).
 			Msg("falling back to default configuration")
 	}
-	if cfg.MaxSize == 0 {
+	if cfg.MaxSize <= 0 {
 		validCfg.MaxSize = defaultMapSize
 		logger.Warn().
 			Str("name", "max_size").
@@ -226,10 +229,14 @@ func (m *mdb) Delete(_ context.Context, storeCtx string, keys ...string) (err er
 }
 
 const (
-	ipLen         = 16
-	packedPeerLen = bittorrent.PeerIDLen + ipLen + 2
-	seederPrefix  = 'S'
-	leecherPrefix = 'L'
+	ipLen            = 16
+	packedPeerLen    = bittorrent.PeerIDLen + ipLen + 2 // peer_id + ipv6 + port
+	seederPrefix     = 'S'
+	leecherPrefix    = 'L'
+	ipv4Prefix       = '4'
+	ipv6Prefix       = '6'
+	countPrefix      = 'C'
+	downloadedPrefix = 'D'
 )
 
 func packPeer(peer bittorrent.Peer, out []byte) {
@@ -252,62 +259,227 @@ func unpackPeer(arr []byte) (peer bittorrent.Peer) {
 	return
 }
 
-func composeIHKey(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (ihKey []byte) {
+func composeIHKeyPrefix(ih bittorrent.InfoHash, seeder bool, v6 bool, suffixLen int) (ihKey []byte, suffixStart int) {
 	ihLen := len(ih)
-	ihKey = make([]byte, ihLen+3+packedPeerLen)
+	ihKey = make([]byte, ihLen+4+suffixLen) // prefix{L/S} + prefix{4/6} + separator + infoHash + separator
 	if seeder {
 		ihKey[0] = seederPrefix
 	} else {
 		ihKey[0] = leecherPrefix
 	}
-	ihKey[1], ihKey[ihLen+2] = keySeparator, keySeparator
-	copy(ihKey[2:], ih)
-	packPeer(peer, ihKey[ihLen+3:])
+	if v6 {
+		ihKey[1] = ipv6Prefix
+	} else {
+		ihKey[1] = ipv4Prefix
+	}
+	ihKey[2], ihKey[ihLen+3] = keySeparator, keySeparator
+	copy(ihKey[3:], ih)
+	suffixStart = len(ihKey) - suffixLen
 	return
 }
 
-func (m *mdb) PutSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return m.Update(func(txn *lmdb.Txn) error {
-		return txn.Put(m.peersDB, composeIHKey(ih, peer, true),
+func composeIHKey(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) (ihKey []byte) {
+	ihKey, start := composeIHKeyPrefix(ih, seeder, peer.Addr().Is6(), packedPeerLen)
+	packPeer(peer, ihKey[start:])
+	return
+}
+
+func (m *mdb) incr(txn *lmdb.Txn, key []byte, inc int) (err error) {
+	var v int
+	var b []byte
+	if b, err = ignoreNotFoundData(txn.Get(m.peersDB, key)); err != nil {
+		return
+	}
+	if len(b) >= 4 {
+		v = int(binary.BigEndian.Uint32(b))
+	} else {
+		b = make([]byte, 4)
+	}
+	v += inc
+	if v < 0 {
+		v = 0
+	}
+	binary.BigEndian.PutUint32(b, uint32(v))
+	return txn.Put(m.peersDB, key, b, 0)
+}
+
+func (m *mdb) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) error {
+	ihKey := composeIHKey(ih, peer, seeder)
+	return m.Update(func(txn *lmdb.Txn) (err error) {
+		if err = txn.Put(m.peersDB, ihKey,
 			binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())),
-			0)
+			0); err == nil {
+			ihKey[1] = countPrefix
+			err = m.incr(txn, ihKey[:len(ihKey)-packedPeerLen], 1)
+		}
+		return
 	})
+}
+
+func (m *mdb) delPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) error {
+	ihKey := composeIHKey(ih, peer, seeder)
+	return m.Update(func(txn *lmdb.Txn) (err error) {
+		if err = ignoreNotFound(txn.Del(m.peersDB, ihKey, nil)); err == nil {
+			ihKey[1] = countPrefix
+			err = m.incr(txn, ihKey[:len(ihKey)-packedPeerLen], -1)
+		}
+		return
+	})
+}
+
+func (m *mdb) PutSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
+	return m.putPeer(ih, peer, true)
 }
 
 func (m *mdb) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	//TODO implement me
-	panic("implement me")
+	return m.delPeer(ih, peer, true)
 }
 
 func (m *mdb) PutLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	return m.Update(func(txn *lmdb.Txn) error {
-		return txn.Put(m.peersDB, composeIHKey(ih, peer, false),
-			binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())),
-			0)
-	})
+	return m.putPeer(ih, peer, false)
 }
 
 func (m *mdb) DeleteLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	//TODO implement me
-	panic("implement me")
+	return m.delPeer(ih, peer, false)
 }
 
 func (m *mdb) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
-	//TODO implement me
-	panic("implement me")
+	ihKey := composeIHKey(ih, peer, false)
+	return m.Update(func(txn *lmdb.Txn) (err error) {
+		if err = ignoreNotFound(txn.Del(m.peersDB, ihKey, nil)); err != nil {
+			return
+		}
+		ihKey[0] = seederPrefix
+		if err = txn.Put(m.peersDB, ihKey, binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())), 0); err != nil {
+			return
+		}
+		ihPrefix := ihKey[:len(ihKey)-packedPeerLen]
+		ihPrefix[1] = countPrefix
+		if err = m.incr(txn, ihPrefix, 1); err != nil {
+			return
+		}
+		ihPrefix[0] = leecherPrefix
+		if err = m.incr(txn, ihPrefix, -1); err != nil {
+			return
+		}
+		ihPrefix[0] = downloadedPrefix
+		err = m.incr(txn, ihPrefix, 1)
+		return
+	})
 }
 
-func (m *mdb) AnnouncePeers(_ context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
-	//TODO implement me
-	panic("implement me")
+type scanAction int
+
+const (
+	next scanAction = iota
+	stop
+	del
+)
+
+func (m *mdb) scanPeers(ctx context.Context, prefix []byte, rw bool, fn func(k, v []byte) scanAction) (err error) {
+	prefixLen := len(prefix)
+	txFunc := func(txn *lmdb.Txn) (err error) {
+		txn.RawRead = true
+		scanner := lmdbscan.New(txn, m.peersDB)
+		defer scanner.Close()
+		if scanner.SetNext(prefix, nil, lmdb.SetRange, lmdb.Next) {
+		loop:
+			for scanner.Scan() {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					k := scanner.Key()
+					if !bytes.HasPrefix(k, prefix) {
+						break loop
+					}
+					if len(k) == prefixLen+packedPeerLen {
+						switch fn(k, scanner.Val()) {
+						case del:
+							if err = scanner.Cursor().Del(0); err != nil {
+								break loop
+							}
+						case stop:
+							break loop
+						}
+					} else {
+						logger.Warn().Int("expected", prefixLen+packedPeerLen).Int("got", len(k)).
+							Msg("Invalid key length")
+					}
+				}
+			}
+			err = scanner.Err()
+		}
+		return
+	}
+
+	if rw {
+		err = m.Update(txFunc)
+	} else {
+		err = m.View(txFunc)
+	}
+
+	return
+}
+
+func (m *mdb) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+	prefix, prefixLen := composeIHKeyPrefix(ih, false, v6, 0)
+	appendFn := func(k, _ []byte) scanAction {
+		peers = append(peers, unpackPeer(k[prefixLen:]))
+		numWant--
+		res := next
+		if numWant == 0 {
+			res = stop
+		}
+		return res
+	}
+	if forSeeder {
+		err = m.scanPeers(ctx, prefix, false, appendFn)
+	} else {
+		prefix[0] = seederPrefix
+		if err = m.scanPeers(ctx, prefix, false, appendFn); err == nil && numWant > 0 {
+			prefix[0] = leecherPrefix
+			err = m.scanPeers(ctx, prefix, false, appendFn)
+		}
+	}
+	return
 }
 
 func (m *mdb) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
+	prefix, _ := composeIHKeyPrefix(ih, false, false, 0)
+	prefix[1] = countPrefix
+	var b []byte
+	err = m.View(func(txn *lmdb.Txn) (err error) {
+		if b, err = ignoreNotFoundData(txn.Get(m.peersDB, prefix)); err != nil {
+			return
+		} else if len(b) >= 4 {
+			leechers = binary.BigEndian.Uint32(b)
+		}
+
+		prefix[0] = seederPrefix
+		if b, err = ignoreNotFoundData(txn.Get(m.peersDB, prefix)); err != nil {
+			return
+		} else if len(b) >= 4 {
+			seeders = binary.BigEndian.Uint32(b)
+		}
+
+		prefix[0] = downloadedPrefix
+		if b, err = ignoreNotFoundData(txn.Get(m.peersDB, prefix)); err != nil {
+			return
+		} else if len(b) >= 4 {
+			snatched = binary.BigEndian.Uint32(b)
+		}
+		return
+	})
+	return
+}
+
+func (m *mdb) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (m *mdb) Ping(_ context.Context) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := m.Info()
+	return err
 }
