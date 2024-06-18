@@ -8,12 +8,15 @@ import (
 	"testing"
 )
 
+const tmpPath = ""
+
 var cfg = config{
 	Path:        "",
 	Mode:        defaultMode,
 	DataDBName:  "KV",
 	PeersDBName: "PEERS",
 	MaxSize:     defaultMapSize,
+	MaxReaders:  defaultMaxReaders,
 }
 
 func createNew() s.PeerStorage {
@@ -27,7 +30,7 @@ func createNew() s.PeerStorage {
 }
 
 func TestStorage(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "lmdb*")
+	tmpDir, err := os.MkdirTemp(tmpPath, "lmdb*")
 	if err != nil {
 		t.Error(err)
 	}
@@ -41,7 +44,7 @@ func TestStorage(t *testing.T) {
 }
 
 func BenchmarkStorage(b *testing.B) {
-	tmpDir, err := os.MkdirTemp("", "lmdb*")
+	tmpDir, err := os.MkdirTemp(tmpPath, "lmdb*")
 	if err != nil {
 		b.Error(err)
 	}

@@ -7,23 +7,26 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/bmatsuo/lmdb-go/lmdb"
-	"github.com/bmatsuo/lmdb-go/lmdbscan"
+	"github.com/PowerDNS/lmdb-go/exp/lmdbsync"
+	"net/netip"
+	"os"
+	"time"
+
+	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/PowerDNS/lmdb-go/lmdbscan"
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/sot-tech/mochi/pkg/timecache"
 	"github.com/sot-tech/mochi/storage"
-	"net/netip"
-	"os"
-	"time"
 )
 
 const (
 	// Name - registered name of the storage
-	Name           = "lmdb"
-	defaultMode    = 0o640
-	defaultMapSize = 1 << 30
+	Name              = "lmdb"
+	defaultMode       = 0o640
+	defaultMapSize    = 1 << 30
+	defaultMaxReaders = 126
 )
 
 var logger = log.NewLogger("storage/memory")
@@ -52,7 +55,13 @@ type config struct {
 	Mode        uint32
 	DataDBName  string `cfg:"data_db"`
 	PeersDBName string `cfg:"peers_db"`
-	MaxSize     int64  `cfg:"max_size"`
+	// MaxSize - size of the memory map to use for lmdb environment.
+	// The size should be a multiple of the OS page size.
+	// Mochi's default is 1GiB.
+	MaxSize int64 `cfg:"max_size"`
+	// MaxReaders - maximum number of threads/reader slots for the LMDB environment.
+	// LMDB library's default is 126.
+	MaxReaders int `cfg:"max_readers"`
 }
 
 var (
@@ -87,11 +96,19 @@ func (cfg config) validate() (config, error) {
 			Int64("default", validCfg.MaxSize).
 			Msg("falling back to default configuration")
 	}
+	if cfg.MaxReaders <= 0 {
+		validCfg.MaxReaders = defaultMaxReaders
+		logger.Warn().
+			Str("name", "max_readers").
+			Int("provided", cfg.MaxReaders).
+			Int("default", 126).
+			Msg("falling back to default configuration")
+	}
 	return validCfg, nil
 }
 
 type mdb struct {
-	*lmdb.Env
+	*lmdbsync.Env
 	dataDB, peersDB lmdb.DBI
 }
 
@@ -100,15 +117,28 @@ func newStorage(cfg config) (*mdb, error) {
 	if cfg, err = cfg.validate(); err != nil {
 		return nil, err
 	}
-	env, err := lmdb.NewEnv()
+	lmEnv, err := lmdb.NewEnv()
 	if err != nil {
 		return nil, err
 	}
+	var env *lmdbsync.Env
+
+	if env, err = lmdbsync.NewEnv(lmEnv,
+		lmdbsync.MapResizedHandler(lmdbsync.MapResizedDefaultRetry, lmdbsync.MapResizedDefaultDelay),
+	); err != nil {
+		return nil, err
+	}
+
 	if err = env.SetMaxDBs(2); err != nil {
 		return nil, err
 	}
 	if err = env.SetMapSize(cfg.MaxSize); err != nil {
 		return nil, err
+	}
+	if cfg.MaxReaders > 0 {
+		if err = env.SetMaxReaders(cfg.MaxReaders); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = env.Open(cfg.Path, 0, os.FileMode(cfg.Mode)); err != nil {
@@ -292,23 +322,23 @@ func (m *mdb) incr(txn *lmdb.Txn, key []byte, inc int) (err error) {
 	}
 	if len(b) >= 4 {
 		v = int(binary.BigEndian.Uint32(b))
-	} else {
-		b = make([]byte, 4)
 	}
 	v += inc
 	if v < 0 {
 		v = 0
 	}
-	binary.BigEndian.PutUint32(b, uint32(v))
-	return txn.Put(m.peersDB, key, b, 0)
+	if b, err = txn.PutReserve(m.peersDB, key, 4, 0); err == nil {
+		binary.BigEndian.PutUint32(b, uint32(v))
+	}
+	return
 }
 
 func (m *mdb) putPeer(ih bittorrent.InfoHash, peer bittorrent.Peer, seeder bool) error {
 	ihKey := composeIHKey(ih, peer, seeder)
 	return m.Update(func(txn *lmdb.Txn) (err error) {
-		if err = txn.Put(m.peersDB, ihKey,
-			binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())),
-			0); err == nil {
+		var b []byte
+		if b, err = txn.PutReserve(m.peersDB, ihKey, 8, 0); err == nil {
+			binary.BigEndian.PutUint64(b, uint64(timecache.NowUnixNano()))
 			ihKey[1] = countPrefix
 			err = m.incr(txn, ihKey[:len(ihKey)-packedPeerLen], 1)
 		}
@@ -350,9 +380,11 @@ func (m *mdb) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, peer bi
 			return
 		}
 		ihKey[0] = seederPrefix
-		if err = txn.Put(m.peersDB, ihKey, binary.BigEndian.AppendUint64(nil, uint64(timecache.NowUnixNano())), 0); err != nil {
+		var b []byte
+		if b, err = txn.PutReserve(m.peersDB, ihKey, 8, 0); err != nil {
 			return
 		}
+		binary.BigEndian.PutUint64(b, uint64(timecache.NowUnixNano()))
 		ihPrefix := ihKey[:len(ihKey)-packedPeerLen]
 		ihPrefix[1] = countPrefix
 		if err = m.incr(txn, ihPrefix, 1); err != nil {
@@ -423,6 +455,7 @@ func (m *mdb) scanPeers(ctx context.Context, prefix []byte, rw bool, fn func(k, 
 }
 
 func (m *mdb) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+	peers = make([]bittorrent.Peer, 0, numWant)
 	prefix, prefixLen := composeIHKeyPrefix(ih, false, v6, 0)
 	appendFn := func(k, _ []byte) scanAction {
 		peers = append(peers, unpackPeer(k[prefixLen:]))
