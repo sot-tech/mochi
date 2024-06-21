@@ -17,6 +17,8 @@ var cfg = config{
 	PeersDBName: "PEERS",
 	MaxSize:     defaultMapSize,
 	MaxReaders:  defaultMaxReaders,
+	AsyncWrite:  true,
+	NoMetaSync:  false,
 }
 
 func createNew() s.PeerStorage {

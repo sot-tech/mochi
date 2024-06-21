@@ -56,15 +56,11 @@ storage:
         # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
         gc_interval: 3m
 
-        # The interval at which metrics about the number of infohashes and peers
-        # are collected and posted to Prometheus.
-        prometheus_reporting_interval: 1s
-
         # The amount of time until a peer is considered stale.
         # To avoid churn, keep this slightly larger than `announce_interval`
         peer_lifetime: 31m
 
-        # Path to LMDB folder. Must exist
+        # Path to LMDB folder. Required.
         Path: ""
 
         # File mode of created database files, default is 0o640
@@ -78,6 +74,16 @@ storage:
 
         # Maximum size of database, default is 1GiB
         max_size: 0
+
+        # Set MDB_WRITEMAP and MDB_MAPASYNC flags to use asynchronous flushes to disk.
+        # The installation of the flag can highly speed up writes, but there is a risk of DB damage
+        # or loss of last committed data if the application crashes.
+        async_write: true
+
+        # Set MDB_NOMETASYNC flag. Omit the metadata flush on commit.
+        # Can a little accelerate writes if `async_write` not set, but last committed data
+        # bay be lost if the application crashes.
+        no_sync_meta: false
 
 posthooks: []
 prehooks: []

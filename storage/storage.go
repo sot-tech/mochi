@@ -239,7 +239,7 @@ func RegisterDriver(name string, d Driver) {
 func NewDataStorage(cfg conf.NamedMapConfig) (DataStorage, error) {
 	driversMU.RLock()
 	defer driversMU.RUnlock()
-	logger.Debug().Object("config", cfg).Msg("starting peer storage")
+	logger.Debug().Object("config", cfg).Msg("starting data storage")
 
 	var d Driver
 	d, ok := drivers[cfg.Name]
