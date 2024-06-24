@@ -75,6 +75,10 @@ storage:
         # Maximum size of database, default is 1GiB
         max_size: 0
 
+        # Maximum number of threads/reader slots for the LMDB environment,
+        # default is 126.
+        max_readers: 0
+
         # Set MDB_WRITEMAP and MDB_MAPASYNC flags to use asynchronous flushes to disk.
         # The installation of the flag can highly speed up writes, but there is a risk of DB damage
         # or loss of last committed data if the application crashes.
