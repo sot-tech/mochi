@@ -12,12 +12,13 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/conf"
+	"github.com/sot-tech/mochi/storage"
+
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
 
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
-	"github.com/sot-tech/mochi/storage"
 )
 
 // Name is the name by which this middleware is registered with Conf.
@@ -32,10 +33,10 @@ func init() {
 type baseConfig struct {
 	// Source - name of container for initial values
 	Source string `cfg:"initial_source"`
-	// Deprecated: use Store parameter
+	// Deprecated: use Storage parameter
 	Preserve bool
-	// Store where to hold provided data by Source
-	Store conf.NamedMapConfig
+	// Storage where to hold provided data by Source
+	Storage conf.NamedMapConfig
 	// Configuration depends on used container
 	Configuration conf.MapConfig
 }
@@ -58,16 +59,18 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 		return nil, errors.New("preserve option is deprecated, use store parameter")
 	}
 
-	var ds storage.DataStorage
-	if len(cfg.Store.Name) == 0 || cfg.Store.Name == internalStore {
+	var ds, dsc storage.DataStorage
+	if len(cfg.Storage.Name) == 0 || cfg.Storage.Name == internalStore {
 		ds = st
-	} else if ds, err = storage.NewDataStorage(cfg.Store); err != nil {
+	} else if ds, err = storage.NewDataStorage(cfg.Storage); err == nil {
+		dsc = ds
+	} else {
 		return
 	}
 
 	var c container.Container
 	if c, err = container.GetContainer(cfg.Source, cfg.Configuration, ds); err == nil {
-		h = &hook{c}
+		h = &hook{c, dsc}
 	}
 	return h, err
 }
@@ -76,7 +79,8 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 var ErrTorrentUnapproved = bittorrent.ClientError("torrent not allowed by mochi")
 
 type hook struct {
-	hashContainer container.Container
+	hashContainer   container.Container
+	providedStorage storage.DataStorage
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
@@ -97,6 +101,9 @@ func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ 
 func (h *hook) Close() (err error) {
 	if cl, isOk := h.hashContainer.(io.Closer); isOk {
 		err = cl.Close()
+	}
+	if stErr := h.providedStorage.Close(); stErr != nil {
+		err = errors.Join(err, stErr)
 	}
 	return err
 }

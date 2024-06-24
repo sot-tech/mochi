@@ -2,10 +2,11 @@ package mdb
 
 import (
 	"fmt"
-	s "github.com/sot-tech/mochi/storage"
-	"github.com/sot-tech/mochi/storage/test"
 	"os"
 	"testing"
+
+	s "github.com/sot-tech/mochi/storage"
+	"github.com/sot-tech/mochi/storage/test"
 )
 
 const tmpPath = ""
@@ -37,9 +38,7 @@ func TestStorage(t *testing.T) {
 		t.Error(err)
 	}
 	t.Cleanup(func() {
-		err := os.RemoveAll(tmpDir)
-		if err != nil {
-		}
+		_ = os.RemoveAll(tmpDir)
 	})
 	cfg.Path = tmpDir
 	test.RunTests(t, createNew())
@@ -51,9 +50,7 @@ func BenchmarkStorage(b *testing.B) {
 		b.Error(err)
 	}
 	b.Cleanup(func() {
-		err := os.RemoveAll(tmpDir)
-		if err != nil {
-		}
+		_ = os.RemoveAll(tmpDir)
 	})
 	cfg.Path = tmpDir
 	test.RunBenchmarks(b, createNew)

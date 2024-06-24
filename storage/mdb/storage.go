@@ -1,5 +1,6 @@
 //go:build cgo
 
+// Package mdb implements LMDB data and peer storage
 package mdb
 
 import (
@@ -7,14 +8,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/PowerDNS/lmdb-go/exp/lmdbsync"
 	"net/netip"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/PowerDNS/lmdb-go/exp/lmdbsync"
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/PowerDNS/lmdb-go/lmdbscan"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/conf"
 	"github.com/sot-tech/mochi/pkg/log"
@@ -78,12 +80,10 @@ func (cfg config) validate() (config, error) {
 	validCfg := cfg
 	if len(cfg.Path) == 0 {
 		return cfg, errPathNotProvided
-	} else {
-		if stat, err := os.Stat(cfg.Path); err != nil {
-			return cfg, err
-		} else if !stat.IsDir() {
-			return cfg, errPathNotDirectory
-		}
+	} else if stat, err := os.Stat(cfg.Path); err != nil {
+		return cfg, err
+	} else if !stat.IsDir() {
+		return cfg, errPathNotDirectory
 	}
 	if cfg.Mode == 0 {
 		validCfg.Mode = defaultMode
@@ -314,7 +314,6 @@ func packPeer(peer bittorrent.Peer, out []byte) {
 	a := peer.Addr().As16()
 	copy(out[bittorrent.PeerIDLen:], a[:])
 	binary.BigEndian.PutUint16(out[bittorrent.PeerIDLen+ipLen:], peer.Port())
-	return
 }
 
 func unpackPeer(arr []byte) (peer bittorrent.Peer) {

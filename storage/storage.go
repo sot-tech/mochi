@@ -85,7 +85,11 @@ type Entry struct {
 // Driver is the interface used to initialize a new DataStorage or PeerStorage
 // with provided configuration.
 type Driver interface {
+	// NewDataStorage function prototype for creating new instance of data (KV) storage
+	// with provided configuration
 	NewDataStorage(cfg conf.MapConfig) (DataStorage, error)
+	// NewPeerStorage function prototype for creating new instance of peer storage
+	// with provided configuration
 	NewPeerStorage(cfg conf.MapConfig) (PeerStorage, error)
 }
 

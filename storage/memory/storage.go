@@ -35,12 +35,15 @@ func init() {
 	storage.RegisterDriver(Name, Builder{})
 }
 
+// Builder is structure to create new in-memory peer or data storage
 type Builder struct{}
 
+// NewDataStorage creates new in-memory KV storage. Does not need configuration
 func (Builder) NewDataStorage(conf.MapConfig) (storage.DataStorage, error) {
 	return dataStorage(), nil
 }
 
+// NewPeerStorage creates new in-memory peer storage
 func (Builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
 	var cfg config
 	if err := icfg.Unmarshal(&cfg); err != nil {

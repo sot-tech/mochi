@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/sot-tech/mochi/pkg/str2bytes"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -99,6 +100,7 @@ func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error
 	return b.NewPeerStorage(icfg)
 }
 
+// NewStore creates new redis peer storage with provided configuration structure
 func NewStore(cfg Config) (storage.PeerStorage, error) {
 	cfg, err := cfg.Validate()
 	if err != nil {

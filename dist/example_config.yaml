@@ -208,7 +208,7 @@ prehooks:
 #                initial_source: list
 # Save data provided by source in specific storage. If name is empty or 'internal', provided above 'storage'
 # is used, but another storage may be provided (configuration is the same as for 'storage' above)
-#                store:
+#                storage:
 #                    name: internal
 #                    config:
 #                configuration:
