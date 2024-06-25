@@ -13,7 +13,7 @@ Modified version of [Chihaya](https://github.com/chihaya/chihaya), an open sourc
 * Supports BittorrentV2 hashes (SHA-256 and _hybrid_
   SHA-256-to-160 [BEP52](https://www.bittorrent.org/beps/bep_0052.html), tested with qBittorrent);
 * Supports storage in middleware modules to persist useful data;
-* Supports [KeyDB](https://keydb.dev) and [PostgreSQL](https://www.postgresql.org) storages;
+* Supports [KeyDB](https://keydb.dev), [PostgreSQL](https://www.postgresql.org) and [LMDB](https://www.symas.com/lmdb) storages;
 * Metrics can be turned off (not enabled till it really needed);
 * Allows mixed peers: IPv4 requesters can fetch IPv6 peers or vice versa;
 * Contains some internal improvements.
