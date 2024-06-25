@@ -22,7 +22,7 @@ type Hook interface {
 // to check if it is operational. Used in frontend.Logic.
 //
 // It may be useful in cases when Hook performs foreign requests to
-// some external resources (i.e. storage) and `ping` request should
+// some external resources (e.g. storage) and `ping` request should
 // also check resource availability.
 type Pinger interface {
 	Ping(ctx context.Context) error

@@ -3,7 +3,7 @@
 This storage uses PostgreSQL-like database to store peer and arbitrary key-value data.
 
 'PostgreSQL-like' means, that you can use any database which _understand_ PostgreSQL protocol
-i.e. _real_ [PostgreSQL](https://www.postgresql.org) or [CockroachDB](https://www.cockroachlabs.com).
+e.g. _real_ [PostgreSQL](https://www.postgresql.org) or [CockroachDB](https://www.cockroachlabs.com).
 
 _(YugabyteDB is not recommended (at the moment), because of some problems with
 concurrent inserts while benchmarks.)_
