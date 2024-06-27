@@ -35,8 +35,7 @@ Fields:
    * `<PEERID>` - 20 bytes of peer ID
    * `<IPADDRESS>` - 16 bytes of BE-encoded IP address (real IPv6 or IPv4-mapped IPv6 address)
    * `<PORT>` - 2 bytes of BE-encoded port
-2. Key `<PREFIX>_<INFOHASH>_`, value - BE-encoded unsigned 32-bit integer.
-`<PREFIX>` is `LC`, `SC`, `DC` string for leechers, seeders or downloaded count of specified `<INFOHASH>` (20 or 32 bytes).
+2. Key `DC_<INFOHASH>_` - downloaded count of specified `<INFOHASH>` (20 or 32 bytes), value - BE-encoded unsigned 32-bit integer.
 
 Write speed may be increased with `no_sync_meta` and `async_write` configuration options,
 but the risk of DB corruption is also increase.

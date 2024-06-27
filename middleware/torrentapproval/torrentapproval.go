@@ -102,8 +102,10 @@ func (h *hook) Close() (err error) {
 	if cl, isOk := h.hashContainer.(io.Closer); isOk {
 		err = cl.Close()
 	}
-	if stErr := h.providedStorage.Close(); stErr != nil {
-		err = errors.Join(err, stErr)
+	if h.providedStorage != nil {
+		if stErr := h.providedStorage.Close(); stErr != nil {
+			err = errors.Join(err, stErr)
+		}
 	}
 	return err
 }
