@@ -179,33 +179,33 @@ goos: linux
 goarch: amd64
 pkg: github.com/sot-tech/mochi/storage/mdb
 cpu: 12th Gen Intel(R) Core(TM) i5-12500H
-BenchmarkStorage/BenchmarkNop-16                1000000000               0.1721 ns/op          0 B/op          0 allocs/op
-BenchmarkStorage/BenchmarkPut-16                  327027              3127 ns/op             268 B/op          6 allocs/op
-BenchmarkStorage/BenchmarkPut1k-16                320313              4422 ns/op             268 B/op          6 allocs/op
-BenchmarkStorage/BenchmarkPut1kInfoHash-16                295910              4002 ns/op             260 B/op          6 allocs/op
-BenchmarkStorage/BenchmarkPut1kInfoHash1k-16              258867              4967 ns/op             260 B/op          6 allocs/op
-BenchmarkStorage/BenchmarkPutDelete-16                    299650              3814 ns/op             568 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkPutDelete1k-16                  293272              4041 ns/op             568 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkPutDelete1kInfoHash-16          268844              4367 ns/op             552 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkPutDelete1kInfoHash1k-16        254877              4553 ns/op             552 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkDeleteNonexist-16               420516              4119 ns/op             372 B/op         11 allocs/op
-BenchmarkStorage/BenchmarkDeleteNonexist1k-16             218998              4668 ns/op             372 B/op         11 allocs/op
-BenchmarkStorage/BenchmarkDeleteNonexist1kInfoHash-16             308973              3916 ns/op             364 B/op         11 allocs/op
-BenchmarkStorage/BenchmarkDeleteNonexist1kInfoHash1k-16           391814              3435 ns/op             364 B/op         11 allocs/op
-BenchmarkStorage/BenchmarkPutGradDelete-16                        152656              7754 ns/op             876 B/op         22 allocs/op
-BenchmarkStorage/BenchmarkPutGradDelete1k-16                      153908              7915 ns/op             876 B/op         22 allocs/op
-BenchmarkStorage/BenchmarkPutGradDelete1kInfoHash-16              130611              9273 ns/op             852 B/op         22 allocs/op
-BenchmarkStorage/BenchmarkPutGradDelete1kInfoHash1k-16            127370              9124 ns/op             852 B/op         22 allocs/op
-BenchmarkStorage/BenchmarkGradNonexist-16                         209017              5403 ns/op             380 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkGradNonexist1k-16                       225026              6203 ns/op             380 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkGradNonexist1kInfoHash-16               184981              6386 ns/op             372 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkGradNonexist1kInfoHash1k-16             181864              5550 ns/op             372 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkAnnounceLeecher-16                      676172              1937 ns/op            3648 B/op         15 allocs/op
-BenchmarkStorage/BenchmarkAnnounceLeecher1kInfoHash-16            639292              2022 ns/op            3636 B/op         15 allocs/op
-BenchmarkStorage/BenchmarkAnnounceSeeder-16                       926640              1300 ns/op            3416 B/op         10 allocs/op
-BenchmarkStorage/BenchmarkAnnounceSeeder1kInfoHash-16             880938              1390 ns/op            3404 B/op         10 allocs/op
-BenchmarkStorage/BenchmarkScrapeSwarm-16                         2990839               399.6 ns/op           344 B/op         13 allocs/op
-BenchmarkStorage/BenchmarkScrapeSwarm1kInfoHash-16               3079238               382.5 ns/op           332 B/op         13 allocs/op
+BenchmarkStorage/BenchmarkNop-16                1000000000               0.1618 ns/op          0 B/op          0 allocs/op
+BenchmarkStorage/BenchmarkPut-16                  356353              3095 ns/op             264 B/op          5 allocs/op
+BenchmarkStorage/BenchmarkPut1k-16                402933              3055 ns/op             264 B/op          5 allocs/op
+BenchmarkStorage/BenchmarkPut1kInfoHash-16                381813              2966 ns/op             256 B/op          5 allocs/op
+BenchmarkStorage/BenchmarkPut1kInfoHash1k-16              376526              3083 ns/op             256 B/op          5 allocs/op
+BenchmarkStorage/BenchmarkPutDelete-16                    423085              2595 ns/op             528 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkPutDelete1k-16                  443782              2656 ns/op             528 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkPutDelete1kInfoHash-16          434588              2738 ns/op             512 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkPutDelete1kInfoHash1k-16        393522              2770 ns/op             512 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkDeleteNonexist-16               887683              1353 ns/op             300 B/op          7 allocs/op
+BenchmarkStorage/BenchmarkDeleteNonexist1k-16             914343              1323 ns/op             300 B/op          7 allocs/op
+BenchmarkStorage/BenchmarkDeleteNonexist1kInfoHash-16             921487              1328 ns/op             292 B/op          7 allocs/op
+BenchmarkStorage/BenchmarkDeleteNonexist1kInfoHash1k-16           911662              1322 ns/op             292 B/op          7 allocs/op
+BenchmarkStorage/BenchmarkPutGradDelete-16                        210553              5038 ns/op             796 B/op         16 allocs/op
+BenchmarkStorage/BenchmarkPutGradDelete1k-16                      205284              5106 ns/op             796 B/op         16 allocs/op
+BenchmarkStorage/BenchmarkPutGradDelete1kInfoHash-16              193164              5751 ns/op             772 B/op         16 allocs/op
+BenchmarkStorage/BenchmarkPutGradDelete1kInfoHash1k-16            199144              5867 ns/op             772 B/op         16 allocs/op
+BenchmarkStorage/BenchmarkGradNonexist-16                         264282              4037 ns/op             304 B/op          8 allocs/op
+BenchmarkStorage/BenchmarkGradNonexist1k-16                       274296              3930 ns/op             304 B/op          8 allocs/op
+BenchmarkStorage/BenchmarkGradNonexist1kInfoHash-16               268438              4886 ns/op             296 B/op          8 allocs/op
+BenchmarkStorage/BenchmarkGradNonexist1kInfoHash1k-16             191442              5425 ns/op             296 B/op          8 allocs/op
+BenchmarkStorage/BenchmarkAnnounceLeecher-16                      647808              1658 ns/op            3648 B/op         15 allocs/op
+BenchmarkStorage/BenchmarkAnnounceLeecher1kInfoHash-16            684120              1813 ns/op            3636 B/op         15 allocs/op
+BenchmarkStorage/BenchmarkAnnounceSeeder-16                       877350              1282 ns/op            3416 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkAnnounceSeeder1kInfoHash-16             847063              1307 ns/op            3404 B/op         10 allocs/op
+BenchmarkStorage/BenchmarkScrapeSwarm-16                          614961              1767 ns/op             712 B/op         20 allocs/op
+BenchmarkStorage/BenchmarkScrapeSwarm1kInfoHash-16                659012              1870 ns/op             700 B/op         20 allocs/op
 PASS
-ok      github.com/sot-tech/mochi/storage/mdb   46.359s
+ok      github.com/sot-tech/mochi/storage/mdb   42.032s
 ```
