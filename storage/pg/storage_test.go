@@ -12,7 +12,7 @@ import (
 const (
 	createTablesQuery = `
 DROP TABLE IF EXISTS mo_peers;
-CREATE TABLE mo_peers (
+CREATE UNLOGGED TABLE mo_peers (
 	info_hash bytea NOT NULL,
 	peer_id bytea NOT NULL,
 	address inet NOT NULL,
@@ -27,7 +27,7 @@ CREATE INDEX mo_peers_created_idx ON mo_peers(created);
 CREATE INDEX mo_peers_announce_idx ON mo_peers(info_hash, is_seeder, is_v6);
 
 DROP TABLE IF EXISTS mo_downloads;
-CREATE TABLE mo_downloads (
+CREATE UNLOGGED TABLE mo_downloads (
 	info_hash bytea PRIMARY KEY NOT NULL,
 	downloads int NOT NULL DEFAULT 1
 );
@@ -42,7 +42,7 @@ CREATE TABLE mo_kv (
 `
 )
 
-var cfg = Config{
+var cfg = config{
 	ConnectionString: "host=127.0.0.1 database=test user=postgres pool_max_conns=50",
 	PingQuery:        "SELECT 1",
 	Peer: peerQueryConf{
@@ -76,6 +76,10 @@ var cfg = Config{
 func createNew() s.PeerStorage {
 	var ps s.PeerStorage
 	var err error
+	cfg, err = cfg.validateFull()
+	if err != nil {
+		panic(fmt.Sprint("invalid configuration: ", err))
+	}
 	ps, err = newStore(cfg)
 	if err != nil {
 		panic(fmt.Sprint("Unable to create PostgreSQL connection: ", err, "\nThis driver needs real PostgreSQL instance"))

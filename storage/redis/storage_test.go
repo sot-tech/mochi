@@ -19,7 +19,7 @@ var cfg = Config{
 func createNew() s.PeerStorage {
 	var ps s.PeerStorage
 	var err error
-	ps, err = newStore(cfg)
+	ps, err = NewStore(cfg)
 	if err != nil {
 		panic(fmt.Sprint("Unable to create Redis connection: ", err, "\nThis driver needs real Redis instance"))
 	}

@@ -32,27 +32,31 @@ var logger = log.NewLogger("storage/memory")
 
 func init() {
 	// Register the storage driver.
-	storage.RegisterDriver(Name, builder)
+	storage.RegisterDriver(Name, Builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
-	var cfg Config
+// Builder is structure to create new in-memory peer or data storage
+type Builder struct{}
+
+// NewDataStorage creates new in-memory KV storage. Does not need configuration
+func (Builder) NewDataStorage(conf.MapConfig) (storage.DataStorage, error) {
+	return dataStorage(), nil
+}
+
+// NewPeerStorage creates new in-memory peer storage
+func (Builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+	var cfg config
 	if err := icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	return NewPeerStorage(cfg)
+	return peerStorage(cfg)
 }
 
-// Config holds the configuration of a memory PeerStorage.
-type Config struct {
+type config struct {
 	ShardCount int `cfg:"shard_count"`
 }
 
-// Validate sanity checks values set in a config and returns a new config with
-// default values replacing anything that is invalid.
-//
-// This function warns to the logger when a value is changed.
-func (cfg Config) Validate() Config {
+func (cfg config) validate() config {
 	validcfg := cfg
 
 	if cfg.ShardCount <= 0 || cfg.ShardCount > (math.MaxInt/2) {
@@ -67,12 +71,11 @@ func (cfg Config) Validate() Config {
 	return validcfg
 }
 
-// NewPeerStorage creates a new PeerStorage backed by memory.
-func NewPeerStorage(provided Config) (storage.PeerStorage, error) {
-	cfg := provided.Validate()
+func peerStorage(provided config) (storage.PeerStorage, error) {
+	cfg := provided.validate()
 	ps := &peerStore{
 		shards:      make([]*peerShard, cfg.ShardCount*2),
-		DataStorage: NewDataStorage(),
+		DataStorage: dataStorage(),
 		closed:      make(chan any),
 	}
 
@@ -453,8 +456,7 @@ func (ps *peerStore) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (lee
 	return
 }
 
-// NewDataStorage creates new in-memory data store
-func NewDataStorage() storage.DataStorage {
+func dataStorage() storage.DataStorage {
 	return new(dataStore)
 }
 

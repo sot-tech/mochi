@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/sot-tech/mochi/pkg/str2bytes"
 
 	"github.com/sot-tech/mochi/bittorrent"
@@ -79,21 +80,28 @@ var (
 
 func init() {
 	// Register the storage builder.
-	storage.RegisterDriver("redis", builder)
+	storage.RegisterDriver("redis", builder{})
 }
 
-func builder(icfg conf.MapConfig) (storage.PeerStorage, error) {
-	// Unmarshal the bytes into the proper config type.
-	var cfg Config
+type builder struct{}
 
-	if err := icfg.Unmarshal(&cfg); err != nil {
+func (builder) NewPeerStorage(icfg conf.MapConfig) (storage.PeerStorage, error) {
+	var cfg Config
+	var err error
+
+	if err = icfg.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 
-	return newStore(cfg)
+	return NewStore(cfg)
 }
 
-func newStore(cfg Config) (*store, error) {
+func (b builder) NewDataStorage(icfg conf.MapConfig) (storage.DataStorage, error) {
+	return b.NewPeerStorage(icfg)
+}
+
+// NewStore creates new redis peer storage with provided configuration structure
+func NewStore(cfg Config) (storage.PeerStorage, error) {
 	cfg, err := cfg.Validate()
 	if err != nil {
 		return nil, err
@@ -456,31 +464,29 @@ func (ps *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pe
 // peerMinimumLen is the least allowed length of string serialized Peer
 const peerMinimumLen = bittorrent.PeerIDLen + 2 + net.IPv4len
 
-var errInvalidPeerDataSize = fmt.Errorf("invalid peer data (must be at least %d bytes (InfoHash + Port + IPv4))", peerMinimumLen)
+var errInvalidPeerDataSize = fmt.Errorf("invalid peer data (must be at least %d bytes (PeerID + Port + IPv4))", peerMinimumLen)
 
 // UnpackPeer constructs Peer from serialized by Peer.PackPeer data: PeerID[20by]Port[2by]net.IP[4/16by]
-func UnpackPeer(data string) (bittorrent.Peer, error) {
-	var peer bittorrent.Peer
+func UnpackPeer(data string) (peer bittorrent.Peer, err error) {
 	if len(data) < peerMinimumLen {
-		return peer, errInvalidPeerDataSize
+		err = errInvalidPeerDataSize
+		return
 	}
 	b := str2bytes.StringToBytes(data)
-	peerID, err := bittorrent.NewPeerID(b[:bittorrent.PeerIDLen])
-	if err == nil {
-		if addr, isOk := netip.AddrFromSlice(b[bittorrent.PeerIDLen+2:]); isOk {
-			peer = bittorrent.Peer{
-				ID: peerID,
-				AddrPort: netip.AddrPortFrom(
-					addr.Unmap(),
-					binary.BigEndian.Uint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2]),
-				),
-			}
-		} else {
-			err = bittorrent.ErrInvalidIP
+	peerID, _ := bittorrent.NewPeerID(b[:bittorrent.PeerIDLen])
+	if addr, isOk := netip.AddrFromSlice(b[bittorrent.PeerIDLen+2:]); isOk {
+		peer = bittorrent.Peer{
+			ID: peerID,
+			AddrPort: netip.AddrPortFrom(
+				addr.Unmap(),
+				binary.BigEndian.Uint16(b[bittorrent.PeerIDLen:bittorrent.PeerIDLen+2]),
+			),
 		}
+	} else {
+		err = bittorrent.ErrInvalidIP
 	}
 
-	return peer, err
+	return
 }
 
 func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {

@@ -16,7 +16,7 @@ func init() {
 }
 
 func TestStartStopRaceIssue437(t *testing.T) {
-	ps, err := storage.NewStorage(conf.NamedMapConfig{
+	ps, err := storage.NewPeerStorage(conf.NamedMapConfig{
 		Name:   "memory",
 		Config: conf.MapConfig{},
 	})

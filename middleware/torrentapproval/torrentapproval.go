@@ -4,6 +4,7 @@ package torrentapproval
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -11,18 +12,19 @@ import (
 	"github.com/sot-tech/mochi/middleware"
 	"github.com/sot-tech/mochi/middleware/torrentapproval/container"
 	"github.com/sot-tech/mochi/pkg/conf"
-	"github.com/sot-tech/mochi/storage/memory"
+	"github.com/sot-tech/mochi/storage"
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
 
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
-	"github.com/sot-tech/mochi/storage"
 )
 
 // Name is the name by which this middleware is registered with Conf.
 const Name = "torrent approval"
+
+const internalStore = "internal"
 
 func init() {
 	middleware.RegisterBuilder(Name, build)
@@ -31,9 +33,10 @@ func init() {
 type baseConfig struct {
 	// Source - name of container for initial values
 	Source string `cfg:"initial_source"`
-	// Preserve - if true, container will receive real registered storage if it is NOT `memory`
-	// if false - temporary in-memory storage will be used or created
+	// Deprecated: use Storage parameter
 	Preserve bool
+	// Storage where to hold provided data by Source
+	Storage conf.NamedMapConfig
 	// Configuration depends on used container
 	Configuration conf.MapConfig
 }
@@ -52,14 +55,22 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 		return nil, fmt.Errorf("invalid config for middleware %s: config not provided", Name)
 	}
 
-	var ds storage.DataStorage = st
-	if !cfg.Preserve && ds.Preservable() {
-		ds = memory.NewDataStorage()
+	if cfg.Preserve {
+		return nil, errors.New("preserve option is deprecated, use store parameter")
+	}
+
+	var ds, dsc storage.DataStorage
+	if len(cfg.Storage.Name) == 0 || cfg.Storage.Name == internalStore {
+		ds = st
+	} else if ds, err = storage.NewDataStorage(cfg.Storage); err == nil {
+		dsc = ds
+	} else {
+		return
 	}
 
 	var c container.Container
 	if c, err = container.GetContainer(cfg.Source, cfg.Configuration, ds); err == nil {
-		h = &hook{c}
+		h = &hook{c, dsc}
 	}
 	return h, err
 }
@@ -68,7 +79,8 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 var ErrTorrentUnapproved = bittorrent.ClientError("torrent not allowed by mochi")
 
 type hook struct {
-	hashContainer container.Container
+	hashContainer   container.Container
+	providedStorage storage.DataStorage
 }
 
 func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
@@ -89,6 +101,11 @@ func (h *hook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ 
 func (h *hook) Close() (err error) {
 	if cl, isOk := h.hashContainer.(io.Closer); isOk {
 		err = cl.Close()
+	}
+	if h.providedStorage != nil {
+		if stErr := h.providedStorage.Close(); stErr != nil {
+			err = errors.Join(err, stErr)
+		}
 	}
 	return err
 }

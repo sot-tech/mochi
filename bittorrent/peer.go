@@ -11,6 +11,7 @@ import (
 	"net/netip"
 
 	"github.com/rs/zerolog"
+
 	"github.com/sot-tech/mochi/pkg/str2bytes"
 )
 
@@ -26,8 +27,6 @@ var ErrInvalidPeerIDSize = fmt.Errorf("peer ID must be %d bytes", PeerIDLen)
 var zeroPeerID PeerID
 
 // NewPeerID creates a PeerID from a byte slice.
-//
-// It panics if b is not 20 bytes long.
 func NewPeerID(b []byte) (PeerID, error) {
 	if len(b) != PeerIDLen {
 		return zeroPeerID, ErrInvalidPeerIDSize

@@ -71,8 +71,7 @@ var cases = []struct {
 }
 
 func TestHandleAnnounce(t *testing.T) {
-	config := memory.Config{}.Validate()
-	storage, err := memory.NewPeerStorage(config)
+	storage, err := memory.Builder{}.NewPeerStorage(make(conf.MapConfig))
 	require.Nil(t, err)
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("testing hash %s", tt.ih), func(t *testing.T) {
@@ -84,10 +83,10 @@ func TestHandleAnnounce(t *testing.T) {
 			req := &bittorrent.AnnounceRequest{}
 			resp := &bittorrent.AnnounceResponse{}
 
-			hashinfo, err := bittorrent.NewInfoHashString(tt.ih)
+			ih, err := bittorrent.NewInfoHashString(tt.ih)
 			require.Nil(t, err)
 
-			req.InfoHash = hashinfo
+			req.InfoHash = ih
 
 			nctx, err := h.HandleAnnounce(ctx, req, resp)
 			require.Equal(t, ctx, nctx)

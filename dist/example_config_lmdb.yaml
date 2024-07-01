@@ -1,0 +1,93 @@
+# @formatter:off
+# Note: see `example_config.yaml` for `frontends` and `*hooks` config description
+
+
+announce_interval: 30m
+min_announce_interval: 15m
+metrics_addr: ""
+
+frontends:
+    -   name: http
+        config:
+            addr: "0.0.0.0:6969"
+            tls: false
+            tls_cert_path: ""
+            tls_key_path: ""
+            reuse_port: true
+            read_timeout: 5s
+            write_timeout: 5s
+            enable_keepalive: false
+            idle_timeout: 30s
+            enable_request_timing: false
+            announce_routes:
+                - "/announce"
+            scrape_routes:
+                - "/scrape"
+            ping_routes:
+                - "/ping"
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            real_ip_header: "x-real-ip"
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+    -   name: udp
+        config:
+            addr: "0.0.0.0:6969"
+            reuse_port: true
+            workers: 1
+            max_clock_skew: 10s
+            private_key: "paste a random string here that will be used to hmac connection IDs"
+            enable_request_timing: false
+            allow_ip_spoofing: false
+            filter_private_ips: false
+            max_numwant: 100
+            default_numwant: 50
+            max_scrape_infohashes: 50
+
+# This block defines configuration used for redis storage.
+storage:
+    name: lmdb
+    config:
+        # The frequency which stale peers are removed.
+        # This balances between
+        # - collecting garbage more often, potentially using more CPU time, but potentially using less memory (lower value)
+        # - collecting garbage less frequently, saving CPU time, but keeping old peers long, thus using more memory (higher value).
+        gc_interval: 3m
+
+        # The amount of time until a peer is considered stale.
+        # To avoid churn, keep this slightly larger than `announce_interval`
+        peer_lifetime: 31m
+
+        # Path to LMDB folder. Required.
+        Path: ""
+
+        # File mode of created database files, default is 0o640
+        mode: 0
+
+        # Name of database to store KV data. If not provided, root DB is used (not recommended)
+        data_db: ""
+
+        # Name of database to store peers data. If not provided, root DB is used (not recommended)
+        peers_db: ""
+
+        # Maximum size of database, default is 1GiB
+        max_size: 0
+
+        # Maximum number of threads/reader slots for the LMDB environment,
+        # default is 126.
+        max_readers: 0
+
+        # Set MDB_WRITEMAP and MDB_MAPASYNC flags to use asynchronous flushes to disk.
+        # The installation of the flag can highly speed up writes, but there is a risk of DB damage
+        # or loss of last committed data if the application crashes.
+        async_write: true
+
+        # Set MDB_NOMETASYNC flag. Omit the metadata flush on commit.
+        # Can a little accelerate writes if `async_write` not set, but last committed data
+        # bay be lost if the application crashes.
+        no_sync_meta: false
+
+posthooks: []
+prehooks: []
