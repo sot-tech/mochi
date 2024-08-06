@@ -36,7 +36,8 @@ func Enabled() bool {
 // Server represents a standalone HTTP server for serving a Prometheus metrics
 // endpoint.
 type Server struct {
-	srv *fasthttp.Server
+	listen string
+	srv    *fasthttp.Server
 }
 
 // AddressFamily returns the label value for reporting the address family of an IP address.
@@ -51,14 +52,37 @@ func AddressFamily(ip netip.Addr) string {
 	}
 }
 
+// Start starts metrics/profiling server
+func (s *Server) Start() (err error) {
+	atomic.AddInt32(serverCounter, 1)
+	defer atomic.AddInt32(serverCounter, -1)
+	if err = s.srv.ListenAndServe(s.listen); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		} else {
+			logger.Error().Err(err).Msg("failed while serving prometheus")
+		}
+	}
+	return err
+}
+
 // Close shuts down the server.
 func (s *Server) Close() error {
 	return s.srv.Shutdown()
 }
 
-// NewServer creates a new instance of a Prometheus server that asynchronously
-// serves requests.
+// NewServer creates new metrics/profiling server and starts it.
+// Equivalent of New and async Server.Start.
 func NewServer(addr string) *Server {
+	s := New(addr)
+	go func() {
+		_ = s.Start()
+	}()
+	return s
+}
+
+// New creates a new instance of a Prometheus and pprof
+func New(addr string) *Server {
 	if len(addr) == 0 {
 		panic("metrics listen address not provided")
 	}
@@ -71,7 +95,8 @@ func NewServer(addr string) *Server {
 	r.GET("/debug/pprof/symbol", fasthttpadaptor.NewFastHTTPHandlerFunc(pprof.Symbol))
 	r.GET("/debug/pprof/trace", fasthttpadaptor.NewFastHTTPHandlerFunc(pprof.Trace))
 
-	s := &Server{
+	return &Server{
+		listen: addr,
 		srv: &fasthttp.Server{
 			Handler:      r.Handler,
 			GetOnly:      true,
@@ -79,14 +104,4 @@ func NewServer(addr string) *Server {
 			WriteTimeout: writeTimeout,
 		},
 	}
-
-	go func() {
-		atomic.AddInt32(serverCounter, 1)
-		defer atomic.AddInt32(serverCounter, -1)
-		if err := s.srv.ListenAndServe(addr); !errors.Is(err, http.ErrServerClosed) {
-			logger.Error().Err(err).Msg("failed while serving prometheus")
-		}
-	}()
-
-	return s
 }

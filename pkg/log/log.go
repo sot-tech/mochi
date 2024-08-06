@@ -34,12 +34,11 @@ func ConfigureLogger(output, level string, formatted, colored bool) (err error) 
 	lvl := zerolog.WarnLevel
 	output = strings.ToLower(output)
 	var w io.Writer
-	var stdAny bool
 	switch output {
 	case "stderr", "":
-		w, stdAny = os.Stderr, true
+		w = os.Stderr
 	case "stdout":
-		w, stdAny = os.Stdout, true
+		w = os.Stdout
 	default:
 		if w, err = os.OpenFile(output, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600); err == nil {
 			customOutMu.Lock()
@@ -52,7 +51,7 @@ func ConfigureLogger(output, level string, formatted, colored bool) (err error) 
 			return err
 		}
 	}
-	if stdAny && formatted {
+	if formatted {
 		w = zerolog.ConsoleWriter{
 			Out:        w,
 			NoColor:    !colored,
