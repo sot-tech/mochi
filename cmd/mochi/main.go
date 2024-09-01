@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,19 +20,32 @@ const (
 	logColorsArg = "logColored"
 	configArg    = "config"
 	quickArg     = "quick"
+	versionArg   = "version"
 )
+
+// Version is variable to set version number in build time
+var Version = "dev"
 
 func main() {
 	var err error
 
 	logOut := flag.String(logOutArg, "stderr", "output for logging, might be 'stderr', 'stdout' or file path")
 	logLevel := flag.String(logLevelArg, "warn", "logging level: trace, debug, info, warn, error, fatal, panic")
-	logPretty := flag.Bool(logPrettyArg, false, "enable log pretty print. used only if 'logOut' set to 'stdout' or 'stderr'. if not set, log outputs json")
+	logPretty := flag.Bool(logPrettyArg, false,
+		"enable log pretty print. used only if 'logOut' set to 'stdout' or 'stderr'. if not set, log outputs json")
 	//goland:noinspection GoBoolExpressions
-	logColored := flag.Bool(logColorsArg, runtime.GOOS == "windows", "enable log coloring. used only if set 'logPretty'")
+	logColored := flag.Bool(logColorsArg, runtime.GOOS == "windows",
+		"enable log coloring. used only if set 'logPretty'")
 	configPath := flag.String(configArg, "/etc/mochi.yaml", "location of configuration file")
-	quickStart := flag.Bool(quickArg, false, "start tracker with default configuration (all frontends, in-memory store, no hooks)")
+	quickStart := flag.Bool(quickArg, false,
+		"start tracker with default configuration (all frontends, in-memory store, no hooks)")
+	version := flag.Bool(versionArg, false, "print version and exit")
 	flag.Parse()
+
+	if *version {
+		fmt.Println("mochi:", Version)
+		return
+	}
 
 	if err = l.ConfigureLogger(*logOut, *logLevel, *logPretty, *logColored); err != nil {
 		log.Fatal("unable to configure logger: ", err)
