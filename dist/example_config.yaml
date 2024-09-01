@@ -214,6 +214,10 @@ prehooks:
 #                configuration:
 #                    hash_list:
 #                        - "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5"
+# Path to watch new torrent files (only for initial_source: 'directory')
+#                    path: "some/path"
+# Time between two directory checks
+#                    period: 5m
 # true - whitelist mode, false - blacklist
 #                    invert: false
 # Name of storage context where store hash list

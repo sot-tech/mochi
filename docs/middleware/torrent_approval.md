@@ -25,7 +25,7 @@ There are two sources of hashes: `list` and `directory`.
 
 * `directory` will watch for `*.torrent` files in specified path and
   append/delete records from storage. This source will parse all existing
-  files at start and then watch for new files to add, or for delete events
+  files at start and then periodically watch for new files to add, or for delete events
   to remove hash from storage.
 
 Note: if storage is not `memory`, and `preserve` option set to `true`, records
@@ -37,7 +37,8 @@ to storage) won't delete it.
 This middleware provides the following parameters for configuration:
 
 - `initial_source` - source type: `list` or `directory`
-- `preserve`: - save source provided data into storage
+- `storage` - storage configuration to store data, structure is same as global `storage` section.
+If `name` is empty or `internal` global storage will be used
 - `configuration` - options for specified source
 	- `list`:
 		- `hash_list` - list of HEX encoded hashes
@@ -46,6 +47,7 @@ This middleware provides the following parameters for configuration:
 		  It may be redis hash key, DB table name etc.
 	- `directory`:
 		- `path` - directory to watch
+        - `period` - time between two directory checks
 		- `invert` and `storage_ctx` has the same meanins as `list`'s options
 
 Configuration example:
@@ -58,9 +60,13 @@ mochi:
         -   name: torrent approval
                 options:
                     initial_source: list
-                    preserve: true
+					storage:
+						name: internal
+						config:
                     configuration:
                         hash_list: [ "AAA", "BBB" ]
+						path: "some/path"
+						period: 1m
                         invert: false
                         storage_ctx: APPROVED_HASH
 ```

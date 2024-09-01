@@ -1,8 +1,6 @@
 ---
 run:
-    # mochi in not written with generics (a.t.m),
-    # so we can check with 1.17
-    go: "1.17"
+    go: "1.22"
     timeout: "5m"
 output:
     sort-results: true
@@ -15,6 +13,7 @@ linters-settings:
     gosec:
         excludes:
             - "G505"  # Allow SHA1 usage
+            - "G115" # FIXME: remove after https://github.com/securego/gosec/issues/1187 resolve
 linters:
     enable:
         - "bidichk"

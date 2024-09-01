@@ -95,6 +95,7 @@ func TestHandleAnnounce(t *testing.T) {
 			} else {
 				require.Equal(t, err, ErrTorrentUnapproved)
 			}
+			_ = h.(*hook).Close()
 		})
 	}
 }
