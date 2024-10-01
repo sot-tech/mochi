@@ -32,9 +32,8 @@ var (
 //	otherwise any goroutine, which uses logger will wait logger initialization
 func ConfigureLogger(output, level string, formatted, colored bool) (err error) {
 	lvl := zerolog.WarnLevel
-	output = strings.ToLower(output)
 	var w io.Writer
-	switch output {
+	switch strings.ToLower(output) {
 	case "stderr", "":
 		w = os.Stderr
 	case "stdout":

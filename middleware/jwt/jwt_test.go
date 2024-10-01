@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	cr "crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"math/rand"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/minio/sha256-simd"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
@@ -76,17 +76,19 @@ func init() {
 	}
 	s2.Write(ecdhPubKey.Bytes())
 	// s2.Write(elliptic.Marshal(privKey.PublicKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y))
-	jwksData = JWKSKeys{Keys: []JWKSKey{
-		{
-			KeyType:   "EC",
-			Usage:     "sig",
-			KeyID:     base64.RawURLEncoding.EncodeToString(s2.Sum(nil)),
-			Algorithm: jwt.SigningMethodES256.Name,
-			Curve:     privKey.Curve.Params().Name,
-			X:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.X.Bytes()),
-			Y:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.Y.Bytes()),
+	jwksData = JWKSKeys{
+		Keys: []JWKSKey{
+			{
+				KeyType:   "EC",
+				Usage:     "sig",
+				KeyID:     base64.RawURLEncoding.EncodeToString(s2.Sum(nil)),
+				Algorithm: jwt.SigningMethodES256.Name,
+				Curve:     privKey.Curve.Params().Name,
+				X:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.X.Bytes()),
+				Y:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.Y.Bytes()),
+			},
 		},
-	}}
+	}
 }
 
 func TestHook_HandleAnnounceValid(t *testing.T) {

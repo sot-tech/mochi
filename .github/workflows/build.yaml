@@ -15,7 +15,7 @@ jobs:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"
                 with:
-                    go-version: ">=1.22"
+                    go-version: ">=1.23"
             -   name: "Build"
                 run: "go build ./cmd/..."
 
@@ -42,7 +42,7 @@ jobs:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"
                 with:
-                    go-version: "^1.22"
+                    go-version: "^1.23"
             -   name: "Run `go test`"
                 run: "go test -race ./..."
 
@@ -53,11 +53,13 @@ jobs:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"
                 with:
-                    go-version: "^1.22"
+                    go-version: "^1.23"
             -   name: "Install and configure mochi"
                 run: |
                     go install ./cmd/mochi
-                    go install ./cmd/mochi-e2e
+                    cd ./cmd/mochi-e2e
+                    go install .
+                    cd -
                     cat ./dist/example_config.yaml
             -   name: "Run end-to-end tests"
                 run: |
@@ -77,11 +79,13 @@ jobs:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"
                 with:
-                    go-version: "^1.22"
+                    go-version: "^1.23"
             -   name: "Install and configure mochi"
                 run: |
                     go install ./cmd/mochi
-                    go install ./cmd/mochi-e2e
+                    cd ./cmd/mochi-e2e
+                    go install .
+                    cd -
                     cat ./dist/example_config_redis.yaml
             -   name: "Run end-to-end tests"
                 run: |

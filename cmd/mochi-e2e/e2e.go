@@ -4,14 +4,13 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha1"
 	"flag"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/anacrolix/torrent/tracker"
-
-	"github.com/sot-tech/mochi/bittorrent"
 )
 
 func main() {
@@ -40,19 +39,18 @@ func main() {
 }
 
 func test(addr string, delay time.Duration) error {
-	b := make([]byte, bittorrent.InfoHashV1Len)
-	if _, err := rand.Read(b); err != nil {
+	ih := make([]byte, sha1.Size)
+	if _, err := rand.Read(ih); err != nil {
 		panic(err)
 	}
-	ih, _ := bittorrent.NewInfoHash(b)
 	return testWithInfoHash(ih, addr, delay)
 }
 
-func testWithInfoHash(infoHash bittorrent.InfoHash, url string, delay time.Duration) error {
-	var ih [bittorrent.InfoHashV1Len]byte
+func testWithInfoHash(infoHash []byte, url string, delay time.Duration) error {
+	var ih [sha1.Size]byte
 	req := tracker.AnnounceRequest{
 		InfoHash:   ih,
-		PeerId:     [bittorrent.PeerIDLen]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
 		Downloaded: 50,
 		Left:       100,
 		Uploaded:   50,
@@ -80,7 +78,7 @@ func testWithInfoHash(infoHash bittorrent.InfoHash, url string, delay time.Durat
 	copy(ih[:], infoHash)
 	req = tracker.AnnounceRequest{
 		InfoHash:   ih,
-		PeerId:     [bittorrent.PeerIDLen]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21},
+		PeerId:     [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21},
 		Downloaded: 50,
 		Left:       100,
 		Uploaded:   50,

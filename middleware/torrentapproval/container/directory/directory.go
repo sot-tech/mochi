@@ -7,14 +7,13 @@ package directory
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/minio/sha256-simd"
 
 	"github.com/zeebo/bencode"
 
