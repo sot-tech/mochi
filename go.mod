@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20240813203737-5032edb05ceb
-	github.com/MicahParks/jwkset v0.5.19
+	github.com/MicahParks/jwkset v0.5.20
 	github.com/MicahParks/keyfunc/v3 v3.3.5
 	github.com/PowerDNS/lmdb-go v1.9.2
 	github.com/anacrolix/torrent v1.56.1
