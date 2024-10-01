@@ -121,7 +121,7 @@ func (g *ConnectionIDGenerator) Generate(ip netip.Addr, now time.Time) (out []by
 	g.connID[0], g.connID[1], g.connID[2] = g.buff[0], g.buff[7], g.buff[8]
 	copy(g.connID[connIDLen-hmacLen:], g.scratch[:hmacLen])
 
-	log.Debug().
+	log.Trace().
 		Stringer("ip", ip).
 		Hex("connID", g.connID).
 		Msg("generated connection ID")
@@ -145,7 +145,7 @@ func (g *ConnectionIDGenerator) Validate(connectionID []byte, ip netip.Addr, now
 	// ts-skew < now < ts+ttl+skew
 	res = ts-g.maxClockSkew < nowTS && res
 	res = nowTS < ts+ttl+g.maxClockSkew && res
-	log.Debug().
+	log.Trace().
 		Stringer("ip", ip).
 		Hex("connID", connectionID).
 		Bool("result", res).

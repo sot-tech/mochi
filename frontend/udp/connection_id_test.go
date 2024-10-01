@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"encoding/binary"
 	"fmt"
@@ -12,8 +13,9 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/sot-tech/mochi/pkg/log"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sot-tech/mochi/pkg/log"
 )
 
 var golden = []struct {
@@ -99,10 +101,13 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 
 			gen := NewConnectionIDGenerator(tt.key, 0)
 
+			eq := true
 			for i := 0; i < 3; i++ {
 				connID := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
-				require.NotEqual(t, cid, connID) // IDs should NOT be equal because of salt
+				eq = eq && bytes.Equal(cid, connID)
 			}
+			// at least one of generated IDs should NOT be equal because of salt. 3 attempts to check collisions
+			require.Equal(t, eq, false)
 		})
 	}
 }
