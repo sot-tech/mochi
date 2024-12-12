@@ -5,12 +5,12 @@ go 1.23
 toolchain go1.23.1
 
 require (
-	code.cloudfoundry.org/go-diodes v0.0.0-20241104194350-6f18271962f1
+	code.cloudfoundry.org/go-diodes v0.0.0-20241202111822-779c0b5a3368
 	github.com/MicahParks/jwkset v0.5.20
 	github.com/MicahParks/keyfunc/v3 v3.3.5
 	github.com/PowerDNS/lmdb-go v1.9.2
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/fasthttp/router v1.5.2
+	github.com/fasthttp/router v1.5.3
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/libp2p/go-reuseport v0.4.0
@@ -19,7 +19,7 @@ require (
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
-	github.com/valyala/fasthttp v1.57.0
+	github.com/valyala/fasthttp v1.58.0
 	github.com/zeebo/bencode v1.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -39,15 +39,15 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.60.1 // indirect
+	github.com/prometheus/common v0.61.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	golang.org/x/crypto v0.29.0 // indirect
-	golang.org/x/net v0.31.0 // indirect
-	golang.org/x/sync v0.9.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
-	google.golang.org/protobuf v1.35.1 // indirect
+	google.golang.org/protobuf v1.35.2 // indirect
 )
