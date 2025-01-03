@@ -12,7 +12,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fasthttp/router v1.5.3
 	github.com/golang-jwt/jwt/v5 v5.2.1
-	github.com/jackc/pgx/v5 v5.7.1
+	github.com/jackc/pgx/v5 v5.7.2
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/prometheus/client_golang v1.20.5
