@@ -217,20 +217,14 @@ func (cfg Config) Connect() (con Connection, err error) {
 				if certData, err = os.ReadFile(cert); err != nil {
 					logger.Warn().
 						Err(err).
-						Str("name", cert).
-						Msg("unable to read certificate file")
-				} else if len(certData) > 0 {
-					if added := certPool.AppendCertsFromPEM(certData); added {
-						ok = true
-					} else {
-						logger.Warn().
-							Str("name", cert).
-							Msg("unable to append certificate to trusted pool")
-					}
+						Str("path", cert).
+						Msg("unable to read certificate(s) file")
+				} else if added := certPool.AppendCertsFromPEM(certData); added {
+					ok = true
 				} else {
 					logger.Warn().
-						Str("name", cert).
-						Msg("empty certificate file")
+						Str("path", cert).
+						Msg("unable to append certificate(s) to trusted pool")
 				}
 			}
 			if ok {
