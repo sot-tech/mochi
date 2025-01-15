@@ -70,6 +70,13 @@ storage:
         # only first address used
         addresses: ["127.0.0.1:6379"]
 
+        # Use TLS for connecting to specified addresses.
+        tls: false
+
+        # Trusted CA certificates to check while TLS connection.
+        # If not provided, system certificates used.
+        ca_certs: []
+
         # Database to be selected after connecting to the server.
         db: 0
 

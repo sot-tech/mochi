@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -89,21 +88,16 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 
 		var jwks keyfunc.Keyfunc
 		if cfg.HandleAnnounce || cfg.HandleScrape {
-			var jwkURL *url.URL
-			jwkURL, err = url.Parse(cfg.JWKSetURL)
+			var httpStorage jwkset.Storage
+			httpStorage, err = jwkset.NewStorageFromHTTP(cfg.JWKSetURL, jwkset.HTTPClientStorageOptions{
+				NoErrorReturnFirstHTTPReq: true,
+				RefreshErrorHandler: func(_ context.Context, err error) {
+					logger.Error().Err(err).Msg("error occurred while updating JWKs")
+				},
+				RefreshInterval: cfg.JWKUpdateInterval,
+			})
 			if err == nil {
-				var httpStorage jwkset.Storage
-				httpStorage, err = jwkset.NewStorageFromHTTP(jwkURL, jwkset.HTTPClientStorageOptions{
-					NoErrorReturnFirstHTTPReq: true,
-					RefreshErrorHandler: func(_ context.Context, err error) {
-						logger.Error().Err(err).Msg("error occurred while updating JWKs")
-					},
-					RefreshInterval: cfg.JWKUpdateInterval,
-					Storage:         nil,
-				})
-				if err == nil {
-					jwks, err = keyfunc.New(keyfunc.Options{Storage: httpStorage})
-				}
+				jwks, err = keyfunc.New(keyfunc.Options{Storage: httpStorage})
 			}
 		} else {
 			logger.Warn().Msg("both announce and scrape handle disabled")
@@ -127,7 +121,9 @@ type announceClaims struct {
 	InfoHash string `json:"infohash,omitempty"`
 }
 
-func (h *hook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
+func (h *hook) HandleAnnounce(
+	ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse,
+) (context.Context, error) {
 	if !h.cfg.HandleAnnounce {
 		return ctx, nil
 	}
@@ -171,7 +167,9 @@ type scrapeClaims struct {
 	InfoHashes []string `json:"infohashes,omitempty"`
 }
 
-func (h *hook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *hook) HandleScrape(
+	ctx context.Context, req *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse,
+) (context.Context, error) {
 	if !h.cfg.HandleScrape {
 		return ctx, nil
 	}

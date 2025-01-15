@@ -37,6 +37,16 @@ mochi:
 
       # The addresses of redis storage.
       addresses: ["127.0.0.1:6379"]
+
+      # Use TLS for connecting to specified addresses.
+      # Note: server names must strictly match with names, 
+      # provided in certificates (CN or SAN field) and 
+      # issuer must be trusted by system or provided in ca_certs.  
+      tls: false
+
+      # Trusted CA certificates to check while TLS connection.
+      # If not provided, system certificates used.
+      ca_certs: []
       
       # Database number
       db: 0
