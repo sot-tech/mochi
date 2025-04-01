@@ -2,7 +2,7 @@ module github.com/sot-tech/mochi
 
 go 1.23.0
 
-toolchain go1.23.6
+toolchain go1.24.1
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20250317104522-5c806ff4fd8d
@@ -12,7 +12,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fasthttp/router v1.5.4
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.7.4
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/prometheus/client_golang v1.21.1
