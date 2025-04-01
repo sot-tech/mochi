@@ -16,6 +16,7 @@ import (
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
+	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/s3"
 
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
