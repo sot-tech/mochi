@@ -117,7 +117,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 			Strs("default", validCfg.ScrapeRoutes).
 			Msg("falling back to default configuration")
 	}
-	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.ParseOptions.Validate(logger)
+	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.Validate(logger)
 	return
 }
 
@@ -163,7 +163,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 			return nil, err
 		}
 		certs := []tls.Certificate{cert}
-		f.Server.TLSConfig = &tls.Config{
+		f.TLSConfig = &tls.Config{
 			Certificates: certs,
 			MinVersion:   tls.VersionTLS12,
 		}
@@ -194,7 +194,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 		pathRouting[path.Clean(route)] = f.ping
 	}
 
-	f.Server.Handler = func(ctx *fasthttp.RequestCtx) {
+	f.Handler = func(ctx *fasthttp.RequestCtx) {
 		if route, exists := pathRouting[string(ctx.Path())]; exists {
 			route(ctx)
 		} else {
@@ -228,7 +228,7 @@ func runServer(s *fasthttp.Server, cfg *Config) {
 func (f *httpFE) Close() (err error) {
 	f.onceCloser.Do(func() {
 		if f.Server != nil {
-			err = f.Server.Shutdown()
+			err = f.Shutdown()
 		}
 	})
 

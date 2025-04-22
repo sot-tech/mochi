@@ -84,8 +84,8 @@ func init() {
 				KeyID:     base64.RawURLEncoding.EncodeToString(s2.Sum(nil)),
 				Algorithm: jwt.SigningMethodES256.Name,
 				Curve:     privKey.Curve.Params().Name,
-				X:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.X.Bytes()),
-				Y:         base64.RawURLEncoding.EncodeToString(privKey.PublicKey.Y.Bytes()),
+				X:         base64.RawURLEncoding.EncodeToString(privKey.X.Bytes()),
+				Y:         base64.RawURLEncoding.EncodeToString(privKey.Y.Bytes()),
 			},
 		},
 	}
