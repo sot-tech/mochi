@@ -20,7 +20,7 @@ var globalBroadcastIPv4 = netip.AddrFrom4([4]byte{255, 255, 255, 255})
 
 // IsValid checks if netip.Addr is valid, not unspecified and not multicast
 func (a RequestAddress) IsValid() bool {
-	return a.Addr.IsValid() && !(a.IsUnspecified() || a.IsMulticast() || a.Addr == globalBroadcastIPv4)
+	return a.Addr.IsValid() && !a.IsUnspecified() && !a.IsMulticast() && a.Addr != globalBroadcastIPv4
 }
 
 // MarshalZerologObject writes fields into zerolog event
