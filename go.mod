@@ -6,7 +6,7 @@ toolchain go1.23.6
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20250417050917-333c2580673b
-	github.com/MicahParks/jwkset v0.9.5
+	github.com/MicahParks/jwkset v0.9.6
 	github.com/MicahParks/keyfunc/v3 v3.3.11
 	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/cespare/xxhash/v2 v2.3.0
