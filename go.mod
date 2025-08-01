@@ -11,7 +11,7 @@ require (
 	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fasthttp/router v1.5.4
-	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mitchellh/mapstructure v1.5.0
