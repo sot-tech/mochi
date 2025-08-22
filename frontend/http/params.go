@@ -2,9 +2,10 @@ package http
 
 import (
 	"github.com/rs/zerolog"
+	"github.com/valyala/fasthttp"
+
 	"github.com/sot-tech/mochi/bittorrent"
 	"github.com/sot-tech/mochi/pkg/str2bytes"
-	"github.com/valyala/fasthttp"
 )
 
 // queryParams parses a URL Query and implements the Params interface with some
@@ -33,5 +34,5 @@ func (qp queryParams) InfoHashes() bittorrent.InfoHashes {
 
 // MarshalZerologObject writes fields into zerolog event
 func (qp queryParams) MarshalZerologObject(e *zerolog.Event) {
-	e.Str("query", str2bytes.BytesToString(qp.Args.QueryString()))
+	e.Str("query", str2bytes.BytesToString(qp.QueryString()))
 }
