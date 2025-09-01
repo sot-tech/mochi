@@ -19,7 +19,7 @@ require (
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
-	github.com/valyala/fasthttp v1.64.0
+	github.com/valyala/fasthttp v1.65.0
 	github.com/zeebo/bencode v1.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -43,11 +43,11 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/savsgio/gotils v0.0.0-20250408102913-196191ec6287 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/net v0.42.0 // indirect
+	golang.org/x/crypto v0.41.0 // indirect
+	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
