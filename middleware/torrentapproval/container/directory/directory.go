@@ -53,46 +53,35 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
-	var err error
-	if c.Period == 0 {
-		logger.Warn().
-			Str("name", "Period").
-			Dur("provided", 0).
-			Dur("default", defaultPeriod).
-			Msg("falling back to default configuration")
-		c.Period = defaultPeriod
-	}
 	d := NewScanner(list.List{
 		Invert:     c.Invert,
 		Storage:    st,
 		StorageCtx: c.StorageCtx,
-	}, path(c.Path))
-	go d.Run(c.Period)
-	return d, err
+	}, path(c.Path), c.Period)
+	go d.Run()
+	return d, nil
 }
 
-// BencodeRawBytes wrapper for byte slice to get raw 'info' section from
-// torrent file
-type BencodeRawBytes []byte
+type bencodeRawBytes []byte
 
 // UnmarshalBencode just appends raw byte slice to result
-func (ba *BencodeRawBytes) UnmarshalBencode(in []byte) error {
+func (ba *bencodeRawBytes) UnmarshalBencode(in []byte) error {
 	*ba = append([]byte(nil), in...)
 	return nil
 }
 
 type torrentRawInfoStruct struct {
-	Info BencodeRawBytes `bencode:"info"`
+	Info bencodeRawBytes `bencode:"info"`
 }
 
 type torrentNameInfoStruct struct {
 	Name string `bencode:"name"`
 }
 
-// PathReader - interface for abstract directory reader
+// PathReader - interface for abstract directory-like reader
 type PathReader interface {
 	// ReadDir returns names of torrent entries.
-	// Implementation must return absolute names of entries
+	// Implementation must return absolute paths of entries
 	// to fetch torrent file-like data.
 	ReadDir() (it iter.Seq[string], err error)
 	// ReadData returns reader for entry data
@@ -125,7 +114,7 @@ func (p path) ReadData(entry string) (io.ReadCloser, error) {
 }
 
 // NewScanner creates Scanner instance.
-func NewScanner(list list.List, reader PathReader) *Scanner {
+func NewScanner(list list.List, reader PathReader, period time.Duration) *Scanner {
 	if len(list.StorageCtx) == 0 {
 		logger.Warn().
 			Str("name", "StorageCtx").
@@ -134,9 +123,18 @@ func NewScanner(list list.List, reader PathReader) *Scanner {
 			Msg("falling back to default configuration")
 		list.StorageCtx = container.DefaultStorageCtxName
 	}
+	if period == 0 {
+		logger.Warn().
+			Str("name", "Period").
+			Dur("provided", 0).
+			Dur("default", defaultPeriod).
+			Msg("falling back to default configuration")
+		period = defaultPeriod
+	}
 	return &Scanner{
 		List:   list,
 		reader: reader,
+		period: period,
 		closed: make(chan bool),
 	}
 }
@@ -145,16 +143,21 @@ func NewScanner(list list.List, reader PathReader) *Scanner {
 type Scanner struct {
 	list.List
 	reader PathReader
+	period time.Duration
 	closed chan bool
 }
 
 // Run starts periodic directory scanning and blocks until Stop called
-func (d *Scanner) Run(period time.Duration) {
+func (d *Scanner) Run() {
 	if d.reader == nil {
 		log.Warn().Msg("reader not provided")
 		return
 	}
-	t := time.NewTicker(period)
+	if d.period == 0 {
+		log.Warn().Msg("period not provided")
+		return
+	}
+	t := time.NewTicker(d.period)
 	defer t.Stop()
 	files := make(map[string][2]bittorrent.InfoHash)
 	tmpFiles := make(map[string]bool)
