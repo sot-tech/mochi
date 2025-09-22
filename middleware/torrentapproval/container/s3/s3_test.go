@@ -57,7 +57,7 @@ emDE8BsT0R1/0GVl`),
 }
 
 func init() {
-	_ = log.ConfigureLogger("", "debug", false, false)
+	_ = log.ConfigureLogger("", "warn", false, false)
 }
 
 type mockS3 struct {

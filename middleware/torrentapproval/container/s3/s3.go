@@ -5,6 +5,7 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -34,9 +35,9 @@ type Config struct {
 	list.Config
 	Endpoint     string
 	Region       string
-	KeyID        string
-	KeySecret    string
-	SessionToken string
+	KeyID        string `cfg:"key_id"`
+	KeySecret    string `cfg:"key_secret"`
+	SessionToken string `cfg:"session_token"`
 	Bucket       string
 	Prefix       string
 	Suffix       string
@@ -52,6 +53,11 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
+
+	if len(c.Bucket) == 0 {
+		return nil, errors.New("no bucket provided")
+	}
+
 	if c.Period == 0 {
 		logger.Warn().
 			Str("name", "Period").
@@ -61,25 +67,35 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 		c.Period = defaultPeriod
 	}
 
-	awsCfg, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("unable load AWS S3 SDK configuration: %w", err)
-	}
+	modifiers := make([]func(*config.LoadOptions) error, 1, 4)
 
-	awsCfg.Logger = logging.LoggerFunc(func(classification logging.Classification, format string, v ...interface{}) {
+	modifiers[0] = config.WithLogger(logging.LoggerFunc(func(
+		classification logging.Classification, format string, v ...interface{},
+	) {
 		if classification == logging.Debug {
 			logger.Debug().CallerSkipFrame(1).Msg(fmt.Sprintf(format, v...))
 		} else if classification == logging.Warn {
 			logger.Warn().CallerSkipFrame(1).Msg(fmt.Sprintf(format, v...))
 		}
-	})
+	}))
 
 	if len(c.Endpoint) > 0 {
-		awsCfg.BaseEndpoint = &c.Endpoint
+		modifiers = append(modifiers, config.WithBaseEndpoint(c.Endpoint))
 	}
 
 	if len(c.Region) > 0 {
-		awsCfg.Region = c.Region
+		modifiers = append(modifiers, config.WithRegion(c.Endpoint))
+	}
+
+	if len(c.KeyID) > 0 || len(c.KeySecret) > 0 || len(c.SessionToken) > 0 {
+		modifiers = append(modifiers, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(c.KeyID, c.KeySecret, c.SessionToken)),
+		)
+	}
+
+	awsCfg, err := config.LoadDefaultConfig(context.Background(), modifiers...)
+	if err != nil {
+		return nil, fmt.Errorf("unable load AWS S3 SDK configuration: %w", err)
 	}
 
 	if len(c.KeyID) > 0 || len(c.KeySecret) > 0 || len(c.SessionToken) > 0 {
