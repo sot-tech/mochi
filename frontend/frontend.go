@@ -71,7 +71,7 @@ func NewFrontends(configs []conf.NamedMapConfig, logic *middleware.Logic) (fs []
 		fs = append(fs, f)
 		logger.Info().Str("name", c.Name).Msg("frontend started")
 	}
-	return
+	return fs, err
 }
 
 // CloseGroup simultaneously calls Close for each non-nil
@@ -102,5 +102,5 @@ func CloseGroup(cls []io.Closer) (err error) {
 	if sb.Len() > 0 {
 		err = errors.New(sb.String())
 	}
-	return
+	return err
 }

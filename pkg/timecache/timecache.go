@@ -38,7 +38,7 @@ type TimeCache struct {
 func New() (tc *TimeCache) {
 	tc = &TimeCache{closed: make(chan struct{})}
 	tc.clock.Store(time.Now().UnixNano())
-	return
+	return tc
 }
 
 // Run runs the TimeCache, updating the cached clock value once every interval

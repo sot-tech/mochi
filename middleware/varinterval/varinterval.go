@@ -36,7 +36,7 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 			}
 		}
 	}
-	return
+	return h, err
 }
 
 var (
@@ -112,5 +112,5 @@ func deriveEntropyFromRequest(req *bittorrent.AnnounceRequest) (v0 uint64, v1 ui
 		v0 = binary.BigEndian.Uint64([]byte(req.InfoHash[:8])) + binary.BigEndian.Uint64([]byte(req.InfoHash[8:16]))
 	}
 	v1 = binary.BigEndian.Uint64(req.ID[:8]) + binary.BigEndian.Uint64(req.ID[8:16])
-	return
+	return v0, v1
 }

@@ -108,7 +108,7 @@ func (s *store) addPeer(ctx context.Context, infoHashKey, peerID string) (err er
 	if err = s.SAdd(ctx, infoHashKey, peerID).Err(); err == nil {
 		err = s.Process(ctx, redis.NewCmd(ctx, expireMemberCmd, infoHashKey, peerID, s.peerTTL))
 	}
-	return
+	return err
 }
 
 func (s *store) delPeer(ctx context.Context, infoHashKey, peerID string) error {

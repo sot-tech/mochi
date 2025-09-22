@@ -61,7 +61,7 @@ func (c Config) sanitizeGCConfig() (gcInterval, peerTTL time.Duration) {
 	} else {
 		peerTTL = c.PeerLifetime
 	}
-	return
+	return gcInterval, peerTTL
 }
 
 func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
@@ -73,7 +73,7 @@ func (c Config) sanitizeStatisticsConfig() (statInterval time.Duration) {
 			Dur("default", DefaultPrometheusReportingInterval).
 			Msg("falling back to default configuration")
 	}
-	return
+	return statInterval
 }
 
 // Entry - some key-value pair, used for BulkPut
@@ -269,11 +269,11 @@ func NewPeerStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
 
 	c := new(Config)
 	if err = cfg.Config.Unmarshal(c); err != nil {
-		return
+		return ps, err
 	}
 
 	if ps, err = d.NewPeerStorage(cfg.Config); err != nil {
-		return
+		return ps, err
 	}
 
 	if gc, isOk := ps.(GarbageCollector); isOk {
@@ -308,5 +308,5 @@ func NewPeerStorage(cfg conf.NamedMapConfig) (ps PeerStorage, err error) {
 
 	logger.Info().Str("name", cfg.Name).Msg("storage started")
 
-	return
+	return ps, err
 }

@@ -164,5 +164,5 @@ func (s s3) ReadData(entry string) (data io.ReadCloser, err error) {
 	if err == nil {
 		data = result.Body
 	}
-	return
+	return data, err
 }

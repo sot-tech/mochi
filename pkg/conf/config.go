@@ -49,7 +49,7 @@ func (m MapConfig) Unmarshal(into any) (err error) {
 	} else {
 		err = ErrNilConfigMap
 	}
-	return
+	return err
 }
 
 // NamedMapConfig encapsulates MapConfig with string Name

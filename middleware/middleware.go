@@ -62,5 +62,5 @@ func NewHooks(configs []conf.NamedMapConfig, storage storage.PeerStorage) (hooks
 		logger.Info().Str("name", c.Name).Msg("hook started")
 	}
 
-	return
+	return hooks, err
 }

@@ -56,7 +56,7 @@ type params map[string]string
 
 func (p params) GetString(key string) (out string, found bool) {
 	out, found = p[key]
-	return
+	return out, found
 }
 
 func (params) MarshalZerologObject(*zerolog.Event) {}

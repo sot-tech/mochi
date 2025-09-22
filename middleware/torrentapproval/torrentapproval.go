@@ -66,7 +66,7 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 	} else if ds, err = storage.NewDataStorage(cfg.Storage); err == nil {
 		dsc = ds
 	} else {
-		return
+		return h, err
 	}
 
 	var c container.Container

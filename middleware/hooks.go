@@ -43,7 +43,7 @@ type swarmInteractionHook struct {
 func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (outCtx context.Context, err error) {
 	outCtx = ctx
 	if ctx.Value(SkipSwarmInteractionKey) != nil {
-		return
+		return outCtx, err
 	}
 
 	var storeFn func(context.Context, bittorrent.InfoHash, bittorrent.Peer) error
@@ -82,7 +82,7 @@ func (h *swarmInteractionHook) HandleAnnounce(ctx context.Context, req *bittorre
 		}
 	}
 
-	return
+	return outCtx, err
 }
 
 func (h *swarmInteractionHook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
@@ -105,17 +105,17 @@ type responseHook struct {
 func (h *responseHook) scrape(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
 	leechers, seeders, snatched, err = h.store.ScrapeSwarm(ctx, ih)
 	if err != nil {
-		return
+		return leechers, seeders, snatched, err
 	}
 	if len(ih) == bittorrent.InfoHashV2Len {
 		var l, s, n uint32
 		l, s, n, err = h.store.ScrapeSwarm(ctx, ih.TruncateV1())
 		if err != nil {
-			return
+			return leechers, seeders, snatched, err
 		}
 		leechers, seeders, snatched = leechers+l, seeders+s, snatched+n
 	}
-	return
+	return leechers, seeders, snatched, err
 }
 
 func (h *responseHook) HandleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest, resp *bittorrent.AnnounceResponse) (_ context.Context, err error) {
@@ -209,7 +209,7 @@ func (h *responseHook) appendPeers(ctx context.Context, req *bittorrent.Announce
 		}
 	}
 
-	return
+	return err
 }
 
 func (h *responseHook) HandleScrape(ctx context.Context, req *bittorrent.ScrapeRequest, resp *bittorrent.ScrapeResponse) (_ context.Context, err error) {

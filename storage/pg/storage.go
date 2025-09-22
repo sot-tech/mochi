@@ -144,7 +144,7 @@ func checkParameter(p *string, name string) (err error) {
 	if *p = strings.TrimSpace(*p); len(*p) == 0 {
 		err = fmt.Errorf(errRequiredParameterNotSetMsg, name)
 	}
-	return
+	return err
 }
 
 type config struct {
@@ -268,7 +268,7 @@ func (s *store) txBatch(ctx context.Context, batch *pgx.Batch) (err error) {
 			}
 		}
 	}
-	return
+	return err
 }
 
 func (s *store) Put(ctx context.Context, storeCtx string, values ...storage.Entry) (err error) {
@@ -284,7 +284,7 @@ func (s *store) Put(ctx context.Context, storeCtx string, values ...storage.Entr
 		}
 		err = s.txBatch(ctx, &batch)
 	}
-	return
+	return err
 }
 
 func (s *store) Contains(ctx context.Context, storeCtx string, key string) (contains bool, err error) {
@@ -294,12 +294,12 @@ func (s *store) Contains(ctx context.Context, storeCtx string, key string) (cont
 		contains = rows.Next()
 		err = rows.Err()
 	}
-	return
+	return contains, err
 }
 
 func (s *store) Load(ctx context.Context, storeCtx string, key string) (out []byte, err error) {
 	err = noResultErr(s.QueryRow(ctx, s.Data.GetQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(key)}).Scan(&out))
-	return
+	return out, err
 }
 
 func (s *store) Delete(ctx context.Context, storeCtx string, keys ...string) (err error) {
@@ -310,7 +310,7 @@ func (s *store) Delete(ctx context.Context, storeCtx string, keys ...string) (er
 		}
 		_, err = s.Exec(ctx, s.Data.DelQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: baKeys})
 	}
-	return
+	return err
 }
 
 func (s *store) Preservable() bool {
@@ -397,7 +397,7 @@ func (s *store) putPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, se
 		pV6:       peer.Addr().Is6(),
 		pCreated:  timecache.Now(),
 	})
-	return
+	return err
 }
 
 func (s *store) delPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, seeder bool) (err error) {
@@ -412,7 +412,7 @@ func (s *store) delPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, se
 		pPort:     peer.Port(),
 		pSeeder:   seeder,
 	})
-	return
+	return err
 }
 
 func (s *store) PutSeeder(ctx context.Context, ih bittorrent.InfoHash, peer bittorrent.Peer) error {
@@ -475,7 +475,7 @@ func (s *store) getPeers(ctx context.Context, ih []byte, seeders bool, maxCount 
 				s.Announce.AddressColumn,
 				s.Announce.PortColumn,
 			})
-			return
+			return peers, err
 		}
 		var maxIndex int
 		switch {
@@ -516,7 +516,7 @@ func (s *store) getPeers(ctx context.Context, ih []byte, seeders bool, maxCount 
 			}
 		}
 	}
-	return
+	return peers, err
 }
 
 func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
@@ -546,7 +546,7 @@ func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSe
 		logger.Warn().Err(err).Stringer("infoHash", ih).Msg("error occurred while retrieving peers")
 	}
 
-	return
+	return peers, err
 }
 
 func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leechers uint32, err error) {
@@ -585,7 +585,7 @@ func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leec
 			}
 		}
 	}
-	return
+	return seeders, leechers, err
 }
 
 func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
@@ -594,13 +594,13 @@ func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leeche
 		Msg("scrape swarm")
 	ihb := ih.Bytes()
 	if seeders, leechers, err = s.countPeers(ctx, ihb); err != nil {
-		return
+		return leechers, seeders, snatched, err
 	}
 	if len(s.Downloads.GetQuery) > 0 {
 		err = noResultErr(s.QueryRow(ctx, s.Downloads.GetQuery, pgx.NamedArgs{pInfoHash: ihb}).Scan(&snatched))
 	}
 
-	return
+	return leechers, seeders, snatched, err
 }
 
 func (s *store) Ping(ctx context.Context) error {

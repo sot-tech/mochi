@@ -242,7 +242,7 @@ func sendHTTPReq(u string) (err error) {
 			return errors.New(r.Status)
 		}
 	}
-	return
+	return err
 }
 
 func BenchmarkServerHTTPAnnounce(b *testing.B) {

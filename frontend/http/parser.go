@@ -158,12 +158,12 @@ func requestedIPs(r *fasthttp.RequestCtx, p *queryParams, opts ParseOptions) (ad
 			Provided: false,
 		})
 	}
-	return
+	return addresses
 }
 
 func parseRequestAddress(s string, provided bool) (ra bittorrent.RequestAddress) {
 	if addr, err := netip.ParseAddr(s); err == nil {
 		ra.Addr, ra.Provided = addr, provided
 	}
-	return
+	return ra
 }

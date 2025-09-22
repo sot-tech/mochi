@@ -101,7 +101,7 @@ func (p *ihSwarm) get(k bittorrent.InfoHash) (v swarm, ok bool) {
 	p.RLock()
 	v, ok = p.m[k]
 	p.RUnlock()
-	return
+	return v, ok
 }
 
 func (p *ihSwarm) getOrCreate(k bittorrent.InfoHash) (v swarm) {
@@ -117,7 +117,7 @@ func (p *ihSwarm) getOrCreate(k bittorrent.InfoHash) (v swarm) {
 		}
 		p.Unlock()
 	}
-	return
+	return v
 }
 
 func (p *ihSwarm) del(k bittorrent.InfoHash) (ok bool) {
@@ -126,7 +126,7 @@ func (p *ihSwarm) del(k bittorrent.InfoHash) (ok bool) {
 		delete(p.m, k)
 	}
 	p.Unlock()
-	return
+	return ok
 }
 
 func (p *ihSwarm) len() int {
@@ -158,7 +158,7 @@ func (p *peers) get(k bittorrent.Peer) (v int64, ok bool) {
 	p.RLock()
 	v, ok = p.m[k]
 	p.RUnlock()
-	return
+	return v, ok
 }
 
 func (p *peers) set(k bittorrent.Peer, v int64) {
@@ -173,7 +173,7 @@ func (p *peers) del(k bittorrent.Peer) (ok bool) {
 		delete(p.m, k)
 	}
 	p.Unlock()
-	return
+	return ok
 }
 
 func (p *peers) len() int {
@@ -322,7 +322,7 @@ func (ps *peerStore) DeleteSeeder(_ context.Context, ih bittorrent.InfoHash, p b
 		err = storage.ErrResourceDoesNotExist
 	}
 
-	return
+	return err
 }
 
 func (ps *peerStore) PutLeecher(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -368,7 +368,7 @@ func (ps *peerStore) DeleteLeecher(_ context.Context, ih bittorrent.InfoHash, p 
 		err = storage.ErrResourceDoesNotExist
 	}
 
-	return
+	return err
 }
 
 func (ps *peerStore) GraduateLeecher(_ context.Context, ih bittorrent.InfoHash, p bittorrent.Peer) error {
@@ -427,7 +427,7 @@ func (ps *peerStore) AnnouncePeers(_ context.Context, ih bittorrent.InfoHash, fo
 		}
 	}
 
-	return
+	return peers, err
 }
 
 func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers, seeders uint32) {
@@ -436,7 +436,7 @@ func (ps *peerStore) countPeers(ih bittorrent.InfoHash, v6 bool) (leechers, seed
 	if sw, ok := shard.swarms.get(ih); ok {
 		leechers, seeders = uint32(sw.leechers.len()), uint32(sw.seeders.len())
 	}
-	return
+	return leechers, seeders
 }
 
 func (ps *peerStore) ScrapeSwarm(_ context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, _ error) {
