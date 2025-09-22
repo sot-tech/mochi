@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,6 +39,7 @@ type Config struct {
 	SessionToken string
 	Bucket       string
 	Prefix       string
+	Suffix       string
 	Period       time.Duration
 }
 
@@ -94,6 +94,7 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 		client: awss3.NewFromConfig(awsCfg),
 		bucket: c.Bucket,
 		prefix: c.Prefix,
+		suffix: c.Suffix,
 	}, c.Period)
 	go s.Run()
 
@@ -110,8 +111,8 @@ type s3Client interface {
 }
 
 type s3 struct {
-	client         s3Client
-	bucket, prefix string
+	client                 s3Client
+	bucket, prefix, suffix string
 }
 
 var _ directory.PathReader = s3{}
@@ -125,15 +126,9 @@ func (s s3) ReadDir() (it iter.Seq[string], err error) {
 	if err == nil {
 		it = func(yield func(string) bool) {
 			for _, e := range entries.Contents {
-				logger.Trace().Any("content", e).Msg("read dir")
-				if e.Key != nil && strings.ToLower(filepath.Ext(*e.Key)) == ".torrent" {
-					var name string
-					if len(s.prefix) == 0 {
-						name = *e.Key
-					} else {
-						name = filepath.Join(s.prefix, *e.Key)
-					}
-					if !yield(name) {
+				logger.Trace().Any("content", e).Msg("s3 read")
+				if e.Key != nil && strings.HasSuffix(*e.Key, s.suffix) {
+					if !yield(*e.Key) {
 						return
 					}
 				}

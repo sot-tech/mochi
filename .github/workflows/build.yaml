@@ -38,6 +38,13 @@ jobs:
                     --health-interval 10s
                     --health-timeout 5s
                     --health-retries 5
+            minio:
+                image: "minio/minio"
+                ports: [ "9000:9000" ]
+                options: >-
+                    server
+                    --address
+                    127.0.0.1:9000
         steps:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"

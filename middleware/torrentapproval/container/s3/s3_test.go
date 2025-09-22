@@ -125,6 +125,7 @@ func TestScanMock(t *testing.T) {
 var (
 	minioEndpoint = "http://127.0.0.1:9000"
 	minioBucket   = "test"
+	minioPrefix   = "test/"
 )
 
 const (
@@ -134,7 +135,7 @@ const (
 )
 
 // TestScanMinio requires real minio instance listening 127.0.0.1:9000
-// with default login/password (minioadmin/minioadmin)
+// with default login, password and region (minioadmin/minioadmin, us-east-1)
 func TestScanMinio(t *testing.T) {
 	st, _ := memory.Builder{}.NewDataStorage(make(conf.MapConfig))
 	awsCfg, err := config.LoadDefaultConfig(context.Background())
@@ -157,26 +158,59 @@ func TestScanMinio(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		name = minioPrefix + name
+		_, err = cl.PutObject(context.Background(), &awss3.PutObjectInput{
+			Bucket: &minioBucket,
+			Key:    &name,
+			Body:   bytes.NewReader(data.data),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		name += "1"
+		_, err = cl.PutObject(context.Background(), &awss3.PutObjectInput{
+			Bucket: &minioBucket,
+			Key:    &name,
+			Body:   bytes.NewReader(data.data),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s3Dir := s3{
+		client: cl,
+		bucket: minioBucket,
+		prefix: minioPrefix,
+		suffix: ".torrent",
+	}
+
+	if content, err := s3Dir.ReadDir(); err == nil {
+		var i int
+		for range content {
+			i++
+		}
+		require.Equal(t, len(files), i, "S3 content data not the same as test data")
+	} else {
+		t.Fatal(err)
 	}
 
 	d := directory.NewScanner(list.List{
 		Invert:     false,
 		Storage:    st,
 		StorageCtx: "TEST",
-	}, s3{
-		client: cl,
-		bucket: minioBucket,
-	}, time.Millisecond*100)
+	}, s3Dir, time.Millisecond*100)
+
 	go d.Run()
 	t.Cleanup(func() {
 		_ = d.Close()
 	})
-
 	time.Sleep(time.Millisecond * 200)
 
 	for name, f := range files {
 		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.True(t, contains, "%s must present", name)
+		name = minioPrefix + name
 		_, err = cl.DeleteObject(context.Background(), &awss3.DeleteObjectInput{
 			Bucket: &minioBucket,
 			Key:    &name,
