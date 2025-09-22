@@ -38,19 +38,16 @@ jobs:
                     --health-interval 10s
                     --health-timeout 5s
                     --health-retries 5
-            minio:
-                image: "minio/minio:latest"
-                ports: [ "9000:9000" ]
-                env:
-                    MINIO_ROOT_USER: minioadmin
-                    MINIO_ROOT_PASSWORD: minioadmin
-                options: >-
-                    --health-cmd "true"
         steps:
             -   uses: "actions/checkout@v4"
             -   uses: "actions/setup-go@v5"
                 with:
                     go-version: "^1.24"
+            -   name: "Download & start MinIO"
+                run: |
+                    wget --quiet -O /tmp/minio https://dl.min.io/server/minio/release/linux-amd64/minio
+                    chmod +x /tmp/minio
+                    /tmp/minio server /tmp/minio_data &
             -   name: "Run `go test`"
                 run: "go test -race ./..."
 
