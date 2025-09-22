@@ -106,7 +106,7 @@ func TestScanMock(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 	for name, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.True(t, contains, "%s must present", name)
 		for i := 0; i < len(cl.objs); i++ {
 			if *cl.objs[i].Key == name {
@@ -117,7 +117,7 @@ func TestScanMock(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 	for name, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.False(t, contains, "%s must absent", name)
 	}
 }
@@ -208,7 +208,7 @@ func TestScanMinio(t *testing.T) {
 	time.Sleep(time.Millisecond * 200)
 
 	for name, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.True(t, contains, "%s must present", name)
 		name = minioPrefix + name
 		_, err = cl.DeleteObject(context.Background(), &awss3.DeleteObjectInput{
@@ -223,7 +223,7 @@ func TestScanMinio(t *testing.T) {
 	time.Sleep(time.Millisecond * 200)
 
 	for name, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.False(t, contains, "%s must absent", name)
 	}
 }

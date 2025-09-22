@@ -64,9 +64,8 @@ func writeTmp() (string, error) {
 		return "", err
 	}
 	for _, f := range files {
-		err = os.WriteFile(filepath.Join(tmpDir, f.name), f.data, 0644)
-		if err != nil {
-			return "", err
+		if err = os.WriteFile(filepath.Join(tmpDir, f.name), f.data, 0o600); err != nil {
+			break
 		}
 	}
 	return tmpDir, err
@@ -96,14 +95,14 @@ func TestScan(t *testing.T) {
 	})
 	time.Sleep(time.Millisecond * 100)
 	for _, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.True(t, contains, "%s must present", f.name)
 		_ = os.Remove(filepath.Join(tmpDir, f.name))
 	}
 
 	time.Sleep(time.Millisecond * 100)
 	for _, f := range files {
-		contains, _ := d.List.Storage.Contains(context.Background(), "TEST", f.hash)
+		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.False(t, contains, "%s must absent", f.name)
 	}
 }

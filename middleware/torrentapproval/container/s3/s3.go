@@ -72,9 +72,10 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	modifiers[0] = config.WithLogger(logging.LoggerFunc(func(
 		classification logging.Classification, format string, v ...interface{},
 	) {
-		if classification == logging.Debug {
+		switch classification {
+		case logging.Debug:
 			logger.Debug().CallerSkipFrame(1).Msg(fmt.Sprintf(format, v...))
-		} else if classification == logging.Warn {
+		case logging.Warn:
 			logger.Warn().CallerSkipFrame(1).Msg(fmt.Sprintf(format, v...))
 		}
 	}))
