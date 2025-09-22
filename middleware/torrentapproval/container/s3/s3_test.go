@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,12 +62,15 @@ func init() {
 }
 
 type mockS3 struct {
-	objs []types.Object
+	objs   []types.Object
+	objsMu *sync.Mutex
 }
 
 func (m *mockS3) ListObjectsV2(
 	context.Context, *awss3.ListObjectsV2Input, ...func(*awss3.Options),
 ) (*awss3.ListObjectsV2Output, error) {
+	m.objsMu.Lock()
+	defer m.objsMu.Unlock()
 	return &awss3.ListObjectsV2Output{
 		Contents: m.objs,
 	}, nil
@@ -87,7 +91,7 @@ func (m *mockS3) GetObject(
 }
 
 func TestScanMock(t *testing.T) {
-	cl := &mockS3{make([]types.Object, 0, len(files))}
+	cl := &mockS3{objs: make([]types.Object, 0, len(files)), objsMu: &sync.Mutex{}}
 	for k := range files {
 		cl.objs = append(cl.objs, types.Object{Key: &k})
 	}
@@ -108,12 +112,11 @@ func TestScanMock(t *testing.T) {
 	for name, f := range files {
 		contains, _ := d.Storage.Contains(context.Background(), "TEST", f.hash)
 		require.True(t, contains, "%s must present", name)
-		for i := 0; i < len(cl.objs); i++ {
-			if *cl.objs[i].Key == name {
-				cl.objs = append(cl.objs[:i], cl.objs[i+1:]...)
-			}
-		}
 	}
+
+	cl.objsMu.Lock()
+	cl.objs = []types.Object{}
+	cl.objsMu.Unlock()
 
 	time.Sleep(time.Millisecond * 100)
 	for name, f := range files {
