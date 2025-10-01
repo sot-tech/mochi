@@ -13,7 +13,7 @@ jobs:
         runs-on: "ubuntu-latest"
         steps:
             -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version-file: go.mod
             -   uses: "authzed/actions/gofumpt@main"
@@ -25,7 +25,7 @@ jobs:
         runs-on: "ubuntu-latest"
         steps:
             -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version-file: go.mod
             -   uses: "golangci/golangci-lint-action@v8"
@@ -45,7 +45,7 @@ jobs:
                 language: [ "go" ]
         steps:
             -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version-file: go.mod
             -   uses: "authzed/actions/codeql@main"
