@@ -12,8 +12,8 @@ jobs:
         name: "Go Build"
         runs-on: "ubuntu-latest"
         steps:
-            -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/checkout@v6"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version: ">=1.24"
             -   name: "Build"
@@ -39,8 +39,8 @@ jobs:
                     --health-timeout 5s
                     --health-retries 5
         steps:
-            -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/checkout@v6"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version: "^1.24"
             -   name: "Download & start MinIO"
@@ -55,8 +55,8 @@ jobs:
         name: "E2E Memory Tests"
         runs-on: "ubuntu-latest"
         steps:
-            -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/checkout@v6"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version: "^1.24"
             -   name: "Install and configure mochi"
@@ -81,8 +81,8 @@ jobs:
                 image: "eqalpha/keydb"
                 ports: [ "6379:6379" ]
         steps:
-            -   uses: "actions/checkout@v4"
-            -   uses: "actions/setup-go@v5"
+            -   uses: "actions/checkout@v6"
+            -   uses: "actions/setup-go@v6"
                 with:
                     go-version: "^1.24"
             -   name: "Install and configure mochi"
