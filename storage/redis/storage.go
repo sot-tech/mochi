@@ -353,7 +353,7 @@ func (ps *store) count(key string, getLength bool) (n uint64) {
 	if err != nil {
 		logger.Error().Err(err).Str("key", key).Msg("GET/SCARD failure")
 	}
-	return
+	return n
 }
 
 func (ps *store) getClock() int64 {
@@ -374,7 +374,7 @@ func (ps *store) tx(ctx context.Context, txf func(tx redis.Pipeliner) error) (er
 	} else {
 		err = txErr
 	}
-	return
+	return err
 }
 
 // NoResultErr returns nil if provided err is redis.Nil
@@ -406,7 +406,7 @@ func InfoHashKey(infoHash string, seeder, v6 bool) (infoHashKey string) {
 		infoHashKey = IH4LeecherKey
 	}
 	infoHashKey += infoHash
-	return
+	return infoHashKey
 }
 
 func (ps *store) putPeer(ctx context.Context, infoHashKey, peerCountKey, peerID string) error {
@@ -416,13 +416,13 @@ func (ps *store) putPeer(ctx context.Context, infoHashKey, peerCountKey, peerID 
 		Msg("put peer")
 	return ps.tx(ctx, func(tx redis.Pipeliner) (err error) {
 		if err = tx.HSet(ctx, infoHashKey, peerID, ps.getClock()).Err(); err != nil {
-			return
+			return err
 		}
 		if err = tx.Incr(ctx, peerCountKey).Err(); err != nil {
-			return
+			return err
 		}
 		err = tx.SAdd(ctx, IHKey, infoHashKey).Err()
-		return
+		return err
 	})
 }
 
@@ -513,7 +513,7 @@ var errInvalidPeerDataSize = fmt.Errorf("invalid peer data (must be at least %d 
 func UnpackPeer(data string) (peer bittorrent.Peer, err error) {
 	if len(data) < peerMinimumLen {
 		err = errInvalidPeerDataSize
-		return
+		return peer, err
 	}
 	b := str2bytes.StringToBytes(data)
 	peerID, _ := bittorrent.NewPeerID(b[:bittorrent.PeerIDLen])
@@ -529,7 +529,7 @@ func UnpackPeer(data string) (peer bittorrent.Peer, err error) {
 		err = bittorrent.ErrInvalidIP
 	}
 
-	return
+	return peer, err
 }
 
 func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers []bittorrent.Peer, err error) {
@@ -544,7 +544,7 @@ func (ps *Connection) parsePeersList(peersResult *redis.StringSliceCmd) (peers [
 			}
 		}
 	}
-	return
+	return peers, err
 }
 
 type getPeersFn func(context.Context, string, int) *redis.StringSliceCmd
@@ -586,7 +586,7 @@ func (ps *Connection) GetPeers(
 		logger.Warn().Err(err).Stringer("infoHash", ih).Msg("error occurred while retrieving peers")
 	}
 
-	return
+	return out, err
 }
 
 func (ps *store) AnnouncePeers(
@@ -613,26 +613,26 @@ func (ps *Connection) ScrapeIH(ctx context.Context, ih bittorrent.InfoHash, coun
 
 	lc4, err = countFn(ctx, InfoHashKey(infoHash, false, false)).Result()
 	if err = NoResultErr(err); err != nil {
-		return
+		return leechersCount, seedersCount, downloadsCount, err
 	}
 	lc6, err = countFn(ctx, InfoHashKey(infoHash, false, true)).Result()
 	if err = NoResultErr(err); err != nil {
-		return
+		return leechersCount, seedersCount, downloadsCount, err
 	}
 	sc4, err = countFn(ctx, InfoHashKey(infoHash, true, false)).Result()
 	if err = NoResultErr(err); err != nil {
-		return
+		return leechersCount, seedersCount, downloadsCount, err
 	}
 	sc6, err = countFn(ctx, InfoHashKey(infoHash, true, true)).Result()
 	if err = NoResultErr(err); err != nil {
-		return
+		return leechersCount, seedersCount, downloadsCount, err
 	}
 	dc, err = ps.HGet(ctx, CountDownloadsKey, infoHash).Int64()
 	if err = NoResultErr(err); err != nil {
-		return
+		return leechersCount, seedersCount, downloadsCount, err
 	}
 	leechersCount, seedersCount, downloadsCount = uint32(lc4+lc6), uint32(sc4+sc6), uint32(dc)
-	return
+	return leechersCount, seedersCount, downloadsCount, err
 }
 
 func (ps *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (uint32, uint32, uint32, error) {
@@ -667,7 +667,7 @@ func (ps *Connection) Put(ctx context.Context, storeCtx string, values ...storag
 			}
 		}
 	}
-	return
+	return err
 }
 
 // Contains - storage.DataStorage implementation
@@ -682,7 +682,7 @@ func (ps *Connection) Load(ctx context.Context, storeCtx string, key string) (v 
 	if err != nil && errors.Is(err, redis.Nil) {
 		v, err = nil, nil
 	}
-	return
+	return v, err
 }
 
 // Delete - storage.DataStorage implementation
@@ -700,7 +700,7 @@ func (ps *Connection) Delete(ctx context.Context, storeCtx string, keys ...strin
 			}
 		}
 	}
-	return
+	return err
 }
 
 // Preservable - storage.DataStorage implementation
@@ -866,5 +866,5 @@ func (ps *store) Close() (err error) {
 		logger.Info().Msg("redis exiting. mochi does not clear data in redis when exiting. mochi keys have prefix " + PrefixKey)
 		err = ps.UniversalClient.Close()
 	})
-	return
+	return err
 }

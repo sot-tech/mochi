@@ -52,7 +52,7 @@ func NewEvent(eventStr string) (evt Event, err error) {
 	default:
 		evt, err = None, ErrUnknownEvent
 	}
-	return
+	return evt, err
 }
 
 // String implements Stringer for an event.
@@ -69,5 +69,5 @@ func (e Event) String() (s string) {
 	default:
 		s = "<unknown>"
 	}
-	return
+	return s
 }

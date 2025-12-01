@@ -30,7 +30,7 @@ func generateInfoHashes() (a [ihCount]bittorrent.InfoHash) {
 	for i := range a {
 		a[i] = randIH(i < ihCount/2)
 	}
-	return
+	return a
 }
 
 func generatePeers() (a [peersCount]bittorrent.Peer) {
@@ -56,7 +56,7 @@ func generatePeers() (a [peersCount]bittorrent.Peer) {
 		}
 	}
 
-	return
+	return a
 }
 
 type (

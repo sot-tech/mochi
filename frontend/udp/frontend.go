@@ -96,7 +96,7 @@ func (cfg Config) Validate() (validCfg Config) {
 
 	validCfg.ParseOptions = cfg.ParseOptions.Validate(logger)
 
-	return
+	return validCfg
 }
 
 // udpFE holds the state of a UDP BitTorrent Frontend.
@@ -174,7 +174,7 @@ func (f *udpFE) Close() (err error) {
 		err = frontend.CloseGroup(cls)
 	})
 
-	return
+	return err
 }
 
 // serve blocks while listening and serving UDP BitTorrent requests
@@ -257,7 +257,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		// Malformed, no client packets are less than 16 bytes.
 		// We explicitly return nothing in case this is a DoS attempt.
 		err = errMalformedPacket
-		return
+		return actionName, err
 	}
 
 	// Parse the headers of the UDP packet.
@@ -274,7 +274,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 	if actionID != connectActionID && !gen.Validate(connID, r.IP, timecache.Now()) {
 		err = errBadConnectionID
 		writeErrorResponse(w, txID, err)
-		return
+		return actionName, err
 	}
 
 	// Handle the requested action.
@@ -284,7 +284,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 
 		if !bytes.Equal(connID, initialConnectionID) {
 			err = errMalformedPacket
-			return
+			return actionName, err
 		}
 
 		writeConnectionID(w, txID, gen.Generate(r.IP, timecache.Now()))
@@ -296,7 +296,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		req, err = parseAnnounce(r, actionID == announceV6ActionID, f.ParseOptions)
 		if err != nil {
 			writeErrorResponse(w, txID, err)
-			return
+			return actionName, err
 		}
 
 		var resp *bittorrent.AnnounceResponse
@@ -306,7 +306,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 			if !errors.Is(err, context.Canceled) {
 				writeErrorResponse(w, txID, err)
 			}
-			return
+			return actionName, err
 		}
 
 		if err = ctx.Err(); err == nil {
@@ -323,7 +323,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		req, err = parseScrape(r, f.ParseOptions)
 		if err != nil {
 			writeErrorResponse(w, txID, err)
-			return
+			return actionName, err
 		}
 
 		var resp *bittorrent.ScrapeResponse
@@ -333,7 +333,7 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 			if !errors.Is(err, context.Canceled) {
 				writeErrorResponse(w, txID, err)
 			}
-			return
+			return actionName, err
 		}
 
 		if err = ctx.Err(); err == nil {
@@ -348,5 +348,5 @@ func (f *udpFE) handleRequest(ctx context.Context, r Request, w ResponseWriter) 
 		writeErrorResponse(w, txID, err)
 	}
 
-	return
+	return actionName, err
 }

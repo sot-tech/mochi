@@ -69,7 +69,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 	validCfg.ListenOptions = cfg.ListenOptions.Validate(logger)
 	if cfg.UseTLS && (len(cfg.TLSCertPath) == 0 || len(cfg.TLSKeyPath) == 0) {
 		err = errTLSNotProvided
-		return
+		return validCfg, err
 	}
 
 	if cfg.ReadTimeout <= 0 {
@@ -118,7 +118,7 @@ func (cfg Config) Validate() (validCfg Config, err error) {
 			Msg("falling back to default configuration")
 	}
 	validCfg.ParseOptions.ParseOptions = cfg.ParseOptions.Validate(logger)
-	return
+	return validCfg, err
 }
 
 type httpFE struct {
@@ -232,7 +232,7 @@ func (f *httpFE) Close() (err error) {
 		}
 	})
 
-	return
+	return err
 }
 
 // announceRoute parses and responds to an Announce.

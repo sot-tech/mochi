@@ -113,5 +113,5 @@ func (l *Logic) Ping(ctx context.Context) (err error) {
 			break
 		}
 	}
-	return
+	return err
 }

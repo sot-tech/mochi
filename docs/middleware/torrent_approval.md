@@ -28,6 +28,11 @@ There are two sources of hashes: `list` and `directory`.
   files at start and then periodically watch for new files to add, or for delete events
   to remove hash from storage.
 
+* `s3` will search for torrent files in specified S3-compatible storage (AWS S3, MinIO, etc.) and
+  append/delete records from storage. This source will parse all existing
+  files at start and then periodically watch for new files to add, or for delete events
+  to remove hash from storage.
+
 Note: if storage is not `memory`, and `preserve` option set to `true`, records
 will be persisted in storage until _somebody_ or _something_ (different tool with access
 to storage) won't delete it.
@@ -48,7 +53,21 @@ If `name` is empty or `internal` global storage will be used
 	- `directory`:
 		- `path` - directory to watch
         - `period` - time between two directory checks
-		- `invert` and `storage_ctx` has the same meanins as `list`'s options
+		- `invert` and `storage_ctx` has the same meaning as `list`'s options
+	- `s3`:
+		- `endpoint`* - base URL of S3 provider
+        - `region`* - S3 region to connect to
+        - `key_id`* - S3 access key ID
+        - `key_secret`* - S3 secret access key
+		- `session_token`* - S3 temporary security credential
+        - `bucket` - S3 bucket
+        - `prefix` - prefix path to search entries
+        - `suffix` - suffix to filter returned entries, such as extension (e.g. `.torrent`)
+		- `period` - time between two S3 checks
+		- `invert` and `storage_ctx` has the same meaning as `list`'s options
+
+Note: `s3` options marked with `*` and any other specific options can be omitted in MoChi and can be provided 
+with environment variables or in `$HOME/.aws/*` files (see [AWS SDK documentation](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configure-gosdk.html)).
 
 Configuration example:
 

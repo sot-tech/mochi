@@ -1,53 +1,53 @@
 version: "2"
 run:
-  go: "1.23"
+    go: "1.24"
 linters:
-  enable:
-    - bidichk
-    - bodyclose
-    - errname
-    - errorlint
-    - goprintffuncname
-    - gosec
-    - importas
-    - makezero
-    - prealloc
-    - predeclared
-    - revive
-    - rowserrcheck
-    - staticcheck
-    - unconvert
-    - wastedassign
-    - whitespace
-  settings:
-    gosec:
-      excludes:
-        - G505
-        - G115
-    staticcheck:
-      checks:
-        - all
-  exclusions:
-    generated: lax
-    presets:
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+    enable:
+        - bidichk
+        - bodyclose
+        - errname
+        - errorlint
+        - goprintffuncname
+        - gosec
+        - importas
+        - makezero
+        - prealloc
+        - predeclared
+        - revive
+        - rowserrcheck
+        - staticcheck
+        - unconvert
+        - wastedassign
+        - whitespace
+    settings:
+        gosec:
+            excludes:
+                - G505
+                - G115
+        staticcheck:
+            checks:
+                - all
+    exclusions:
+        generated: lax
+        presets:
+            - common-false-positives
+            - legacy
+            - std-error-handling
+        paths:
+            - third_party$
+            - builtin$
+            - examples$
 formatters:
-  enable:
-    - gofumpt
-    - goimports
-  settings:
-    goimports:
-      local-prefixes:
-        - sot-te.ch/mochi
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+    enable:
+        - gofumpt
+        - goimports
+    settings:
+        goimports:
+            local-prefixes:
+                - sot-te.ch/mochi
+    exclusions:
+        generated: lax
+        paths:
+            - third_party$
+            - builtin$
+            - examples$

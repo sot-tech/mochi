@@ -77,7 +77,7 @@ func runGet(u string, checkResponse bool) (err error) {
 			return errors.New(r.Status)
 		}
 	}
-	return
+	return err
 }
 
 func BenchmarkPing(b *testing.B) {

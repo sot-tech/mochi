@@ -133,7 +133,7 @@ func (rp RequestPeer) Peers() (peers Peers) {
 			AddrPort: netip.AddrPortFrom(a.Addr, rp.Port),
 		})
 	}
-	return
+	return peers
 }
 
 // MarshalZerologObject writes fields into zerolog event

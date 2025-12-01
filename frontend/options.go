@@ -35,7 +35,7 @@ func (lo ListenOptions) Validate(logger *log.Logger) (validOptions ListenOptions
 			Str("default", validOptions.Addr).
 			Msg("falling back to default configuration")
 	}
-	return
+	return validOptions
 }
 
 // ListenTCP listens at the given TCP Addr
@@ -56,7 +56,7 @@ func (lo ListenOptions) ListenTCP() (conn *net.TCPListener, err error) {
 			conn, err = net.ListenTCP("tcp", addr)
 		}
 	}
-	return
+	return conn, err
 }
 
 // ListenUDP listens at the given UDP Addr
@@ -77,7 +77,7 @@ func (lo ListenOptions) ListenUDP() (conn *net.UDPConn, err error) {
 			conn, err = net.ListenUDP("udp", addr)
 		}
 	}
-	return
+	return conn, err
 }
 
 // ParseOptions is the configuration used to parse an Announce Request.

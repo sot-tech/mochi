@@ -16,6 +16,7 @@ import (
 
 	// import directory watcher to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/directory"
+	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/s3"
 
 	// import static list to enable appropriate support
 	_ "github.com/sot-tech/mochi/middleware/torrentapproval/container/list"
@@ -65,7 +66,7 @@ func build(config conf.MapConfig, st storage.PeerStorage) (h middleware.Hook, er
 	} else if ds, err = storage.NewDataStorage(cfg.Storage); err == nil {
 		dsc = ds
 	} else {
-		return
+		return h, err
 	}
 
 	var c container.Container

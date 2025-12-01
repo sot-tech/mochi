@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,55 +53,111 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	if err := conf.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("unable to deserialise configuration: %w", err)
 	}
-	var err error
-	d := &directory{
-		List: list.List{
-			Invert:     c.Invert,
-			Storage:    st,
-			StorageCtx: c.StorageCtx,
-		},
-		closed: make(chan bool),
-	}
-	if len(d.StorageCtx) == 0 {
-		logger.Warn().
-			Str("name", "StorageCtx").
-			Str("provided", d.StorageCtx).
-			Str("default", container.DefaultStorageCtxName).
-			Msg("falling back to default configuration")
-		d.StorageCtx = container.DefaultStorageCtxName
-	}
-	if c.Period == 0 {
-		logger.Warn().
-			Str("name", "Period").
-			Dur("provided", 0).
-			Dur("default", defaultPeriod).
-			Msg("falling back to default configuration")
-		c.Period = defaultPeriod
-	}
-	go d.runScan(c.Path, c.Period)
-	return d, err
+	d := NewScanner(list.List{
+		Invert:     c.Invert,
+		Storage:    st,
+		StorageCtx: c.StorageCtx,
+	}, path(c.Path), c.Period)
+	go d.Run()
+	return d, nil
 }
 
-// BencodeRawBytes wrapper for byte slice to get raw 'info' section from
-// torrent file
-type BencodeRawBytes []byte
+type bencodeRawBytes []byte
 
 // UnmarshalBencode just appends raw byte slice to result
-func (ba *BencodeRawBytes) UnmarshalBencode(in []byte) error {
+func (ba *bencodeRawBytes) UnmarshalBencode(in []byte) error {
 	*ba = append([]byte(nil), in...)
 	return nil
 }
 
 type torrentRawInfoStruct struct {
-	Info BencodeRawBytes `bencode:"info"`
+	Info bencodeRawBytes `bencode:"info"`
 }
 
 type torrentNameInfoStruct struct {
 	Name string `bencode:"name"`
 }
 
-func (d *directory) runScan(path string, period time.Duration) {
-	t := time.NewTicker(period)
+// PathReader - interface for abstract directory-like reader
+type PathReader interface {
+	// ReadDir returns names of torrent entries.
+	// Implementation must return absolute paths of entries
+	// to fetch torrent file-like data.
+	ReadDir() (it iter.Seq[string], err error)
+	// ReadData returns reader for entry data
+	ReadData(entry string) (io.ReadCloser, error)
+}
+
+type path string
+
+var _ PathReader = path("")
+
+func (p path) ReadDir() (it iter.Seq[string], err error) {
+	var entries []os.DirEntry
+	dir := string(p)
+	if entries, err = os.ReadDir(dir); err == nil {
+		it = func(yield func(string) bool) {
+			for _, e := range entries {
+				if !e.IsDir() && strings.ToLower(filepath.Ext(e.Name())) == ".torrent" {
+					if !yield(filepath.Join(dir, e.Name())) {
+						return
+					}
+				}
+			}
+		}
+	}
+	return it, err
+}
+
+func (p path) ReadData(entry string) (io.ReadCloser, error) {
+	return os.Open(entry)
+}
+
+// NewScanner creates Scanner instance.
+func NewScanner(list list.List, reader PathReader, period time.Duration) *Scanner {
+	if len(list.StorageCtx) == 0 {
+		logger.Warn().
+			Str("name", "StorageCtx").
+			Str("provided", list.StorageCtx).
+			Str("default", container.DefaultStorageCtxName).
+			Msg("falling back to default configuration")
+		list.StorageCtx = container.DefaultStorageCtxName
+	}
+	if period == 0 {
+		logger.Warn().
+			Str("name", "Period").
+			Dur("provided", 0).
+			Dur("default", defaultPeriod).
+			Msg("falling back to default configuration")
+		period = defaultPeriod
+	}
+	return &Scanner{
+		List:   list,
+		reader: reader,
+		period: period,
+		closed: make(chan bool),
+	}
+}
+
+// Scanner holds list of approved/rejected torrents
+type Scanner struct {
+	list.List
+	reader PathReader
+	period time.Duration
+	closed chan bool
+}
+
+// Run starts periodic directory scanning and blocks until Stop called
+func (d *Scanner) Run() {
+	if d.reader == nil {
+		log.Warn().Msg("reader not provided")
+		return
+	}
+	if d.period == 0 {
+		log.Warn().Msg("period not provided")
+		return
+	}
+	t := time.NewTicker(d.period)
 	defer t.Stop()
 	files := make(map[string][2]bittorrent.InfoHash)
 	tmpFiles := make(map[string]bool)
@@ -112,16 +169,14 @@ func (d *directory) runScan(path string, period time.Duration) {
 			return
 		case <-t.C:
 			logger.Debug().Msg("starting directory scan")
-			if entries, err := os.ReadDir(path); err == nil {
-				for _, e := range entries {
-					if !e.IsDir() && strings.ToLower(filepath.Ext(e.Name())) == ".torrent" {
-						tmpFiles[filepath.Join(path, e.Name())] = true
-					}
+			if entries, err := d.reader.ReadDir(); err == nil {
+				for e := range entries {
+					tmpFiles[e] = true
 				}
 				for p := range tmpFiles {
 					if _, exists := files[p]; !exists {
-						var f *os.File
-						if f, err = os.Open(p); err == nil {
+						var f io.ReadCloser
+						if f, err = d.reader.ReadData(p); err == nil {
 							var info torrentRawInfoStruct
 							err = bencode.NewDecoder(io.LimitReader(f, maxTorrentSize)).Decode(&info)
 							_ = f.Close()
@@ -186,13 +241,8 @@ func (d *directory) runScan(path string, period time.Duration) {
 	}
 }
 
-type directory struct {
-	list.List
-	closed chan bool
-}
-
 // Close closes watching of torrent directory
-func (d *directory) Close() error {
+func (d *Scanner) Close() error {
 	if d.closed != nil {
 		close(d.closed)
 	}

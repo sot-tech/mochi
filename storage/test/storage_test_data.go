@@ -27,7 +27,7 @@ func randIH(v2 bool) (ih bittorrent.InfoHash) {
 		panic(err)
 	}
 	ih, _ = bittorrent.NewInfoHash(b)
-	return
+	return ih
 }
 
 func randPeerID() (ih bittorrent.PeerID) {
@@ -36,7 +36,7 @@ func randPeerID() (ih bittorrent.PeerID) {
 		panic(err)
 	}
 	ih, _ = bittorrent.NewPeerID(b)
-	return
+	return ih
 }
 
 func init() {

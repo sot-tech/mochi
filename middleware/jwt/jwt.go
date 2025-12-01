@@ -113,7 +113,7 @@ func build(config conf.MapConfig, _ storage.PeerStorage) (h middleware.Hook, err
 		err = errJWKsNotSet
 	}
 
-	return
+	return h, err
 }
 
 type announceClaims struct {
@@ -237,5 +237,5 @@ func (h *hook) getJWTString(params bittorrent.Params) (jwt string) {
 			}
 		}
 	}
-	return
+	return jwt
 }
