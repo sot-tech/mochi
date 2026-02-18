@@ -43,6 +43,7 @@ func init() {
 // Tracker.
 type Config struct {
 	frontend.ListenOptions
+	//nolint:gosec
 	PrivateKey   string        `cfg:"private_key"`
 	MaxClockSkew time.Duration `cfg:"max_clock_skew"`
 	frontend.ParseOptions

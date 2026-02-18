@@ -33,10 +33,12 @@ const defaultPeriod = time.Minute
 // Extends list.Config because uses the same storage and Approved function.
 type Config struct {
 	list.Config
-	Endpoint     string
-	Region       string
-	KeyID        string `cfg:"key_id"`
-	KeySecret    string `cfg:"key_secret"`
+	Endpoint string
+	Region   string
+	KeyID    string `cfg:"key_id"`
+	//nolint:gosec
+	KeySecret string `cfg:"key_secret"`
+	//nolint:gosec
 	SessionToken string `cfg:"session_token"`
 	Bucket       string
 	Prefix       string

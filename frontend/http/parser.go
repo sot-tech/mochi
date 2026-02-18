@@ -1,3 +1,4 @@
+//nolint:revive
 package http
 
 import (
@@ -105,7 +106,8 @@ func parseAnnounce(r *fasthttp.RequestCtx, opts ParseOptions) (*bittorrent.Annou
 	// Parse the IP address where the client is listening.
 	request.RequestAddresses = requestedIPs(r, qp, opts)
 
-	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant, opts.FilterPrivateIPs); err != nil {
+	if err = bittorrent.SanitizeAnnounce(request, opts.MaxNumWant, opts.DefaultNumWant,
+		opts.FilterPrivateIPs); err != nil {
 		request = nil
 	}
 

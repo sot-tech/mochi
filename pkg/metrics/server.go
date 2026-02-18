@@ -1,5 +1,7 @@
 // Package metrics implements a standalone HTTP server for serving pprof
 // profiles and Prometheus metrics.
+//
+//nolint:revive
 package metrics
 
 import (

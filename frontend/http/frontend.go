@@ -1,5 +1,7 @@
 // Package http implements a BitTorrent frontend via the HTTP protocol as
 // described in BEP 3 and BEP 23.
+//
+//nolint:revive
 package http
 
 import (

@@ -120,13 +120,14 @@ func NewStore(cfg Config) (storage.PeerStorage, error) {
 
 // Config holds the configuration of a redis PeerStorage.
 type Config struct {
-	PeerLifetime   time.Duration `cfg:"peer_lifetime"`
-	Addresses      []string
-	TLS            bool
-	CACerts        []string `cfg:"ca_certs"`
-	DB             int
-	PoolSize       int `cfg:"pool_size"`
-	Login          string
+	PeerLifetime time.Duration `cfg:"peer_lifetime"`
+	Addresses    []string
+	TLS          bool
+	CACerts      []string `cfg:"ca_certs"`
+	DB           int
+	PoolSize     int `cfg:"pool_size"`
+	Login        string
+	//nolint:gosec
 	Password       string
 	Sentinel       bool
 	SentinelMaster string `cfg:"sentinel_master"`
