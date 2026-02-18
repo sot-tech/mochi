@@ -1,5 +1,7 @@
 // Package list implements container with pre-defined
 // list of torrent hashes from config file
+//
+//nolint:revive
 package list
 
 import (

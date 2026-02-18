@@ -12,14 +12,35 @@ var (
 		{},
 		{"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}},
 		{"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}},
-		{"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "numwant": {"28"}},
-		{"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "event": {"stopped"}},
-		{"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "event": {"started"}, "numwant": {"13"}},
+		{
+			"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"},
+			"numwant": {"28"},
+		},
+		{
+			"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"},
+			"event": {"stopped"},
+		},
+		{
+			"peer_id": {testPeerID}, "ip": {"192.168.0.1"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"},
+			"event": {"started"}, "numwant": {"13"},
+		},
 		{"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "no_peer_id": {"1"}},
-		{"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"}, "no_peer_id": {"1"}},
-		{"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"}, "no_peer_id": {"1"}, "key": {"peerKey"}},
-		{"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"}, "no_peer_id": {"1"}, "key": {"peerKey"}, "trackerid": {"trackerId"}},
-		{"peer_id": {"%3Ckey%3A+0x90%3E"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"}, "no_peer_id": {"1"}, "key": {"peerKey"}, "trackerid": {"trackerId"}},
+		{
+			"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"},
+			"no_peer_id": {"1"},
+		},
+		{
+			"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"},
+			"no_peer_id": {"1"}, "key": {"peerKey"},
+		},
+		{
+			"peer_id": {testPeerID}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"}, "compact": {"0"},
+			"no_peer_id": {"1"}, "key": {"peerKey"}, "trackerid": {"trackerId"},
+		},
+		{
+			"peer_id": {"%3Ckey%3A+0x90%3E"}, "port": {"6881"}, "downloaded": {"1234"}, "left": {"4321"},
+			"compact": {"0"}, "no_peer_id": {"1"}, "key": {"peerKey"}, "trackerid": {"trackerId"},
+		},
 		{"peer_id": {"%3Ckey%3A+0x90%3E"}, "compact": {"1"}},
 		{"peer_id": {""}, "compact": {""}},
 	}
@@ -68,7 +89,8 @@ func TestParseValidURLData(t *testing.T) {
 		}
 
 		if !mapArrayEqual(parseVal, parsedQueryObj.params) {
-			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal, parsedQueryObj.params)
+			t.Fatalf("Incorrect parse at item %d.\n Expected=%v\n Received=%v\n", parseIndex, parseVal,
+				parsedQueryObj.params)
 		}
 	}
 }
@@ -95,7 +117,7 @@ func TestParseShouldNotPanicURLData(t *testing.T) {
 }
 
 func BenchmarkParseQuery(b *testing.B) {
-	announceStrings := make([][]byte, 0)
+	announceStrings := make([][]byte, 0, len(ValidAnnounceArguments))
 	for i := range ValidAnnounceArguments {
 		announceStrings = append(announceStrings, []byte(ValidAnnounceArguments[i].Encode()))
 	}
@@ -111,7 +133,7 @@ func BenchmarkParseQuery(b *testing.B) {
 }
 
 func BenchmarkURLParseQuery(b *testing.B) {
-	announceStrings := make([]string, 0)
+	announceStrings := make([]string, 0, len(ValidAnnounceArguments))
 	for i := range ValidAnnounceArguments {
 		announceStrings = append(announceStrings, ValidAnnounceArguments[i].Encode())
 	}

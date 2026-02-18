@@ -4,6 +4,8 @@
 // until ConfigureLogger called. Any child logger created with NewLogger will not
 // produce any events until logger configured, so any function which uses child
 // logger will come stuck because of root initialization synchronization.
+//
+//nolint:revive
 package log
 
 import (

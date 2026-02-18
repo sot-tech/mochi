@@ -27,14 +27,14 @@ type benchData struct {
 }
 
 func generateInfoHashes() (a [ihCount]bittorrent.InfoHash) {
-	for i := range a {
+	for i := range ihCount {
 		a[i] = randIH(i < ihCount/2)
 	}
 	return a
 }
 
 func generatePeers() (a [peersCount]bittorrent.Peer) {
-	for i := range a {
+	for i := range peersCount {
 		var ip []byte
 		if i%2 == 0 {
 			ip = make([]byte, net.IPv4len)
