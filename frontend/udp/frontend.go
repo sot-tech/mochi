@@ -137,6 +137,7 @@ func NewFrontend(c conf.MapConfig, logic *middleware.Logic) (frontend.Frontend, 
 	}
 
 	var ctx context.Context
+	//#nosec G118
 	ctx, f.ctxCancel = context.WithCancel(context.Background())
 	logger.Debug().Str("addr", cfg.Addr).Msg("starting listener")
 	for i := range f.sockets {
@@ -212,6 +213,15 @@ func (f *udpFE) serve(ctx context.Context, socket *net.UDPConn) error {
 			continue
 		}
 
+		// double check if serve closed after first check but
+		// before socket processing goroutine started
+		select {
+		case <-f.closing:
+			log.Debug().Msg("serve received shutdown signal")
+			pool.Put(buffer)
+			return nil
+		default:
+		}
 		f.wg.Add(1)
 		go func() {
 			defer f.wg.Done()

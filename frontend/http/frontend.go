@@ -1,7 +1,7 @@
 // Package http implements a BitTorrent frontend via the HTTP protocol as
 // described in BEP 3 and BEP 23.
 //
-//nolint:revive
+//revive:disable-next-line:var-naming
 package http
 
 import (
@@ -218,7 +218,9 @@ func runServer(s *fasthttp.Server, cfg *Config) {
 			err = s.ServeTLS(ln, "", "")
 		}
 	}
-	defer ln.Close()
+	if ln != nil {
+		defer ln.Close()
+	}
 	if err == nil {
 		logger.Info().Str("addr", cfg.Addr).Msg("listener stopped")
 	} else if !errors.Is(err, http.ErrServerClosed) {

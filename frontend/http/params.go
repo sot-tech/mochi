@@ -1,4 +1,4 @@
-//nolint:revive
+//revive:disable-next-line:var-naming
 package http
 
 import (
