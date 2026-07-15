@@ -1,8 +1,6 @@
 module github.com/sot-tech/mochi/cmd/mochi-e2e
 
-go 1.23
-
-toolchain go1.23.1
+go 1.25.0
 
 require github.com/anacrolix/torrent v1.58.0
 
@@ -22,8 +20,8 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/protolambda/ctxlock v0.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
