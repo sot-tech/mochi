@@ -143,7 +143,8 @@ func newStorage(cfg config) (*mdb, error) {
 	}
 	var env lmdbEnv
 
-	if env, err = lmdbsync.NewEnv(lmEnv,
+	if env, err = lmdbsync.NewEnv(
+		lmEnv,
 		lmdbsync.MapResizedHandler(lmdbsync.MapResizedDefaultRetry, lmdbsync.MapResizedDefaultDelay),
 	); err != nil {
 		return nil, err
@@ -457,7 +458,9 @@ func (m *mdb) scanPeers(ctx context.Context, prefix []byte, readRaw bool, fn fun
 	return err
 }
 
-func (m *mdb) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (m *mdb) AnnouncePeers(
+	ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool,
+) (peers []bittorrent.Peer, err error) {
 	peers = make([]bittorrent.Peer, 0, numWant)
 	prefix, prefixLen := composeIHKeyPrefix(ih.Bytes(), false, v6, 0)
 	appendFn := func(k, _ []byte) bool {
@@ -491,7 +494,8 @@ func (m *mdb) countPeers(ctx context.Context, scanPrefix []byte) (cnt uint32, er
 					return ctx.Err()
 				default:
 					k := scanner.Key()
-					if len(k) == len(scanPrefix)+packedPeerLen && bytes.HasPrefix(scanPrefix, k[:len(k)-packedPeerLen]) {
+					if len(k) == len(scanPrefix)+packedPeerLen && bytes.HasPrefix(scanPrefix,
+						k[:len(k)-packedPeerLen]) {
 						if !bytes.Equal(k, prevKey) {
 							cnt++
 							prevKey = k
@@ -516,7 +520,9 @@ func (m *mdb) countPeers(ctx context.Context, scanPrefix []byte) (cnt uint32, er
 	return cnt, err
 }
 
-func (m *mdb) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
+func (m *mdb) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (
+	leechers uint32, seeders uint32, snatched uint32, err error,
+) {
 	scanPrefix, _ := composeIHKeyPrefix(ih.Bytes(), false, false, 0)
 	if leechers, err = m.countPeers(ctx, scanPrefix); err != nil {
 		return leechers, seeders, snatched, err

@@ -233,7 +233,8 @@ func (f *udpFE) serve(ctx context.Context, socket *net.UDPConn) error {
 			if f.collectTimings && metrics.Enabled() {
 				start = time.Now()
 			}
-			action, err := f.handleRequest(ctx,
+			action, err := f.handleRequest(
+				ctx,
 				Request{(*buffer)[:n], addr},
 				ResponseWriter{socket, addrPort},
 			)

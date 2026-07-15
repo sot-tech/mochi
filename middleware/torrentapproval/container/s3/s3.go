@@ -91,8 +91,10 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	}
 
 	if len(c.KeyID) > 0 || len(c.KeySecret) > 0 || len(c.SessionToken) > 0 {
-		modifiers = append(modifiers, config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(c.KeyID, c.KeySecret, c.SessionToken)),
+		modifiers = append(
+			modifiers, config.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(c.KeyID, c.KeySecret, c.SessionToken),
+			),
 		)
 	}
 
