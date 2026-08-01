@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	code.cloudfoundry.org/go-diodes v0.0.0-20260706112827-32a910f327a2
-	github.com/MicahParks/jwkset v0.11.0
+	github.com/MicahParks/jwkset v0.11.2
 	github.com/MicahParks/keyfunc/v3 v3.8.0
 	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
