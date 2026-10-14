@@ -20,8 +20,7 @@ var respBufferPool = bytepool.NewBufferPool()
 
 func writeErrorResponse(w io.StringWriter, err error) {
 	message := "mochi internal error"
-	var clientErr bittorrent.ClientError
-	if errors.As(err, &clientErr) {
+	if clientErr, ok := errors.AsType[bittorrent.ClientError](err); ok {
 		message = clientErr.Error()
 	} else {
 		logger.Error().Err(err).Msg("internal error")

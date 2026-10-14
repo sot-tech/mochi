@@ -147,7 +147,7 @@ func requestedIPs(r *fasthttp.RequestCtx, p *queryParams, opts ParseOptions) (ad
 
 	if ipValues := r.Request.Header.PeekAll(opts.RealIPHeader); len(ipValues) > 0 && opts.RealIPHeader != "" {
 		for _, ipStr := range ipValues {
-			for _, ipStr := range bytes.Split(ipStr, []byte{','}) {
+			for ipStr := range bytes.SplitSeq(ipStr, []byte{','}) {
 				if ipStr = bytes.TrimSpace(ipStr); len(ipStr) > 0 {
 					addresses.Add(parseRequestAddress(str2bytes.BytesToString(ipStr), false))
 				}

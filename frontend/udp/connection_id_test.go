@@ -102,7 +102,7 @@ func TestReuseGeneratorGenerate(t *testing.T) {
 			gen := NewConnectionIDGenerator(tt.key, 0)
 
 			eq := true
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				connID := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
 				eq = eq && bytes.Equal(cid, connID)
 			}
@@ -117,7 +117,7 @@ func TestReuseGeneratorValidate(t *testing.T) {
 		t.Run(fmt.Sprintf("%s created at %d verified at %d", tt.ip, tt.createdAt, tt.now), func(t *testing.T) {
 			gen := NewConnectionIDGenerator(tt.key, time.Minute)
 			cid := gen.Generate(netip.MustParseAddr(tt.ip), time.Unix(tt.createdAt, 0))
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				got := gen.Validate(cid, netip.MustParseAddr(tt.ip), time.Unix(tt.now, 0))
 				if got != tt.valid {
 					t.Errorf("expected validity: %t got validity: %t", tt.valid, got)

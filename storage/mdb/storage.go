@@ -581,9 +581,7 @@ func (m *mdb) gc(cutoff time.Time) {
 }
 
 func (m *mdb) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
+	m.wg.Go(func() {
 		t := time.NewTimer(gcInterval)
 		defer t.Stop()
 		for {
@@ -595,7 +593,7 @@ func (m *mdb) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				t.Reset(gcInterval)
 			}
 		}
-	}()
+	})
 }
 
 func (m *mdb) Ping(_ context.Context) error {

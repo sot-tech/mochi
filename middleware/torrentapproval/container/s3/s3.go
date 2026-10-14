@@ -72,7 +72,7 @@ func build(conf conf.MapConfig, st storage.DataStorage) (container.Container, er
 	modifiers := make([]func(*config.LoadOptions) error, 1, 4)
 
 	modifiers[0] = config.WithLogger(logging.LoggerFunc(func(
-		classification logging.Classification, format string, v ...interface{},
+		classification logging.Classification, format string, v ...any,
 	) {
 		switch classification {
 		case logging.Debug:

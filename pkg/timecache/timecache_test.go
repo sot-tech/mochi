@@ -27,11 +27,9 @@ func TestRunStop(t *testing.T) {
 	require.NotNil(t, c)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c.Run(1 * time.Second)
-	}()
+	})
 
 	c.Stop()
 
@@ -43,11 +41,9 @@ func TestMultipleStop(t *testing.T) {
 	require.NotNil(t, c)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c.Run(1 * time.Second)
-	}()
+	})
 
 	c.Stop()
 	c.Stop()
@@ -59,11 +55,9 @@ func doBenchmark(b *testing.B, f func(tc *TimeCache) func(*testing.PB)) {
 	tc := New()
 	require.NotNil(b, tc)
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		tc.Run(1 * time.Second)
-	}()
+	})
 
 	b.RunParallel(f(tc))
 
