@@ -15,9 +15,8 @@ func writeErrorResponse(w io.Writer, txID []byte, err error) {
 	defer reqRespBufferPool.Put(buf)
 	writeHeader(buf, txID, errorActionID)
 	message := "mochi internal error"
-	var clientErr bittorrent.ClientError
 	// If the client wasn't at fault, acknowledge it.
-	if errors.As(err, &clientErr) {
+	if clientErr, ok := errors.AsType[bittorrent.ClientError](err); ok {
 		message = clientErr.Error()
 	} else {
 		logger.Error().Err(err).Msg("internal error")

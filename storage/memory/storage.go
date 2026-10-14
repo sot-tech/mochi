@@ -213,9 +213,7 @@ type peerStore struct {
 var _ storage.PeerStorage = &peerStore{}
 
 func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
+	ps.wg.Go(func() {
 		t := time.NewTimer(gcInterval)
 		defer t.Stop()
 		for {
@@ -232,13 +230,11 @@ func (ps *peerStore) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				storage.PromGCDurationMilliseconds.Observe(float64(duration.Milliseconds()))
 			}
 		}
-	}()
+	})
 }
 
 func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) {
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
+	ps.wg.Go(func() {
 		t := time.NewTicker(reportInterval)
 		for {
 			select {
@@ -265,7 +261,7 @@ func (ps *peerStore) ScheduleStatisticsCollection(reportInterval time.Duration) 
 				}
 			}
 		}
-	}()
+	})
 }
 
 func (ps *peerStore) shardIndex(infoHash bittorrent.InfoHash, v6 bool) uint32 {

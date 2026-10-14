@@ -222,9 +222,7 @@ func (f *udpFE) serve(ctx context.Context, socket *net.UDPConn) error {
 			return nil
 		default:
 		}
-		f.wg.Add(1)
-		go func() {
-			defer f.wg.Done()
+		f.wg.Go(func() {
 			defer pool.Put(buffer)
 
 			// Handle the request.
@@ -241,7 +239,7 @@ func (f *udpFE) serve(ctx context.Context, socket *net.UDPConn) error {
 			if f.collectTimings && metrics.Enabled() {
 				recordResponseDuration(action, addr, err, time.Since(start))
 			}
-		}()
+		})
 	}
 }
 

@@ -46,16 +46,14 @@ func (hooks hookList) handleAnnounce(ctx context.Context, req *bittorrent.Announ
 }
 
 func benchHookListV4(b *testing.B, hooks hookList) {
-	req := &bittorrent.AnnounceRequest{RequestPeer: bittorrent.RequestPeer{
-		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("1.2.3.4")}},
-	}}
+	req := &bittorrent.AnnounceRequest{
+		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("1.2.3.4")}}}
 	benchHookList(b, hooks, req)
 }
 
 func benchHookListV6(b *testing.B, hooks hookList) {
-	req := &bittorrent.AnnounceRequest{RequestPeer: bittorrent.RequestPeer{
-		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("fc00::0001")}},
-	}}
+	req := &bittorrent.AnnounceRequest{
+		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("fc00::0001")}}}
 	benchHookList(b, hooks, req)
 }
 

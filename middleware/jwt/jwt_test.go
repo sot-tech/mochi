@@ -98,15 +98,13 @@ func TestHook_HandleAnnounceValid(t *testing.T) {
 	defer s.Close()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, announceClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			// nolint:gosec
-			ID: strconv.FormatInt(rand.Int63(), 16),
-		},
+		Issuer:    "CN=test",
+		Subject:   "CN=test",
+		Audience:  []string{"test"},
+		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+		NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+		// nolint:gosec
+		ID:       strconv.FormatInt(rand.Int63(), 16),
 		InfoHash: infoHash.String(),
 	})
 
@@ -142,15 +140,13 @@ func TestHook_HandleAnnounceInvalid(t *testing.T) {
 	// now we wll use HMAC-SHA256 with invalid random key
 	// all errors should be nil except announce request
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, announceClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			// nolint:gosec
-			ID: strconv.FormatInt(rand.Int63(), 16),
-		},
+		Issuer:    "CN=test",
+		Subject:   "CN=test",
+		Audience:  []string{"test"},
+		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+		NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+		// nolint:gosec
+		ID:       strconv.FormatInt(rand.Int63(), 16),
 		InfoHash: infoHash.String(),
 	})
 
@@ -199,15 +195,13 @@ func TestHook_HandleScrapeValid(t *testing.T) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, scrapeClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "CN=test",
-			Subject:   "CN=test",
-			Audience:  []string{"test"},
-			ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
-			NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-			// nolint:gosec
-			ID: strconv.FormatInt(rand.Int63(), 16),
-		},
+		Issuer:    "CN=test",
+		Subject:   "CN=test",
+		Audience:  []string{"test"},
+		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+		NotBefore: &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+		// nolint:gosec
+		ID:         strconv.FormatInt(rand.Int63(), 16),
 		InfoHashes: ihss,
 	})
 

@@ -281,9 +281,7 @@ func (cfg Config) Connect() (con Connection, err error) {
 }
 
 func (ps *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
+	ps.wg.Go(func() {
 		t := time.NewTimer(gcInterval)
 		defer t.Stop()
 		for {
@@ -299,13 +297,11 @@ func (ps *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				t.Reset(gcInterval)
 			}
 		}
-	}()
+	})
 }
 
 func (ps *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
-	ps.wg.Add(1)
-	go func() {
-		defer ps.wg.Done()
+	ps.wg.Go(func() {
 		t := time.NewTicker(reportInterval)
 		for {
 			select {
@@ -328,7 +324,7 @@ func (ps *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 				}
 			}
 		}
-	}()
+	})
 }
 
 // Connection is wrapper for redis.UniversalClient

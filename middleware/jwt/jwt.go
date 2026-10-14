@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -195,13 +196,7 @@ func (h *hook) HandleScrape(
 			eq := len(req.InfoHashes) == len(claimIHs)
 			if eq {
 				for _, rIH := range req.InfoHashes {
-					found := false
-					for _, cIH := range claimIHs {
-						if rIH == cIH {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(claimIHs, rIH)
 					if !found {
 						eq = false
 						break

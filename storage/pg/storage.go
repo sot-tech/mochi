@@ -276,7 +276,8 @@ func (s *store) Put(ctx context.Context, storeCtx string, values ...storage.Entr
 	case 0:
 		// ignore
 	case 1:
-		_, err = s.Exec(ctx, s.Data.AddQuery, pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(values[0].Key), pValue: values[0].Value})
+		_, err = s.Exec(ctx, s.Data.AddQuery,
+			pgx.NamedArgs{pCtx: storeCtx, pKey: []byte(values[0].Key), pValue: values[0].Value})
 	default:
 		var batch pgx.Batch
 		for _, v := range values {
@@ -321,9 +322,7 @@ func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 	if len(s.GCQuery) == 0 {
 		return
 	}
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 		t := time.NewTimer(gcInterval)
 		defer t.Stop()
 		for {
@@ -332,7 +331,8 @@ func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				return
 			case <-t.C:
 				start := time.Now()
-				_, err := s.Exec(context.Background(), s.GCQuery, pgx.NamedArgs{pCreated: time.Now().Add(-peerLifeTime)})
+				_, err := s.Exec(context.Background(), s.GCQuery,
+					pgx.NamedArgs{pCreated: time.Now().Add(-peerLifeTime)})
 				duration := time.Since(start)
 				if err != nil {
 					logger.Error().Err(err).Msg("error occurred while GC")
@@ -343,16 +343,14 @@ func (s *store) ScheduleGC(gcInterval, peerLifeTime time.Duration) {
 				t.Reset(gcInterval)
 			}
 		}
-	}()
+	})
 }
 
 func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 	if len(s.InfoHashCountQuery) == 0 {
 		return
 	}
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 		t := time.NewTicker(reportInterval)
 		for {
 			select {
@@ -379,7 +377,7 @@ func (s *store) ScheduleStatisticsCollection(reportInterval time.Duration) {
 				}
 			}
 		}
-	}()
+	})
 }
 
 func (s *store) putPeer(ctx context.Context, ih []byte, peer bittorrent.Peer, seeder bool) (err error) {
@@ -448,7 +446,9 @@ func (s *store) GraduateLeecher(ctx context.Context, ih bittorrent.InfoHash, pee
 	return s.txBatch(ctx, &batch)
 }
 
-func (s *store) getPeers(ctx context.Context, ih []byte, seeders bool, maxCount int, isV6 bool) (peers []bittorrent.Peer, err error) {
+func (s *store) getPeers(
+	ctx context.Context, ih []byte, seeders bool, maxCount int, isV6 bool,
+) (peers []bittorrent.Peer, err error) {
 	var rows pgx.Rows
 	if rows, err = s.Query(ctx, s.Announce.Query, pgx.NamedArgs{
 		pInfoHash: ih,
@@ -519,7 +519,9 @@ func (s *store) getPeers(ctx context.Context, ih []byte, seeders bool, maxCount 
 	return peers, err
 }
 
-func (s *store) AnnouncePeers(ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool) (peers []bittorrent.Peer, err error) {
+func (s *store) AnnouncePeers(
+	ctx context.Context, ih bittorrent.InfoHash, forSeeder bool, numWant int, v6 bool,
+) (peers []bittorrent.Peer, err error) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Bool("forSeeder", forSeeder).
@@ -570,14 +572,10 @@ func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leec
 				}
 			}
 			if si < 0 || li < 0 {
-				err = fmt.Errorf(errRequiredColumnsNotFoundMsg, []string{s.Peer.CountSeedersColumn, s.Peer.CountLeechersColumn})
+				err = fmt.Errorf(errRequiredColumnsNotFoundMsg,
+					[]string{s.Peer.CountSeedersColumn, s.Peer.CountLeechersColumn})
 			} else {
-				var mi int
-				if si > li {
-					mi = si
-				} else {
-					mi = li
-				}
+				mi := max(si, li)
 				into := make([]any, mi+1)
 				into[si], into[li] = &seeders, &leechers
 
@@ -588,7 +586,9 @@ func (s *store) countPeers(ctx context.Context, ih []byte) (seeders uint32, leec
 	return seeders, leechers, err
 }
 
-func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (leechers uint32, seeders uint32, snatched uint32, err error) {
+func (s *store) ScrapeSwarm(ctx context.Context, ih bittorrent.InfoHash) (
+	leechers uint32, seeders uint32, snatched uint32, err error,
+) {
 	logger.Trace().
 		Stringer("infoHash", ih).
 		Msg("scrape swarm")
