@@ -20,17 +20,23 @@ func init() {
 // benchmarks.
 type nopHook struct{}
 
-func (h *nopHook) HandleAnnounce(ctx context.Context, _ *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse) (context.Context, error) {
+func (h *nopHook) HandleAnnounce(
+	ctx context.Context, _ *bittorrent.AnnounceRequest, _ *bittorrent.AnnounceResponse,
+) (context.Context, error) {
 	return ctx, nil
 }
 
-func (h *nopHook) HandleScrape(ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse) (context.Context, error) {
+func (h *nopHook) HandleScrape(
+	ctx context.Context, _ *bittorrent.ScrapeRequest, _ *bittorrent.ScrapeResponse,
+) (context.Context, error) {
 	return ctx, nil
 }
 
 type hookList []Hook
 
-func (hooks hookList) handleAnnounce(ctx context.Context, req *bittorrent.AnnounceRequest) (resp *bittorrent.AnnounceResponse, err error) {
+func (hooks hookList) handleAnnounce(
+	ctx context.Context, req *bittorrent.AnnounceRequest,
+) (resp *bittorrent.AnnounceResponse, err error) {
 	resp = &bittorrent.AnnounceResponse{
 		Interval:    60,
 		MinInterval: 60,
@@ -47,13 +53,15 @@ func (hooks hookList) handleAnnounce(ctx context.Context, req *bittorrent.Announ
 
 func benchHookListV4(b *testing.B, hooks hookList) {
 	req := &bittorrent.AnnounceRequest{
-		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("1.2.3.4")}}}
+		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("1.2.3.4")}},
+	}
 	benchHookList(b, hooks, req)
 }
 
 func benchHookListV6(b *testing.B, hooks hookList) {
 	req := &bittorrent.AnnounceRequest{
-		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("fc00::0001")}}}
+		RequestAddresses: []bittorrent.RequestAddress{{Addr: netip.MustParseAddr("fc00::0001")}},
+	}
 	benchHookList(b, hooks, req)
 }
 
