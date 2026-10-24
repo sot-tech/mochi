@@ -91,7 +91,7 @@ func (l *List) Approved(ctx context.Context, hash bittorrent.InfoHash) (contains
 	var err error
 	if contains, err = l.Storage.Contains(ctx, l.StorageCtx, hash.RawString()); err == nil {
 		if len(hash) == bittorrent.InfoHashV2Len {
-			if containsV2, errV2 := l.Storage.Contains(ctx, l.StorageCtx, hash.TruncateV1().RawString()); err == nil {
+			if containsV2, errV2 := l.Storage.Contains(ctx, l.StorageCtx, hash.TruncateV1().RawString()); errV2 == nil {
 				contains = contains || containsV2
 			} else {
 				err = errV2
